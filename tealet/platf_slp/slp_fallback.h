@@ -5,6 +5,7 @@
  * is up to the user in each case to ensure that switching only occurs on one thread at
  * a time.
  */
+ #include <stdint.h>
 
 
 /* rename the slp_switch function that the slp headers will define */

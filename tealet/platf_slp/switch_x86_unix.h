@@ -34,7 +34,7 @@ slp_switch(void)
 #if STACKLESS_FRHACK
     __asm__ volatile ("" : : : "esi", "edi");
 #else
-    __asm__ volatile ("" : : : "ebx", "esi", "edi");
+    __asm__ volatile ("" : : : "ebx", "esi", "edi", "ebp");
 #endif
     __asm__ ("movl %%esp, %0" : "=g" (stackref));
     {
@@ -51,7 +51,7 @@ slp_switch(void)
 #if STACKLESS_FRHACK
     __asm__ volatile ("" : : : "esi", "edi");
 #else
-    __asm__ volatile ("" : : : "ebx", "esi", "edi");
+    __asm__ volatile ("" : : : "ebx", "esi", "edi", "ebp");
 #endif
 }
 
