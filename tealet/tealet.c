@@ -95,10 +95,7 @@ typedef struct tealet_main_t {
   tealet_sub_t base;
   void         *g_user;     /* user data pointer for main */
   tealet_sub_t *g_current;
-  /* need to have this volatile. Some optimizers will otherwise
-   * not recognize that it will change across a call to slp_switch
-   */
-  tealet_sub_t * volatile g_target;   /* Temporary store when switching */
+  tealet_sub_t *g_target;   /* Temporary store when switching */
   void         *g_arg;      /* argument passed around when switching */
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
@@ -482,11 +479,16 @@ static int tealet_switchstack(tealet_main_t *g_main)
     */
     if (g_main->g_target->stack == (tealet_stack_t*)-1)
         return -2;
-    res = slp_switch(tealet_save_state, tealet_restore_state, g_main);
-    if ((int)res >= 0)
-        /* g_target is marked as volatile. gcc and other optimizers would otherwise assume
-         * that it wouldn't change in slp_switch and keep it in a register.
+    {
+        /* make sure that optimizers, e.g. gcc -O2, won't assume that
+         * g_main->g_target stays unchanged across the switch and optimize it
+         * into a register
          */
+        tealet_sub_t * volatile *ptarget = &g_main->g_target;
+        res = slp_switch(tealet_save_state, tealet_restore_state, g_main);
+        g_main->g_target = *ptarget;
+    }
+    if ((int)res >= 0)
         g_main->g_current = g_main->g_target;
     g_main->g_target = NULL;
     return (int)res;
