@@ -90,6 +90,12 @@ typedef struct tealet_sub_t {
 #endif
 } tealet_sub_t;
 
+/* a structure incorporating extra data */
+typedef struct tealet_nonmain_t {
+  tealet_sub_t base;
+  double _extra[1];                /* start of any extra data */
+} tealet_nonmain_t;
+
 /* The main tealet has additional fields for housekeeping */
 typedef struct tealet_main_t {
   tealet_sub_t base;
@@ -103,6 +109,7 @@ typedef struct tealet_main_t {
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
 #endif
+  double _extra[1];         /* start of any extra data */
 } tealet_main_t;
 
 #define TEALET_IS_MAIN_STACK(t)  (((tealet_sub_t *)(t))->stack_far == STACK_FAR_MAIN)
@@ -540,11 +547,11 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *sta
     return 0;
 }
 
-static tealet_sub_t *tealet_alloc(tealet_main_t *g_main, tealet_alloc_t *alloc)
+static tealet_sub_t *tealet_alloc(tealet_main_t *g_main, tealet_alloc_t *alloc, size_t extrasize)
 {
-    size_t size;
     tealet_sub_t *g;
-    size = g_main == NULL ? sizeof(tealet_main_t) : sizeof(tealet_sub_t);
+    size_t basesize = g_main == NULL ? offsetof(tealet_main_t, _extra) : offsetof(tealet_nonmain_t, _extra);
+    size_t size = basesize + extrasize;
     if (g_main != NULL)
         alloc = &g_main->g_alloc;
     g = (tealet_sub_t*) alloc->malloc_p(size, alloc->context);
@@ -553,7 +560,10 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main, tealet_alloc_t *alloc)
     if (g_main == NULL)
         g_main = (tealet_main_t *)g;
     g->base.main = (tealet_t *)g_main;
-    g->base.data = NULL;
+    if (extrasize)
+        g->base.extra = (void*)((char*)g + basesize);
+    else
+        g->base.extra = NULL;
     g->stack = NULL;
     g->stack_far = NULL;
 #ifndef NDEBUG
@@ -565,11 +575,11 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main, tealet_alloc_t *alloc)
 
 /************************************************************/
 
-tealet_t *tealet_initialize(tealet_alloc_t *alloc)
+tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
 {
     tealet_sub_t *g;
     tealet_main_t *g_main;
-    g = tealet_alloc(NULL, alloc);
+    g = tealet_alloc(NULL, alloc, extrasize);
     if (g == NULL)
         return NULL;
     g_main = (tealet_main_t *)g;
@@ -613,14 +623,14 @@ void tealet_free(tealet_t *tealet, void *p)
     tealet_int_free(g_main, p);
 }
 
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, size_t extrasize)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(TEALET_IS_MAIN_STACK(g_main));
     assert(!g_main->g_target);
-    result = tealet_alloc(g_main, NULL);
+    result = tealet_alloc(g_main, NULL, extrasize);
     if (result == NULL)
         return NULL; /* Could not allocate */
     g_main->g_target = result;
@@ -688,20 +698,24 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
     return result;
 }
 
-tealet_t *tealet_duplicate(tealet_t *tealet)
+tealet_t *tealet_duplicate(tealet_t *tealet, size_t extrasize)
 {
     tealet_sub_t *g_tealet = (tealet_sub_t *)tealet;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_tealet);
     tealet_sub_t *g_copy;
+    /* can't dup the current or the main tealet */
     assert(g_tealet != g_main->g_current && g_tealet != (tealet_sub_t*)g_main);
-    g_copy = tealet_alloc(g_main, NULL);
+    g_copy = tealet_alloc(g_main, NULL, extrasize);
     if (g_copy == NULL)
         return NULL;
 #ifndef NDEBUG
     g_main->g_tealets++;
 #endif
-    *g_copy = *g_tealet;
-    g_copy->stack = tealet_stack_dup(g_copy->stack);
+    /* copy the relevant bits.  extra data is not copied since we don't
+     * know how large it was in the source
+     */
+    g_copy->stack_far = g_tealet->stack_far;
+    g_copy->stack = tealet_stack_dup(g_tealet->stack);
     return (tealet_t*)g_copy;
 }
 
@@ -745,3 +759,27 @@ int tealet_get_count(tealet_t *tealet)
     return TEALET_GET_MAIN(tealet)->g_tealets;
 }
 #endif
+
+ptrdiff_t tealet_stack_diff(void *a, void *b)
+{
+    return STACK_SUB((ptrdiff_t)a, (ptrdiff_t)(b));
+}
+
+void *tealet_get_far(tealet_t *_tealet)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    return tealet->stack_far;
+}
+
+void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3, size_t d4)
+{
+    tealet_sub_t *result;
+    void *r;
+    (void)d1;
+    (void)d2;
+    (void)d3;
+    (void)d4;
+    /* avoid compiler warnings about returning tmp addr */
+    r = (void*)&result;
+    return r;
+}
