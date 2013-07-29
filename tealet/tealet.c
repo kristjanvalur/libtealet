@@ -265,6 +265,13 @@ static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack)
     }
 }
 
+static size_t tealet_stack_getsize(tealet_stack_t *stack)
+{
+    if (stack->saved != (size_t)-1)
+        return stack->saved;
+    return 0;
+}
+
 
 /***************************************************************
  * utility functions for allocating and growing stacks
@@ -782,4 +789,12 @@ void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3, size_t d4)
     /* avoid compiler warnings about returning tmp addr */
     r = (void*)&result;
     return r;
+}
+
+size_t tealet_get_stacksize(tealet_t *_tealet)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    if (tealet->stack)
+        return tealet_stack_getsize(tealet->stack);
+    return 0;
 }
