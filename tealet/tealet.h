@@ -194,13 +194,17 @@ ptrdiff_t tealet_stack_diff(void *a, void *b);
  * tealet extends until the beginning of stack
  */
 TEALET_API
-void *tealet_get_far(tealet_t *_tealet);
+void *tealet_get_far(tealet_t *tealet);
 
 /* this is used to get the "far address _if_ a tealet were initialized here
  * The arguments must match the real tealet_new() but are dummies.
  */
 TEALET_API
 void *tealet_new_far(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, size_t dummy4);
+
+/* get the size of the suspended tealet's saved stack */
+TEALET_API
+size_t tealet_get_stacksize(tealet_t *tealet);
 
 /* get a tealet's status */
 #define TEALET_STATUS_ACTIVE 0
