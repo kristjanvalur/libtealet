@@ -12,7 +12,7 @@ static int newmode = 0;
 static tealet_alloc_t talloc = TEALET_MALLOC;
 void init_test() {
     assert(g_main == NULL);
-    g_main = tealet_initialize(&talloc);
+    g_main = tealet_initialize(&talloc, 0);
     assert(tealet_current(g_main) == g_main);
     status = 0;
 }
@@ -56,7 +56,7 @@ static tealet_t *mystub_main(tealet_t *current, void *arg)
 /* create a stub and return it */
 tealet_t *mystub_new(tealet_t *t) {
     void *arg = (void*)tealet_current(t);
-    return tealet_new(t, mystub_main, &arg);
+    return tealet_new(t, mystub_main, &arg, 0);
 }
 
 /* run a stub */
@@ -96,7 +96,7 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
     if (level > 0)
         return tealet_new_descend(t, level-1, run, parg);
     if (run)
-        return tealet_new(t, run, parg);
+        return tealet_new(t, run, parg, 0);
     else
         return mystub_new(t);
 }
@@ -135,7 +135,7 @@ static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg)
     stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     if (stub == NULL)
         return NULL;
-    dup = tealet_duplicate(stub);
+    dup = tealet_duplicate(stub, 0);
     if (stub == NULL) {
         tealet_delete(stub);
         return NULL;
@@ -166,7 +166,7 @@ static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg)
         the_stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     if (the_stub == NULL)
         return NULL;
-    dup = tealet_duplicate(the_stub);
+    dup = tealet_duplicate(the_stub, 0);
     if (dup == NULL)
         return NULL;
     if (run) {
@@ -261,7 +261,7 @@ void test_exit(void)
   void *arg;
   init_test();
   stub1 = tealet_new(g_main, NULL, NULL);
-  stub2 = tealet_duplicate(stub1);
+  stub2 = tealet_duplicate(stub1, 0);
   arg = (void*)TEALET_EXIT_NODELETE;
   result = mystub_run(stub1, test_exit_run, &arg);
   assert(result == 0);
@@ -350,7 +350,7 @@ tealet_t *test_switch_new_1(tealet_t *t1, void *arg)
 tealet_t *test_switch_new_2(tealet_t *t2, void *arg) {
     tealet_t *target = (tealet_t*)arg;
     /* switch to tealet 1 to trample the stack*/
-    target->data = (void*)t2;
+    target->extra = (void*)t2;
     tealet_switch(target, NULL);
    
     /* and then return to main */

@@ -40,10 +40,13 @@ typedef struct tealet_alloc_t {
 }
 
 
-/* The user-visible tealet structure */
+/* The user-visible tealet structure.  If an "extrasize" is provided when
+ * the tealet is created, "extra" points to a block of that size, otherwise
+ * it is initialized to NULL
+ */
 typedef struct tealet_t {
   struct tealet_t *main;   /* pointer to the main tealet */
-  void *data;              /* general-purpose, store whatever you want here */
+  void *extra;
   /* private fields follow */
 } tealet_t;
 
@@ -72,7 +75,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
  * different main tealet.
  */
 TEALET_API
-tealet_t *tealet_initialize(tealet_alloc_t *alloc);
+tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize);
 
 /* Tear down the main tealet.  Call e.g. after a thread finishes (including
  * all its tealets).
@@ -100,9 +103,11 @@ void tealet_free(tealet_t *tealet, void *p);
  * causing this return.
  * 'arg' can be NULL, in which case NULL is passed to run and no result
  * argument is passed.
+ * If 'extrasize' is non-zero, extra data will be allocated and the tealet's
+ * 'extra' member points to it, otherwise it is set to NULL
  */
 TEALET_API
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg);
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, size_t extrasize);
 
 /* Switch to another tealet.  Execution continues there.  The tealet
  * passed in must not have been freed yet and must descend from
@@ -143,9 +148,10 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  * "current" argument passed to the original "run" function which may
  * be obsolete by the time the duplicate is run.  Use the argument passing
  * mechanism to provide the copy with fresh data.
+ * Any extra data is left uncopied, the application must do that.
  */
 TEALET_API
-tealet_t *tealet_duplicate(tealet_t *tealet);
+tealet_t *tealet_duplicate(tealet_t *tealet, size_t extrasize);
 
 /* Deallocate a tealet.  Use this to delete a tealet that has exited
  * with tealet_exit() with 'TEALET_EXIT_NODELETE', or defunct tealets.
@@ -170,6 +176,32 @@ tealet_t *tealet_current(tealet_t *tealet);
 TEALET_API
 void **tealet_main_userpointer(tealet_t *tealet);
 
+/* functions for stack arithmetic.  Useful when deciding
+ * if you want to start a newa tealet, or when doing stack
+ * spilling
+ */
+
+/* subtract two stack positions, taking into account if the
+ * local stack grows up or down in memory.
+ * The result is positive if 'b' is 'deeper' on the stack
+ * than 'a'
+ */
+TEALET_API
+ptrdiff_t tealet_stack_diff(void *a, void *b);
+
+/* Get a tealet's "far" position on the stack.  This is an
+ * indicator of its creation position on the stack.  The main
+ * tealet extends until the beginning of stack
+ */
+TEALET_API
+void *tealet_get_far(tealet_t *_tealet);
+
+/* this is used to get the "far address _if_ a tealet were initialized here
+ * The arguments must match the real tealet_new() but are dummies.
+ */
+TEALET_API
+void *tealet_new_far(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, size_t dummy4);
+
 /* get a tealet's status */
 #define TEALET_STATUS_ACTIVE 0
 #define TEALET_STATUS_EXITED 1
@@ -186,5 +218,11 @@ int tealet_get_count(tealet_t *t);
 #define TEALET_MAIN(t) ((t)->main)
 #define TEALET_IS_MAIN(t)  ((t) == TEALET_MAIN(t))
 #define TEALET_CURRENT_IS_MAIN(t) (tealet_current(t) == TEALET_MAIN(t))
+
+/* see if two tealets share the same MAIN, and can therefore be switched between */
+#define TEALET_RELATED(t1, t2) (TEALET_MAIN(t1) == TEALET_MAIN(t2))
+
+/* convenience access to a typecast extra pointer */
+#define TEALET_EXTRA(t, tp) ((tp*)((t)->extra))
 
 #endif /* _TEALET_H_ */
