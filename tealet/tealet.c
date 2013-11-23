@@ -105,6 +105,7 @@ typedef struct tealet_main_t {
   void         *g_arg;      /* argument passed around when switching */
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
+  size_t       g_extrasize; /* amount of extra memory in tealets */
 #ifndef NDEBUG
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
@@ -554,13 +555,11 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *sta
     return 0;
 }
 
-static tealet_sub_t *tealet_alloc(tealet_main_t *g_main, tealet_alloc_t *alloc, size_t extrasize)
+
+static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *alloc, size_t basesize, size_t extrasize)
 {
     tealet_sub_t *g;
-    size_t basesize = g_main == NULL ? offsetof(tealet_main_t, _extra) : offsetof(tealet_nonmain_t, _extra);
     size_t size = basesize + extrasize;
-    if (g_main != NULL)
-        alloc = &g_main->g_alloc;
     g = (tealet_sub_t*) alloc->malloc_p(size, alloc->context);
     if (g == NULL)
         return NULL;
@@ -579,6 +578,19 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main, tealet_alloc_t *alloc, 
     return g;
 }
 
+static tealet_sub_t *tealet_alloc_main(tealet_alloc_t *alloc, size_t extrasize)
+{
+    size_t basesize = offsetof(tealet_main_t, _extra);
+    return tealet_alloc_raw(NULL, alloc, basesize, extrasize);
+}
+
+static tealet_sub_t *tealet_alloc(tealet_main_t *g_main)
+{
+    size_t basesize = offsetof(tealet_nonmain_t, _extra);
+    size_t extrasize = g_main->g_extrasize;
+    return tealet_alloc_raw(g_main, &g_main->g_alloc, basesize, extrasize);
+}
+
 
 /************************************************************/
 
@@ -586,7 +598,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
 {
     tealet_sub_t *g;
     tealet_main_t *g_main;
-    g = tealet_alloc(NULL, alloc, extrasize);
+    g = tealet_alloc_main(alloc, extrasize);
     if (g == NULL)
         return NULL;
     g_main = (tealet_main_t *)g;
@@ -598,6 +610,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_arg = NULL;
     g_main->g_alloc = *alloc;
     g_main->g_prev =  NULL;
+    g_main->g_extrasize = extrasize;
 #ifndef NDEBUG
     g_main->g_tealets = 0;
     g_main->g_counter = 0;
@@ -630,14 +643,14 @@ void tealet_free(tealet_t *tealet, void *p)
     tealet_int_free(g_main, p);
 }
 
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, size_t extrasize)
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(TEALET_IS_MAIN_STACK(g_main));
     assert(!g_main->g_target);
-    result = tealet_alloc(g_main, NULL, extrasize);
+    result = tealet_alloc(g_main);
     if (result == NULL)
         return NULL; /* Could not allocate */
     g_main->g_target = result;
@@ -705,24 +718,23 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
     return result;
 }
 
-tealet_t *tealet_duplicate(tealet_t *tealet, size_t extrasize)
+tealet_t *tealet_duplicate(tealet_t *tealet)
 {
     tealet_sub_t *g_tealet = (tealet_sub_t *)tealet;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_tealet);
     tealet_sub_t *g_copy;
     /* can't dup the current or the main tealet */
     assert(g_tealet != g_main->g_current && g_tealet != (tealet_sub_t*)g_main);
-    g_copy = tealet_alloc(g_main, NULL, extrasize);
+    g_copy = tealet_alloc(g_main);
     if (g_copy == NULL)
         return NULL;
 #ifndef NDEBUG
     g_main->g_tealets++;
 #endif
-    /* copy the relevant bits.  extra data is not copied since we don't
-     * know how large it was in the source
-     */
     g_copy->stack_far = g_tealet->stack_far;
     g_copy->stack = tealet_stack_dup(g_tealet->stack);
+    if (g_main->g_extrasize)
+        memcpy(g_copy->base.extra, g_tealet->base.extra, g_main->g_extrasize);
     return (tealet_t*)g_copy;
 }
 

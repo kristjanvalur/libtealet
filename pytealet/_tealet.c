@@ -7,63 +7,62 @@
 
 #include "tealet.h"
 
-
 /****************************************************************
  *Implement copyable stubs by using a trampoline
  */
 struct stub_arg
 {
-    tealet_t *current;
-    tealet_run_t run;
-    void *runarg;
+	tealet_t *current;
+	tealet_run_t run;
+	void *runarg;
 };
 static tealet_t *
 stub_main(tealet_t *current, void *arg)
 {
-    void *myarg = 0;
-    /* the caller is in arg, return right back to him */
-    tealet_switch((tealet_t*)arg, &myarg);
-    /* now we are back, myarg should contain the arg to the run function.
-     * We were possibly duplicated, so can't trust the original function args.
-     */
-    {
-        struct stub_arg sarg = *(struct stub_arg*)myarg;
-        tealet_free(sarg.current, myarg);
-        return (sarg.run)(sarg.current, sarg.runarg);
-    }
+	void *myarg = 0;
+	/* the caller is in arg, return right back to him */
+	tealet_switch((tealet_t*)arg, &myarg);
+	/* now we are back, myarg should contain the arg to the run function.
+	 * We were possibly duplicated, so can't trust the original function args.
+	 */
+	{
+		struct stub_arg sarg = *(struct stub_arg*)myarg;
+		tealet_free(sarg.current, myarg);
+		return (sarg.run)(sarg.current, sarg.runarg);
+	}
 }
 
 /* create a stub and return it */
 static tealet_t *
 stub_new(tealet_t *t) {
-    void *arg = (void*)tealet_current(t);
-    return tealet_new(t, stub_main, &arg);
+	void *arg = (void*)tealet_current(t);
+	return tealet_new(t, stub_main, &arg);
 }
 
 /* run a stub */
 static int
 stub_run(tealet_t *stub, tealet_run_t run, void **parg)
 {
-    int result;
-    void *myarg;
-    /* we cannot pass arguments to a different tealet on the stack */
-    struct stub_arg *psarg = (struct stub_arg*)tealet_malloc(stub, sizeof(struct stub_arg));
-    if (!psarg)
-        return TEALET_ERR_MEM;
-    psarg->current = stub;
-    psarg->run = run;
-    psarg->runarg = parg ? *parg : NULL;
-    myarg = (void*)psarg;
-    result = tealet_switch(stub, &myarg);
-    if (result) {
-        /* failure */
-        tealet_free(stub, psarg);
-        return result;
-    }
-    /* pass back the arg value from the switch */
-    if (parg)
-        *parg = myarg;
-    return 0;
+	int result;
+	void *myarg;
+	/* we cannot pass arguments to a different tealet on the stack */
+	struct stub_arg *psarg = (struct stub_arg*)tealet_malloc(stub, sizeof(struct stub_arg));
+	if (!psarg)
+		return TEALET_ERR_MEM;
+	psarg->current = stub;
+	psarg->run = run;
+	psarg->runarg = parg ? *parg : NULL;
+	myarg = (void*)psarg;
+	result = tealet_switch(stub, &myarg);
+	if (result) {
+		/* failure */
+		tealet_free(stub, psarg);
+		return result;
+	}
+	/* pass back the arg value from the switch */
+	if (parg)
+		*parg = myarg;
+	return 0;
 }
 /***************************************************************/
 
@@ -79,6 +78,9 @@ static PyTypeObject PyTealetType;
 
 static int tls_key;
 
+/* convenience macro to access the "extra" argument as a pointer to PyTealetObject */
+#define TEALET_PY(t) TEALET_EXTRA((t), PyTealetObject)
+
 /* the structure we associate with the main tealet */
 typedef struct main_data
 {
@@ -88,8 +90,8 @@ typedef struct main_data
 
 /* The python tealet object */
 typedef struct PyTealetObject {
-    PyObject_HEAD
-    int state;
+	PyObject_HEAD
+	int state;
 	tealet_t *tealet;
 	PyObject *weakreflist; /* List of weak references */
 	/* call stack related information from the thread state */
@@ -227,7 +229,7 @@ pytealet_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds)
 				Py_DECREF(result);
 				return PyErr_NoMemory();
 			}
-			result->tealet->data = (void*)result;
+			TEALET_PY(result->tealet) = result;
 		}
 		result->state = src->state;
 	}
@@ -249,7 +251,7 @@ pytealet_dealloc(PyObject *obj)
 	Py_XDECREF(tealet->exc_val);
 	Py_XDECREF(tealet->exc_tb);
 	if (tealet->weakreflist != NULL)
-        PyObject_ClearWeakRefs(obj);
+		PyObject_ClearWeakRefs(obj);
 	if (tealet->tealet)
 		tealet_delete(tealet->tealet);
 	Py_TYPE(obj)->tp_free(obj);
@@ -274,7 +276,7 @@ pytealet_stub(PyObject *self)
 		return PyErr_NoMemory();
 	pytealet->tealet = tresult;
 	pytealet->state = STATE_STUB;
-	tresult->data = (void*)pytealet;
+	TEALET_PY(tresult) = pytealet;
 	Py_INCREF(self);
 	return self;
 }
@@ -406,7 +408,7 @@ pytealet_switch(PyObject *_self, PyObject *args)
 static struct PyMethodDef pytealet_methods[] = {
 	{"stub", (PyCFunction) pytealet_stub, METH_NOARGS, ""},
 	{"run", (PyCFunction) pytealet_run, METH_VARARGS|METH_KEYWORDS, ""},
-    {"switch", (PyCFunction) pytealet_switch, METH_VARARGS, ""},
+	{"switch", (PyCFunction) pytealet_switch, METH_VARARGS, ""},
 	{NULL,       NULL}          /* sentinel */
 };
 
@@ -417,7 +419,7 @@ static PyObject *
 pytealet_get_main(PyObject *_self, void *_closure)
 {
 	PyTealetObject *self = (PyTealetObject *)_self;
-	PyTealetObject *main = (PyTealetObject *)(self->tealet->main->data);
+	PyTealetObject *main = TEALET_PY(self->tealet->main);
 	Py_INCREF(main);
 	return (PyObject*)main;
 }
@@ -470,45 +472,45 @@ static struct PyGetSetDef pytealet_getset[] = {
 
 
 static PyTypeObject PyTealetType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "_tealet.tealet",                           /* tp_name */
-    sizeof(PyTealetObject),                     /* tp_basicsize */
-    0,                                          /* tp_itemsize */
-    (destructor)pytealet_dealloc,                 /* tp_dealloc */
-    0,                                          /* tp_print */
-    0,                                          /* tp_getattr */
-    0,                                          /* tp_setattr */
-    0,                                          /* tp_compare */
-    0,                                          /* tp_repr */
-    0,                                          /* tp_as_number */
-    0,                                          /* tp_as_sequence */
-    0,                                          /* tp_as_mapping */
-    0,                                          /* tp_hash */
-    0,                                          /* tp_call */
-    0,                                          /* tp_str */
-    0,                                          /* tp_getattro */
-    0,                                          /* tp_setattro */
-    0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
-    "",                                         /* tp_doc */
-    0,                                          /* tp_traverse */
-    0,                                          /* tp_clear */
-    0,                                          /* tp_richcompare */
-    offsetof(PyTealetObject,weakreflist),       /* tp_weaklistoffset */
-    0,                                          /* tp_iter */
-    0,                                          /* tp_iternext */
-    pytealet_methods,                           /* tp_methods */
-    0,                                          /* tp_members */
-    pytealet_getset,                            /* tp_getset */
-    0,                                          /* tp_base */
-    0,                                          /* tp_dict */
-    0,                                          /* tp_descr_get */
-    0,                                          /* tp_descr_set */
-    0,                                          /* tp_dictoffset */
-    0,                                          /* tp_init */
-    0,                                          /* tp_alloc */
-    pytealet_new,                               /* tp_new */
-    0,                                          /* tp_free */
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"_tealet.tealet",                           /* tp_name */
+	sizeof(PyTealetObject),                     /* tp_basicsize */
+	0,                                          /* tp_itemsize */
+	(destructor)pytealet_dealloc,                 /* tp_dealloc */
+	0,                                          /* tp_print */
+	0,                                          /* tp_getattr */
+	0,                                          /* tp_setattr */
+	0,                                          /* tp_compare */
+	0,                                          /* tp_repr */
+	0,                                          /* tp_as_number */
+	0,                                          /* tp_as_sequence */
+	0,                                          /* tp_as_mapping */
+	0,                                          /* tp_hash */
+	0,                                          /* tp_call */
+	0,                                          /* tp_str */
+	0,                                          /* tp_getattro */
+	0,                                          /* tp_setattro */
+	0,                                          /* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
+	"",                                         /* tp_doc */
+	0,                                          /* tp_traverse */
+	0,                                          /* tp_clear */
+	0,                                          /* tp_richcompare */
+	offsetof(PyTealetObject,weakreflist),       /* tp_weaklistoffset */
+	0,                                          /* tp_iter */
+	0,                                          /* tp_iternext */
+	pytealet_methods,                           /* tp_methods */
+	0,                                          /* tp_members */
+	pytealet_getset,                            /* tp_getset */
+	0,                                          /* tp_base */
+	0,                                          /* tp_dict */
+	0,                                          /* tp_descr_get */
+	0,                                          /* tp_descr_set */
+	0,                                          /* tp_dictoffset */
+	0,                                          /* tp_init */
+	0,                                          /* tp_alloc */
+	pytealet_new,                               /* tp_new */
+	0,                                          /* tp_free */
 };
 
 
@@ -527,12 +529,12 @@ pytealet_main(tealet_t *t_current, void *arg)
 	if (targ->stub) {
 		assert(tealet->state == STATE_STUB);
 		assert(t_current == tealet->tealet);
-		assert(t_current->data == (void*)tealet);
+		assert(TEALET_PY(t_current) == tealet);
 		PyObject_Free(arg); /* heap allocated */
 	} else {
 		/* set up the pointer in the tealet */
 		tealet->tealet = t_current;
-		t_current->data = (void*)tealet;
+		TEALET_PY(t_current) = tealet;
 	}
 
 	/* We only have borrowed references from the calling tealet.
@@ -597,7 +599,7 @@ pytealet_main(tealet_t *t_current, void *arg)
 	/* clear the old tealet */
 	tealet->state = STATE_EXIT;
 	tealet->tealet = NULL; /* will be auto-deleted on return */
-	t_current->data = NULL;
+	TEALET_PY(t_current) = NULL;
 	t_return = return_to->tealet;
 	
 	/* decref the objects after the switch */
@@ -623,7 +625,7 @@ static PyTealetObject *GetMain()
 		talloc.malloc_p = (tealet_malloc_t)&PyMem_Malloc;
 		talloc.free_p = (tealet_free_t)&PyMem_Free;
 		talloc.context = NULL;
-		tmain = tealet_initialize(&talloc);
+		tmain = tealet_initialize(&talloc, 0);
 		if (!tmain) {
 			PyErr_NoMemory();
 			return NULL;
@@ -647,7 +649,7 @@ static PyTealetObject *GetMain()
 		}
 		t_main->tealet = tmain;
 		t_main->state = STATE_RUN;
-		tmain->data = (void*)t_main; /* back link */
+		TEALET_PY(tmain) = t_main; /* back link */
 		PyThread_set_key_value(tls_key, (void*)t_main);
 	}
 	assert(t_main->tealet);
@@ -664,7 +666,7 @@ GetCurrent(PyTealetObject *main)
 		main = GetMain();
 	if (!main)
 		return NULL;
-	return (PyTealetObject*) (tealet_current(main->tealet)->data);
+	return TEALET_PY(tealet_current(main->tealet));
 }
 
 /* check if a target tealet is valid */
@@ -758,8 +760,8 @@ init_tealet(void)
 		return;
 	
 	m = Py_InitModule3("_tealet", module_methods, "");
-    if (m == NULL)
-        return;
+	if (m == NULL)
+		return;
 
 	/* Todo: Improve error handling */
 	PyModule_AddObject(m, "tealet", (PyObject*)&PyTealetType);
