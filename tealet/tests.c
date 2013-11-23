@@ -4,6 +4,7 @@
 #include <assert.h>
 
 #include "tealet.h"
+#include "tools.h"
 
 static int status = 0;
 static tealet_t *g_main = NULL;
@@ -11,11 +12,13 @@ static tealet_t *the_stub = NULL;
 static int newmode = 0;
 
 
-static tealet_alloc_t talloc = TEALET_MALLOC;
+static tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
 
-void init_test_extra(size_t extrasize) {
+void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
     assert(g_main == NULL);
-    g_main = tealet_initialize(&talloc, extrasize);
+    if (alloc == NULL)
+        alloc = &talloc;
+    g_main = tealet_initialize(alloc, extrasize);
     assert(tealet_current(g_main) == g_main);
     if (extrasize)
         assert(g_main->extra != NULL);
@@ -25,18 +28,18 @@ void init_test_extra(size_t extrasize) {
 }
 
 void init_test() {
-    init_test_extra(0);
+    init_test_extra(NULL, 0);
 }
 
 void fini_test() {
+    tealet_stats_t stats;
     assert(g_main != NULL);
     assert(tealet_current(g_main) == g_main);
     if (the_stub)
         tealet_delete(the_stub);
     the_stub = NULL;
-#ifndef NDEBUG
-    assert(tealet_get_count(g_main) == 0);
-#endif
+    tealet_get_stats(g_main, &stats);
+    assert(stats.n_active == 1); /* main tealet  only */
     tealet_finalize(g_main);
     g_main = NULL;
 }
@@ -614,7 +617,7 @@ void test_extra(void)
 {
     tealet_t *t1, *t2;
     extradata ed = {1, "abcd", 2};
-    init_test_extra(sizeof(extradata));
+    init_test_extra(NULL, sizeof(extradata));
     *TEALET_EXTRA(g_main, extradata) = ed;
 
     t1 = tealet_new(g_main, NULL, NULL);
@@ -624,6 +627,38 @@ void test_extra(void)
     mystub_run(t2, extra_tealet, NULL);
     fini_test();
 }
+
+void test_memstats(void)
+{
+    tealet_statsalloc_t salloc;
+    tealet_statsalloc_init(&salloc, &talloc);
+    assert(salloc.n_allocs == 0);
+    assert(salloc.s_allocs == 0);
+    init_test_extra(&salloc.alloc, 0);
+    assert(salloc.n_allocs > 0);
+    assert(salloc.s_allocs > 0);
+    fini_test();
+}
+
+void test_stats(void)
+{
+    tealet_t *t1;
+    tealet_stats_t stats;
+    init_test_extra(NULL, 0);
+    tealet_get_stats(g_main, &stats);
+    assert(stats.n_active == 1);
+    assert(stats.n_total == 1);
+    t1 = tealet_new(g_main, NULL, NULL);
+    tealet_get_stats(g_main, &stats);
+    assert(stats.n_active == 2);
+    assert(stats.n_total >= 2);
+    tealet_delete(t1);
+    tealet_get_stats(g_main, &stats);
+    assert(stats.n_active == 1);
+    assert(stats.n_total >= 2);
+    fini_test();
+}
+
 
 static void (*test_list[])(void) = {
   test_main_current,
@@ -636,6 +671,8 @@ static void (*test_list[])(void) = {
   test_random,
   test_random2,
   test_extra,
+  test_memstats,
+  test_stats,
   NULL
 };
 

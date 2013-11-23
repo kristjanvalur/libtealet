@@ -22,7 +22,7 @@
  * pointer that they can use as they please
  */
 typedef void*(*tealet_malloc_t)(size_t size, void *context);
-typedef void*(*tealet_free_t)(void *ptr, void *context);
+typedef void(*tealet_free_t)(void *ptr, void *context);
 typedef struct tealet_alloc_t {
   tealet_malloc_t malloc_p;
   tealet_free_t free_p;
@@ -33,11 +33,15 @@ typedef struct tealet_alloc_t {
  * structure with stdlib malloc functions, for convenience, e.g.:
  * tealet_alloc_t stdalloc = TEALET_MALLOC;
  */
-#define TEALET_MALLOC {\
+#define TEALET_ALLOC_INIT_MALLOC {\
     (tealet_malloc_t)&malloc, \
     (tealet_free_t)&free, \
     0 \
 }
+
+/* convenence macros to call an allocator */
+#define TEALET_ALLOC_MALLOC(alloc, size) (alloc)->malloc_p((size), (alloc)->context)
+#define TEALET_ALLOC_FREE(alloc, ptr) (alloc)->free_p((ptr), (alloc)->context)
 
 
 /* The user-visible tealet structure.  If an "extrasize" is provided when
@@ -202,7 +206,7 @@ void *tealet_get_far(tealet_t *tealet);
  * The arguments must match the real tealet_new() but are dummies.
  */
 TEALET_API
-void *tealet_new_far(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, size_t dummy4);
+void *tealet_new_far(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3);
 
 /* get the size of the suspended tealet's saved stack */
 TEALET_API
@@ -215,10 +219,14 @@ size_t tealet_get_stacksize(tealet_t *tealet);
 TEALET_API
 int tealet_status(tealet_t *tealet);
 
-#ifndef NDEBUG
+/* get status about the tealets. */
+typedef struct tealet_stats_t
+{
+    int n_active;
+    int n_total;
+} tealet_stats_t;
 TEALET_API
-int tealet_get_count(tealet_t *t);
-#endif
+void tealet_get_stats(tealet_t *t, tealet_stats_t *s);
 
 /* Convenience macros */
 #define TEALET_MAIN(t) ((t)->main)
