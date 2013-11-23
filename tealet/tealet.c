@@ -11,6 +11,12 @@
 #include <assert.h>
 #include <string.h>
 
+
+/* enable collection of tealet stats */
+#ifndef TEALET_WITH_STATS
+#define TEALET_WITH_STATS 1
+#endif
+
 /************************************************************
  * platform specific code
  */
@@ -85,7 +91,7 @@ typedef struct tealet_sub_t {
   tealet_t base;				   /* the public part of the tealet */
   char *stack_far;                 /* the "far" end of the stack or NULL when exiting */
   tealet_stack_t *stack;           /* saved stack or 0 if active or -1 if invalid*/
-#ifndef debug
+#ifndef NDEBUG
   int id;                          /* number of this tealet */
 #endif
 } tealet_sub_t;
@@ -106,7 +112,7 @@ typedef struct tealet_main_t {
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   size_t       g_extrasize; /* amount of extra memory in tealets */
-#ifndef NDEBUG
+#if TEALET_WITH_STATS
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
 #endif
@@ -425,7 +431,7 @@ static void *tealet_save_state(void *old_stack_pointer, void *main)
         assert(!TEALET_IS_MAIN_STACK(g_current));
         if (g_current->stack == NULL) {
             /* auto-delete the tealet */
-#ifndef NDEBUG
+#if TEALET_WITH_STATS
             g_main->g_tealets--;
 #endif
             tealet_int_free(g_main, g_current);
@@ -563,8 +569,10 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
     g = (tealet_sub_t*) alloc->malloc_p(size, alloc->context);
     if (g == NULL)
         return NULL;
-    if (g_main == NULL)
+    if (g_main == NULL) {
         g_main = (tealet_main_t *)g;
+        g_main->g_counter = 0;
+    }
     g->base.main = (tealet_t *)g_main;
     if (extrasize)
         g->base.extra = (void*)((char*)g + basesize);
@@ -573,7 +581,13 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
     g->stack = NULL;
     g->stack_far = NULL;
 #ifndef NDEBUG
-    g->id = g_main->g_counter++;
+    g->id = 0;
+#endif
+#if TEALET_WITH_STATS
+    g_main->g_counter++;
+#ifndef NDEBUG
+    g->id = g_main->g_counter;
+#endif
 #endif
     return g;
 }
@@ -611,9 +625,10 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_alloc = *alloc;
     g_main->g_prev =  NULL;
     g_main->g_extrasize = extrasize;
-#ifndef NDEBUG
-    g_main->g_tealets = 0;
-    g_main->g_counter = 0;
+#if TEALET_WITH_STATS
+    /* init these.  the main tealet counts as one */
+    g_main->g_tealets = 1;
+    assert(g_main->g_counter == 1); /* set in alloc_raw */
 #endif
     assert(TEALET_IS_MAIN_STACK(g_main));
     /* set up the following field with an indirection, which is needed
@@ -655,7 +670,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
         return NULL; /* Could not allocate */
     g_main->g_target = result;
     g_main->g_arg = parg ? *parg : NULL;
-#ifndef NDEBUG
+#if TEALET_WITH_STATS
     g_main->g_tealets ++;
 #endif
     fail = _tealet_initialstub(g_main, run, (void*)&result);
@@ -663,7 +678,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
         /* could not save stack */
         tealet_int_free(g_main, result);
         g_main->g_target = NULL;
-#ifndef NDEBUG
+#if TEALET_WITH_STATS
         g_main->g_tealets --;
 #endif
         return NULL;
@@ -728,7 +743,7 @@ tealet_t *tealet_duplicate(tealet_t *tealet)
     g_copy = tealet_alloc(g_main);
     if (g_copy == NULL)
         return NULL;
-#ifndef NDEBUG
+#if TEALET_WITH_STATS
     g_main->g_tealets++;
 #endif
     g_copy->stack_far = g_tealet->stack_far;
@@ -745,7 +760,7 @@ void tealet_delete(tealet_t *target)
     assert(!TEALET_IS_MAIN(target));
     tealet_stack_decref(g_main, g_target->stack);
     tealet_int_free(g_main, g_target);
-#ifndef NDEBUG
+#if TEALET_WITH_STATS
     g_main->g_tealets--;
 #endif
 }
@@ -772,12 +787,16 @@ int tealet_status(tealet_t *_tealet)
     return TEALET_STATUS_ACTIVE;
 }
 
-#ifndef NDEBUG
-int tealet_get_count(tealet_t *tealet)
+void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
 {
-    return TEALET_GET_MAIN(tealet)->g_tealets;
-}
+#if ! TEALET_WITH_STATS
+    memset(stats, 0, sizeof(*stats));
+#else
+    tealet_main_t *tmain = TEALET_GET_MAIN(tealet);
+    stats->n_active = tmain->g_tealets;
+    stats->n_total = tmain->g_counter;
 #endif
+}
 
 ptrdiff_t tealet_stack_diff(void *a, void *b)
 {
@@ -790,14 +809,13 @@ void *tealet_get_far(tealet_t *_tealet)
     return tealet->stack_far;
 }
 
-void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3, size_t d4)
+void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
 {
     tealet_sub_t *result;
     void *r;
     (void)d1;
     (void)d2;
     (void)d3;
-    (void)d4;
     /* avoid compiler warnings about returning tmp addr */
     r = (void*)&result;
     return r;

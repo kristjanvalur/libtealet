@@ -170,6 +170,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="tealet.c" />
+    <ClCompile Include="tools.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="platf_slp\slp_fallback.h" />
@@ -179,6 +180,7 @@
     <ClInclude Include="switch_x86_msvc.h" />
     <ClInclude Include="switch_x86_64_gcc.h" />
     <ClInclude Include="switch_x86_gcc.h" />
+    <ClInclude Include="tools.h" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="switch_x64_msvc.asm">
