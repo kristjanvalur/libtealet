@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
+
 #include "tealet.h"
 
 static int status = 0;
@@ -10,12 +12,22 @@ static int newmode = 0;
 
 
 static tealet_alloc_t talloc = TEALET_MALLOC;
-void init_test() {
+
+void init_test_extra(size_t extrasize) {
     assert(g_main == NULL);
-    g_main = tealet_initialize(&talloc, 0);
+    g_main = tealet_initialize(&talloc, extrasize);
     assert(tealet_current(g_main) == g_main);
+    if (extrasize)
+        assert(g_main->extra != NULL);
+    else
+        assert(g_main->extra == NULL);
     status = 0;
 }
+
+void init_test() {
+    init_test_extra(0);
+}
+
 void fini_test() {
     assert(g_main != NULL);
     assert(tealet_current(g_main) == g_main);
@@ -56,7 +68,7 @@ static tealet_t *mystub_main(tealet_t *current, void *arg)
 /* create a stub and return it */
 tealet_t *mystub_new(tealet_t *t) {
     void *arg = (void*)tealet_current(t);
-    return tealet_new(t, mystub_main, &arg, 0);
+    return tealet_new(t, mystub_main, &arg);
 }
 
 /* run a stub */
@@ -96,7 +108,7 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
     if (level > 0)
         return tealet_new_descend(t, level-1, run, parg);
     if (run)
-        return tealet_new(t, run, parg, 0);
+        return tealet_new(t, run, parg);
     else
         return mystub_new(t);
 }
@@ -135,7 +147,7 @@ static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg)
     stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     if (stub == NULL)
         return NULL;
-    dup = tealet_duplicate(stub, 0);
+    dup = tealet_duplicate(stub);
     if (stub == NULL) {
         tealet_delete(stub);
         return NULL;
@@ -166,7 +178,7 @@ static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg)
         the_stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     if (the_stub == NULL)
         return NULL;
-    dup = tealet_duplicate(the_stub, 0);
+    dup = tealet_duplicate(the_stub);
     if (dup == NULL)
         return NULL;
     if (run) {
@@ -261,7 +273,7 @@ void test_exit(void)
   void *arg;
   init_test();
   stub1 = tealet_new(g_main, NULL, NULL);
-  stub2 = tealet_duplicate(stub1, 0);
+  stub2 = tealet_duplicate(stub1);
   arg = (void*)TEALET_EXIT_NODELETE;
   result = mystub_run(stub1, test_exit_run, &arg);
   assert(result == 0);
@@ -584,6 +596,35 @@ void test_random2(void)
     tealetarray[0] = NULL;
     fini_test();
 }
+
+typedef struct extradata {
+    int foo;
+    char bar[5];
+    int gaz;
+} extradata;
+
+tealet_t *extra_tealet(tealet_t* cur, void *arg)
+{
+  extradata ed = {1, "abcd", 2};
+  assert(memcmp(TEALET_EXTRA(cur, extradata), &ed, sizeof(ed)) == 0);
+  return g_main;
+}
+
+void test_extra(void)
+{
+    tealet_t *t1, *t2;
+    extradata ed = {1, "abcd", 2};
+    init_test_extra(sizeof(extradata));
+    *TEALET_EXTRA(g_main, extradata) = ed;
+
+    t1 = tealet_new(g_main, NULL, NULL);
+    *TEALET_EXTRA(t1, extradata) = ed;
+    t2 = tealet_duplicate(t1);
+    mystub_run(t1, extra_tealet, NULL);
+    mystub_run(t2, extra_tealet, NULL);
+    fini_test();
+}
+
 static void (*test_list[])(void) = {
   test_main_current,
   test_simple,
@@ -594,6 +635,7 @@ static void (*test_list[])(void) = {
   test_arg,
   test_random,
   test_random2,
+  test_extra,
   NULL
 };
 

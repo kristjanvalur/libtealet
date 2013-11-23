@@ -41,8 +41,8 @@ typedef struct tealet_alloc_t {
 
 
 /* The user-visible tealet structure.  If an "extrasize" is provided when
- * the tealet is created, "extra" points to a block of that size, otherwise
- * it is initialized to NULL
+ * the main tealet was initialized, "extra" points to a private block of
+ * that size, otherwise it is initialized to NULL
  */
 typedef struct tealet_t {
   struct tealet_t *main;   /* pointer to the main tealet */
@@ -73,6 +73,10 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
  * or to call them in multiple threads in case of multithreaded programs,
  * as long as you don't try to switch between tealets created with a
  * different main tealet.
+ * If 'extrasize' is non-zero, all tealets will be allocated with an
+ * extra data buffer of 'extrasize' and their 'extra' member initialized
+ * to point to that buffer.  Otherwise, the 'extra' members are set
+ * to NULL.
  */
 TEALET_API
 tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize);
@@ -103,11 +107,9 @@ void tealet_free(tealet_t *tealet, void *p);
  * causing this return.
  * 'arg' can be NULL, in which case NULL is passed to run and no result
  * argument is passed.
- * If 'extrasize' is non-zero, extra data will be allocated and the tealet's
- * 'extra' member points to it, otherwise it is set to NULL
  */
 TEALET_API
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, size_t extrasize);
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg);
 
 /* Switch to another tealet.  Execution continues there.  The tealet
  * passed in must not have been freed yet and must descend from
@@ -151,7 +153,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  * Any extra data is left uncopied, the application must do that.
  */
 TEALET_API
-tealet_t *tealet_duplicate(tealet_t *tealet, size_t extrasize);
+tealet_t *tealet_duplicate(tealet_t *tealet);
 
 /* Deallocate a tealet.  Use this to delete a tealet that has exited
  * with tealet_exit() with 'TEALET_EXIT_NODELETE', or defunct tealets.
