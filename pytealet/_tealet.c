@@ -1,9 +1,10 @@
 
 #include <stddef.h>
-#include "Python.h"
-#include "structmember.h"
-#include "frameobject.h"
-#include "pythread.h"
+
+#include <Python.h>
+#include <structmember.h>
+#include <frameobject.h>
+#include <pythread.h>
 
 #include "tealet.h"
 
@@ -78,8 +79,11 @@ static PyTypeObject PyTealetType;
 
 static int tls_key;
 
-/* convenience macro to access the "extra" argument as a pointer to PyTealetObject */
-#define TEALET_PY(t) TEALET_EXTRA((t), PyTealetObject)
+/* convenience macros to access the "extra" argument as a pointer to PyTealetObject */
+#define GET_TEALET_PY(t) ((struct PyTealetObject*) ((t)->extra))
+#define SET_TEALET_PY(t, v) do { \
+		(t)->extra = (void*) (v); \
+	} while (0)
 
 /* the structure we associate with the main tealet */
 typedef struct main_data
@@ -229,7 +233,7 @@ pytealet_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds)
 				Py_DECREF(result);
 				return PyErr_NoMemory();
 			}
-			TEALET_PY(result->tealet) = result;
+			SET_TEALET_PY(result->tealet, result);
 		}
 		result->state = src->state;
 	}
@@ -276,7 +280,7 @@ pytealet_stub(PyObject *self)
 		return PyErr_NoMemory();
 	pytealet->tealet = tresult;
 	pytealet->state = STATE_STUB;
-	TEALET_PY(tresult) = pytealet;
+	SET_TEALET_PY(tresult, pytealet);
 	Py_INCREF(self);
 	return self;
 }
@@ -419,7 +423,7 @@ static PyObject *
 pytealet_get_main(PyObject *_self, void *_closure)
 {
 	PyTealetObject *self = (PyTealetObject *)_self;
-	PyTealetObject *main = TEALET_PY(self->tealet->main);
+	PyTealetObject *main = GET_TEALET_PY(self->tealet->main);
 	Py_INCREF(main);
 	return (PyObject*)main;
 }
@@ -529,12 +533,12 @@ pytealet_main(tealet_t *t_current, void *arg)
 	if (targ->stub) {
 		assert(tealet->state == STATE_STUB);
 		assert(t_current == tealet->tealet);
-		assert(TEALET_PY(t_current) == tealet);
+		assert(GET_TEALET_PY(t_current) == tealet);
 		PyObject_Free(arg); /* heap allocated */
 	} else {
 		/* set up the pointer in the tealet */
 		tealet->tealet = t_current;
-		TEALET_PY(t_current) = tealet;
+		SET_TEALET_PY(t_current, tealet);
 	}
 
 	/* We only have borrowed references from the calling tealet.
@@ -599,7 +603,7 @@ pytealet_main(tealet_t *t_current, void *arg)
 	/* clear the old tealet */
 	tealet->state = STATE_EXIT;
 	tealet->tealet = NULL; /* will be auto-deleted on return */
-	TEALET_PY(t_current) = NULL;
+	SET_TEALET_PY(t_current, NULL);
 	t_return = return_to->tealet;
 	
 	/* decref the objects after the switch */
@@ -649,7 +653,7 @@ static PyTealetObject *GetMain()
 		}
 		t_main->tealet = tmain;
 		t_main->state = STATE_RUN;
-		TEALET_PY(tmain) = t_main; /* back link */
+		SET_TEALET_PY(tmain, t_main); /* back link */
 		PyThread_set_key_value(tls_key, (void*)t_main);
 	}
 	assert(t_main->tealet);
@@ -666,7 +670,7 @@ GetCurrent(PyTealetObject *main)
 		main = GetMain();
 	if (!main)
 		return NULL;
-	return TEALET_PY(tealet_current(main->tealet));
+	return GET_TEALET_PY(tealet_current(main->tealet));
 }
 
 /* check if a target tealet is valid */
