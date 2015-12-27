@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include "tealet.h"
 #include "tools.h"
@@ -264,7 +265,7 @@ tealet_t *test_exit_run(tealet_t *t1, void *arg)
   int result;
   assert(t1 != g_main);
   status += 1;
-  result = tealet_exit(g_main, NULL, (int)arg);
+  result = tealet_exit(g_main, NULL, (intptr_t)arg);
   assert(0);
   return (tealet_t*)-1;
 }
@@ -445,7 +446,7 @@ static void random_run(int index)
         {
           if (status >= MAX_STATUS)
             break;
-          arg = (void*)i;
+          arg = (void*)(intptr_t)i;
           tealet_new(g_main, random_new_tealet, &arg);
         }
       else
@@ -464,7 +465,7 @@ tealet_t *random_new_tealet(tealet_t* cur, void *arg)
 {
   int i = got_index;
   assert(tealet_current(g_main) == cur);
-  assert(i == (int)(arg));
+  assert(i == (intptr_t)(arg));
   assert(i > 0 && i < ARRAYSIZE);
   assert(tealetarray[i] == NULL);
   tealetarray[i] = cur;
@@ -515,7 +516,7 @@ void test_random(void)
 void random2_run(int index);
 tealet_t *random2_tealet(tealet_t* cur, void *arg)
 {
-  int index = (int)arg;
+  int index = (intptr_t)arg;
   assert(tealet_current(g_main) == cur);
   assert(index > 0 && index < ARRAYSIZE);
   assert(tealetarray[index] == NULL);
@@ -525,7 +526,7 @@ tealet_t *random2_tealet(tealet_t* cur, void *arg)
   return tealetarray[0]; /* switch to main */
 }
 void random2_new(int index) {
-    void *arg = (void*)index;
+    void *arg = (void*)(intptr_t)index;
     tealet_new(g_main, random2_tealet, &arg);
 }
 
