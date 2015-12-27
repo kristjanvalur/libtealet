@@ -8,6 +8,7 @@
 #include "tealet.h"
 
 #include <stddef.h>
+#include <stdint.h> /* for intptr_t */
 #include <assert.h>
 #include <string.h>
 
@@ -509,10 +510,10 @@ static int tealet_switchstack(tealet_main_t *g_main)
         res = slp_switch(tealet_save_state, tealet_restore_state, g_main);
         g_main->g_target = *ptarget;
     }
-    if ((int)res >= 0)
+    if ((intptr_t)res >= 0)
         g_main->g_current = g_main->g_target;
     g_main->g_target = NULL;
-    return (int)res;
+    return (int)(intptr_t)res;
 }
 
 /* We are initializing and switching to a new stub,
