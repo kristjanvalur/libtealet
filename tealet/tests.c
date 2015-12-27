@@ -609,8 +609,11 @@ typedef struct extradata {
 
 tealet_t *extra_tealet(tealet_t* cur, void *arg)
 {
-  extradata ed = {1, "abcd", 2};
-  assert(memcmp(TEALET_EXTRA(cur, extradata), &ed, sizeof(ed)) == 0);
+  extradata ed2 = {1, "abcd", 2};
+  extradata *ed1 = TEALET_EXTRA(cur, extradata);
+  assert(ed1->foo == ed2.foo);
+  assert(strcmp(ed1->bar, ed2.bar) == 0);
+  assert(ed1->gaz == ed2.gaz);
   return g_main;
 }
 
