@@ -152,7 +152,7 @@ static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg)
     if (stub == NULL)
         return NULL;
     dup = tealet_duplicate(stub);
-    if (stub == NULL) {
+    if (dup == NULL) {
         tealet_delete(stub);
         return NULL;
     }
@@ -648,19 +648,22 @@ void test_stats(void)
 {
     tealet_t *t1;
     tealet_stats_t stats;
+    int a, b;
     init_test_extra(NULL, 0);
     tealet_get_stats(g_main, &stats);
     assert(stats.n_active == 1);
     assert(stats.n_total == 1);
     t1 = tealet_new(g_main, NULL, NULL);
     tealet_get_stats(g_main, &stats);
-    printf("dud %d\n", stats.n_active);
-    assert(stats.n_active == 2);
-    assert(stats.n_total >= 2);
+    /* can be more than 2 because of stub tealet */
+    a = stats.n_active;
+    b = stats.n_total;
+    assert(a >= 2);
+    assert(b >= a); /* can be bigger if tmp stub was created */
     tealet_delete(t1);
     tealet_get_stats(g_main, &stats);
-    assert(stats.n_active == 1);
-    assert(stats.n_total >= 2);
+    assert(stats.n_active == a - 1);
+    assert(stats.n_total == b);
     fini_test();
 }
 
@@ -698,7 +701,7 @@ void runmode(int mode)
 int main(int argc, char **argv)
 {
     int i;
-    for (i = 0; i<3; i++)
+    for (i = 0; i<=3; i++)
         runmode(i);
     runmode(-1);
     return 0;
