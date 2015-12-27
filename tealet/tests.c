@@ -654,6 +654,7 @@ void test_stats(void)
     assert(stats.n_total == 1);
     t1 = tealet_new(g_main, NULL, NULL);
     tealet_get_stats(g_main, &stats);
+    printf("dud %d\n", stats.n_active);
     assert(stats.n_active == 2);
     assert(stats.n_total >= 2);
     tealet_delete(t1);
