@@ -115,7 +115,7 @@ typedef struct pytealet_main_arg {
 } pytealet_main_arg;
 
 /* helpers for getting main and current and checking relationship */
-static PyTealetObject *GetMain();
+static PyTealetObject *GetMain(void);
 static PyTealetObject *GetCurrent(PyTealetObject *main);
 static int CheckTarget(PyTealetObject *target, PyTealetObject *main);
 
@@ -265,17 +265,17 @@ pytealet_dealloc(PyObject *obj)
 static PyObject *
 pytealet_stub(PyObject *self)
 {
-	PyTealetObject *main, *pytealet = (PyTealetObject*)self;
+	PyTealetObject *tmain, *pytealet = (PyTealetObject*)self;
 	tealet_t *tresult;
 	if (pytealet->state != STATE_NEW) {
 		PyErr_SetString(StateError, "must be new");
 		return NULL;
 	}
 	assert(pytealet->tealet == NULL);
-	main = GetMain();
-	if (!main)
+	tmain = GetMain();
+	if (!tmain)
 		return NULL;
-	tresult = stub_new(main->tealet);
+	tresult = stub_new(tmain->tealet);
 	if (!tresult)
 		return PyErr_NoMemory();
 	pytealet->tealet = tresult;
@@ -342,10 +342,10 @@ pytealet_run(PyObject *self, PyObject *args, PyObject *kwds)
 			goto err;
 		}
 	} else {
-		PyTealetObject *main = GetMain();
-		if (!main)
+		PyTealetObject *tmain = GetMain();
+		if (!tmain)
 			goto err;
-		tealet = tealet_new(main->tealet, pytealet_main, &switch_arg);
+		tealet = tealet_new(tmain->tealet, pytealet_main, &switch_arg);
 		if (!tealet) {
 			PyErr_NoMemory();
 			goto err;
@@ -423,9 +423,9 @@ static PyObject *
 pytealet_get_main(PyObject *_self, void *_closure)
 {
 	PyTealetObject *self = (PyTealetObject *)_self;
-	PyTealetObject *main = GET_TEALET_PY(self->tealet->main);
-	Py_INCREF(main);
-	return (PyObject*)main;
+	PyTealetObject *tmain = GET_TEALET_PY(self->tealet->main);
+	Py_INCREF(tmain);
+	return (PyObject*)tmain;
 }
 
 static PyObject *
@@ -618,7 +618,7 @@ pytealet_main(tealet_t *t_current, void *arg)
 
 
 /* return a borrowed reference to this thread's main tealet */
-static PyTealetObject *GetMain()
+static PyTealetObject *GetMain(void)
 {
 	/* Get the thread's main tealet */
 	PyTealetObject *t_main = (PyTealetObject*)PyThread_get_key_value(tls_key);
@@ -664,13 +664,13 @@ static PyTealetObject *GetMain()
 
 /* return a borrowed ref to this threads current tealet */
 static PyTealetObject *
-GetCurrent(PyTealetObject *main)
+GetCurrent(PyTealetObject *tmain)
 {
-	if (!main)
-		main = GetMain();
-	if (!main)
+	if (!tmain)
+		tmain = GetMain();
+	if (!tmain)
 		return NULL;
-	return GET_TEALET_PY(tealet_current(main->tealet));
+	return GET_TEALET_PY(tealet_current(tmain->tealet));
 }
 
 /* check if a target tealet is valid */
@@ -696,7 +696,7 @@ CheckTarget(PyTealetObject *target, PyTealetObject *ref)
 
 
 static PyObject *
-module_current()
+module_current(void)
 {
 	PyTealetObject* current = GetCurrent(NULL);
 	Py_XINCREF(current);
@@ -704,11 +704,11 @@ module_current()
 }
 
 static PyObject *
-module_main()
+module_main(void)
 {
-	PyTealetObject* main = GetMain();
-	Py_XINCREF(main);
-	return (PyObject*)main;
+	PyTealetObject* tmain = GetMain();
+	Py_XINCREF(tmain);
+	return (PyObject*)tmain;
 }
 
 static PyObject *
@@ -751,7 +751,7 @@ PyMODINIT_FUNC
 init_tealet(void)
 {
 	PyObject *m;
-	PyTealetObject *main;
+	PyTealetObject *tmain;
 
 	tls_key = PyThread_create_key();
 
@@ -759,8 +759,8 @@ init_tealet(void)
 	if (PyType_Ready(&PyTealetType))
 		return;
 
-	main = GetMain();
-	if (!main)
+	tmain = GetMain();
+	if (!tmain)
 		return;
 	
 	m = Py_InitModule3("_tealet", module_methods, "");
