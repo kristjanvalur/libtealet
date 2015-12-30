@@ -32,7 +32,7 @@
  */
 #define STACK_DIRECTION 0   
 
-#include "slp_platformselect.h"
+#include "platf_tealet/slp_platformselect.h"
 
 #if STACK_DIRECTION == 0
 #define STACK_FAR_MAIN     ((char*) -1)     /* for stack_far */

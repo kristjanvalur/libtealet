@@ -28,5 +28,5 @@
 #ifdef USE_SLP_FALLBACK
 /* hope this is standard C */
 #pragma message("fallback to stackless platform support. Switching is not thread-safe")
-#include "platf_slp/slp_fallback.h"
+#include "../platf_slp/slp_fallback.h"
 #endif

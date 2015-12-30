@@ -175,11 +175,11 @@
   <ItemGroup>
     <ClInclude Include="platf_slp\slp_fallback.h" />
     <ClInclude Include="tealet.h" />
-    <ClInclude Include="slp_platformselect.h" />
-    <ClInclude Include="switch_x64_msvc.h" />
-    <ClInclude Include="switch_x86_msvc.h" />
-    <ClInclude Include="switch_x86_64_gcc.h" />
-    <ClInclude Include="switch_x86_gcc.h" />
+    <ClInclude Include="platf_tealet\slp_platformselect.h" />
+    <ClInclude Include="platf_tealet\switch_x64_msvc.h" />
+    <ClInclude Include="platf_tealet\switch_x86_msvc.h" />
+    <ClInclude Include="platf_tealet\switch_x86_64_gcc.h" />
+    <ClInclude Include="platf_tealet\switch_x86_gcc.h" />
     <ClInclude Include="tools.h" />
   </ItemGroup>
   <ItemGroup>
