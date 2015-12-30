@@ -4,7 +4,7 @@ import time
 import threading
 import unittest
 
-from greenlet import greenlet
+from tealet.greenlet import greenlet
 
 class SomeError(Exception):
     pass
