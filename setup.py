@@ -2,7 +2,7 @@
 # coding=utf-8
 # the setuping code
 
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 
 # To use a consistent encoding
 from codecs import open
@@ -36,6 +36,6 @@ setup(
 	author_email="sweskman@gmail.com",
 
 	ext_modules=[_tealet,],
-	packages=["tealet",],
-	test_suite="tests",
+	packages=find_packages(exclude=["*.tests"]),#["tealet",],
+	test_suite="tealet.tests",
 )
