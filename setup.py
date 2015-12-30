@@ -37,5 +37,5 @@ setup(
 
 	ext_modules=[_tealet,],
 	packages=["tealet",],
-
+	test_suite="tests",
 )
