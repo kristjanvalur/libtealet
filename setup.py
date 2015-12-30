@@ -15,14 +15,14 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 
-tealetext = Extension(
+_tealet = Extension(
 	name="_tealet",
 	sources=[
-		"tealet/_tealet.c",
-		"src/tealet.c",
+		"src/_tealet.c",
+		"ctealet/tealet.c",
 	],
 	include_dirs=[
-		"src",
+		"ctealet",
 	],
 )
 
@@ -35,6 +35,7 @@ setup(
 	author="Kristján Valur Jónsson",
 	author_email="sweskman@gmail.com",
 
-	ext_modules=[tealetext,]
+	ext_modules=[_tealet,],
+	packages=["tealet",],
 
 )
