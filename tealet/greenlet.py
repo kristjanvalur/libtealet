@@ -50,21 +50,26 @@ class greenlet(object):
         tealetmap[self._tealet] = self
 
     def __del__(self):
-        if self:
-            if _tealet.current() == self._tealet:
-                # Can't kill ourselves from here
-                return
-            tealetmap[self._tealet] = self # re-insert
-            old = self.parent
-            self.parent = getcurrent()
-            try:
-                self.throw()
-            except error:
-                # This must be a foreign tealet.  Insert it to
-                # it's main tealet's garbage heap
-                self._main._garbage.append(self)
-            finally:
-                self.parent = old
+        try:
+            if self:
+                if _tealet.current() == self._tealet:
+                    # Can't kill ourselves from here
+                    return
+                tealetmap[self._tealet] = self # re-insert
+                old = self.parent
+                self.parent = getcurrent()
+                try:
+                    self.throw()
+                except error:
+                    # This must be a foreign tealet.  Insert it to
+                    # it's main tealet's garbage heap
+                    self._main._garbage.append(self)
+                finally:
+                    self.parent = old
+        except AttributeError as e:
+            # ignore attribute errors at exit due to module teardown
+            if "NoneType" not in str(e):
+                raise
 
     @property
     def gr_frame(self):
