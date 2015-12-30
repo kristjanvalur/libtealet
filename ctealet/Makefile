@@ -1,5 +1,5 @@
 
-all: tealet.so
+all: libtealet.so
 
 libtealet.so: tealet.c tealet.h
 	gcc -fPIC -shared -O2 -o $@ tealet.c
