@@ -20,6 +20,7 @@ _tealet = Extension(
     sources=[
         "src/_tealet.c",
         "ctealet/tealet.c",
+        "ctealet/tools.c",
     ],
     include_dirs=[
         "ctealet",
