@@ -45,61 +45,6 @@ void fini_test() {
     g_main = NULL;
 }
 
-/****************************************************************
- *Implement copyable stubs by using a trampoline
- */
-struct mystub_arg
-{
-    tealet_t *current;
-    tealet_run_t run;
-    void *runarg;
-};
-static tealet_t *mystub_main(tealet_t *current, void *arg)
-{
-    void *myarg = 0;
-    /* the caller is in arg, return right back to him */
-    tealet_switch((tealet_t*)arg, &myarg);
-    /* now we are back, myarg should contain the arg to the run function.
-     * We were possibly duplicated, so can't trust the original function args.
-     */
-    {
-        struct mystub_arg sarg = *(struct mystub_arg*)myarg;
-        tealet_free(sarg.current, myarg);
-        return (sarg.run)(sarg.current, sarg.runarg);
-    }
-}
-
-/* create a stub and return it */
-tealet_t *mystub_new(tealet_t *t) {
-    void *arg = (void*)tealet_current(t);
-    return tealet_new(t, mystub_main, &arg);
-}
-
-/* run a stub */
-int mystub_run(tealet_t *stub, tealet_run_t run, void **parg)
-{
-    int result;
-    void *myarg;
-    /* we cannot pass arguments to a different tealet on the stack */
-    struct mystub_arg *psarg = (struct mystub_arg*)tealet_malloc(stub, sizeof(struct mystub_arg));
-    if (!psarg)
-        return TEALET_ERR_MEM;
-    psarg->current = stub;
-    psarg->run = run;
-    psarg->runarg = parg ? *parg : NULL;
-    myarg = (void*)psarg;
-    result = tealet_switch(stub, &myarg);
-    if (result) {
-        /* failure */
-        tealet_free(stub, psarg);
-        return result;
-    }
-    /* pass back the arg value from the switch */
-    if (parg)
-        *parg = myarg;
-    return 0;
-}
-
 
 
 /**************************************/
@@ -114,7 +59,7 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
     if (run)
         return tealet_new(t, run, parg);
     else
-        return mystub_new(t);
+        return tealet_stub_new(t);
 }
 
 /***************************************
@@ -133,7 +78,7 @@ static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg)
     if (stub == NULL)
         return NULL;
     if (run)
-        res = mystub_run(stub, run, parg);
+        res = tealet_stub_run(stub, run, parg);
     else
         res = 0;
     if (res) {
@@ -157,7 +102,7 @@ static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg)
         return NULL;
     }
     if (run)
-        res = mystub_run(dup, run, parg);
+        res = tealet_stub_run(dup, run, parg);
     else
         res = 0;
     tealet_delete(stub);
@@ -186,7 +131,7 @@ static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg)
     if (dup == NULL)
         return NULL;
     if (run) {
-        res = mystub_run(dup, run, parg);
+        res = tealet_stub_run(dup, run, parg);
         if (res) {
             tealet_delete(dup);
             assert(res == TEALET_ERR_MEM);
@@ -253,7 +198,7 @@ void test_status(void)
   stub1 = tealet_new(g_main, NULL, NULL);
   assert(tealet_status(stub1) == TEALET_STATUS_ACTIVE);
   assert(!TEALET_IS_MAIN(stub1));
-  mystub_run(stub1, test_status_run, NULL);
+  tealet_stub_run(stub1, test_status_run, NULL);
 
   fini_test();
 }
@@ -279,13 +224,13 @@ void test_exit(void)
   stub1 = tealet_new(g_main, NULL, NULL);
   stub2 = tealet_duplicate(stub1);
   arg = (void*)TEALET_EXIT_NODELETE;
-  result = mystub_run(stub1, test_exit_run, &arg);
+  result = tealet_stub_run(stub1, test_exit_run, &arg);
   assert(result == 0);
   assert(status == 1);
   assert(tealet_status(stub1) == TEALET_STATUS_EXITED);
   tealet_delete(stub1);
   arg = (void*)TEALET_EXIT_DEFAULT;
-  result = mystub_run(stub2, test_exit_run, &arg);
+  result = tealet_stub_run(stub2, test_exit_run, &arg);
   assert(status == 2);
   fini_test();
 }
@@ -627,8 +572,8 @@ void test_extra(void)
     t1 = tealet_new(g_main, NULL, NULL);
     *TEALET_EXTRA(t1, extradata) = ed;
     t2 = tealet_duplicate(t1);
-    mystub_run(t1, extra_tealet, NULL);
-    mystub_run(t2, extra_tealet, NULL);
+    tealet_stub_run(t1, extra_tealet, NULL);
+    tealet_stub_run(t2, extra_tealet, NULL);
     fini_test();
 }
 
