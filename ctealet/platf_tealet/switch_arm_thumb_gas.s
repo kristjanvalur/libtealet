@@ -22,49 +22,68 @@
 @     a) obtain the stack pointer.    (mov r0, sp)
 @     b) restore the stack pointer.   (add sp, sp, r0)
 @ which were used in the original inlined assembly.  The rest of the code was
-@ just patched together based on Kristjan's existing masm source code.
+@ just patched together based on Kristjan's existing masm source code
 
-@ (int) slp_switch (void);
+@ Addendum 2016-01-06: Kristjan Valur Jonssons
+@ Converted to tealet semantics
+@ This means that the functions to save and restore state, plus an argument
+@ are passed to the function.  These must be stored in nv registers.
+@ The early exit condition is different, we return if bit 0 is set.
+@ state_save returns absolute PC, not an offset.
+@ finally, branching to dynamic addresses is a bit complicated in thumb, where
+@ the address must have 1 in the lowest bit.
+
+@ (void *) tealet_slp_switch (save_func, restore_func, arg);
 	.thumb
 	.align	2
-	.global	slp_switch
-	.type	slp_switch, %function		@ Apparently useful for .map files.
+	.global	tealet_slp_switch
+	.type	tealet_slp_switch, %function	@ Apparently useful for .map files.
 	.thumb_func
 
-slp_switch:
-	push	{r4, r5, r6, r7, lr}
-	mov	r7, fp
-	mov	r6, sl
+tealet_slp_switch:
+	push	{r4-r7, lr}
+	mov	r7, r11
+	mov	r6, r10
 	mov	r5, r9
 	mov	r4, r8
-	push	{r4, r5, r6, r7}
- 
+	push	{r4-r7}
+	@ additional register saves would come here
+	add	r7, sp, #28			@ thumb fp, points to saved s7 
+
+	@ save call arguments
+	@ note that these must be constant for all switches, we
+	@ cannot save them on stack and restore a value for after switch
+	mov	r4, r0	@ save_state
+	mov	r5, r1  @ restore_state
+	mov	r6, r2	@ arg
+
+	@ save state call.
+
 	mov	r0, sp
-	bl	slp_save_state			@ diff = slp_save_state([r0]stackref)
+	mov	r1, r6
+	mov	r2, #1	@ set bit 0 of branch address to 1 for blx
+	orr	r2, r2, r4
+	blx	r2	@ sp = (*save_func)(stackref, arg)
 
-	mov	r1, #0				@ r1 = -1
-	mvn	r1, r1
-	
-	cmp	r0, r1				@ if (diff == -1)
-	beq	.exit				@     return -1;
-
-	cmp	r0, #1				@ if (diff ==  1)
-	beq	.no_restore			@     return  0;
+	@ is the return value odd ?
+	mov	r1, #1				@ test low order bit
+	tst	r0, r1
+	bne	.exit				@ return r0 if not zero;
 
 .restore:
-	add	sp, sp, r0			@ Adjust the stack pointer for the state we are restoring.
+	mov	sp, r0				@ Adjust the stack pointer for the state we are restoring.
 
-	bl	slp_restore_state		@ slp_restore_state()
-
-.no_restore:
-	mov	r0, #0				@ Switch successful (whether we restored or not).
+	mov	r1, r6
+	mov	r2, #1
+	orr	r2, r2, r5
+	blx	r5	@ sp = (*restore_func)(stackref, arg)
 
 .exit:
 	pop	{r2, r3, r4, r5}
 	mov	r8, r2
 	mov	r9, r3
-	mov	sl, r4
-	mov	fp, r5
-	pop	{r4, r5, r6, r7, pc}
+	mov	r10, r4
+	mov	r11, r5
+	pop	{r4-r7, pc}
 
-	.size	slp_switch, .-slp_switch	@ Apparently useful for .map files.
+	.size	tealet_slp_switch, .-tealet_slp_switch	@ Apparently useful for .map files.
