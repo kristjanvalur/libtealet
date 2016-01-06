@@ -16,6 +16,8 @@
 #include "switch_x86_64_gcc.h" /* gcc on amd64 */
 #elif defined(__GNUC__) && defined(__i386__)
 #include "switch_x86_gcc.h" /* gcc on X86 */
+#elif defined(__GNUC__) && defined(__arm__) && defined (__thumb__)
+#include "switch_arm_thumb_gcc.h" /* gcc using arm thumb */
 #else
 #ifdef ENABLE_SLP_FALLBACK
 #define USE_SLP_FALLBACK
