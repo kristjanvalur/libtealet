@@ -1,11 +1,14 @@
+ASM = $(shell cc platf_tealet/tealet_platformselect.c && ./a.out)
 
 all: libtealet.so
 
-libtealet.so: tealet.c tealet.h
-	gcc -fPIC -shared -O2 -o $@ tealet.c
+SOSRC = tealet.c $(ASM)
+SOSRCALL = tealet.h $(SOSRC)
+libtealet.so: $(SOSRCALL)
+	gcc -fPIC -shared -O2 -o $@  $(SOSRC)
 
-libtealet_g.so: tealet.c tealet.h
-	gcc -fPIC -shared -g -o $@ tealet.c
+libtealet_g.so: $(SOSRCALL)
+	gcc -fPIC -shared -g -o $@ $(SOSRC)
 
 clean:
 	rm -fr libtealet.so libtealet_g.so
@@ -17,18 +20,22 @@ DEBUG = #-DDEBUG_DUMP
 tests: tests-static-g tests-static-o tests-dynamic-g tests-dynamic-o
 	@echo "*** All test suites passed ***"
 
-tests-static-g: tealet.c tealet.h tests.c tools.h tools.c
-	gcc -g -o run_tests_static_g tealet.c tests.c tools.c ${DEBUG}
+TSSRC = $(SOSRC) tests.c tools.c
+TSSRCALL = $(SOSRCALL) tools.h
+tests-static-g: $(TSSRCALL)
+	gcc -g -o run_tests_static_g $(TSSRC) ${DEBUG}
 	./run_tests_static_g
 
-tests-static-o: tealet.c tealet.h tests.c tools.h tools.c
-	gcc -g -O2 -o run_tests_static_o tealet.c tests.c tools.c ${DEBUG}
+tests-static-o: $(TSSRCALL)
+	gcc -g -O2 -o run_tests_static_o $(TSSRC) ${DEBUG}
 	./run_tests_static_o
 
-tests-dynamic-g: libtealet_g.so tests.c tools.h tools.c
-	gcc -L. -g -o run_tests_dynamic_g tests.c tools.c ${DEBUG} -ltealet_g
+TDSRC = tests.c tools.c
+TDSRCALL = tests.c tools.c tools.h
+tests-dynamic-g: libtealet_g.so $(TDSRCALL)
+	gcc -L. -g -o run_tests_dynamic_g $(TDSRC) ${DEBUG} -ltealet_g
 	LD_LIBRARY_PATH=. ./run_tests_dynamic_g
 
-tests-dynamic-o: libtealet.so tests.c tools.h tools.c
-	gcc -L. -g -O2 -o run_tests_dynamic_o tests.c tools.c ${DEBUG} -ltealet
+tests-dynamic-o: libtealet.so $(TDSRCALL)
+	gcc -L. -g -O2 -o run_tests_dynamic_o $(TDSRC) ${DEBUG} -ltealet
 	LD_LIBRARY_PATH=. ./run_tests_dynamic_o
