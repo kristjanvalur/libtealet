@@ -336,7 +336,7 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="platf_tealet\slp_platformselect.h"
+				RelativePath="platf_tealet\tealet_platformselect.h"
 				>
 			</File>
 			<File

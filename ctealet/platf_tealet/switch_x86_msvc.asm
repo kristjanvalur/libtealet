@@ -4,7 +4,7 @@
 
 .code
 
-slp_switch_raw PROC save_state:DWORD, restore_state:DWORD, extra:DWORD
+tealet_slp_switch_raw PROC save_state:DWORD, restore_state:DWORD, extra:DWORD
   
   ;save registers. EAX ECX and EDX are available for function use and thus
   ;do not have to be stored.
@@ -39,6 +39,6 @@ exit:
   pop  esi
   pop  ebx
   ret
-slp_switch_raw ENDP
+tealet_slp_switch_raw ENDP
 
 end

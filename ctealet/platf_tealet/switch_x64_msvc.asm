@@ -16,8 +16,8 @@ endm
 .code
 
 ;arguments save_state, restore_state, extra are passed in rcx, rdx, r8 respectively
-;slp_switch PROC FRAME
-NESTED_ENTRY slp_switch, _TEXT$00
+;tealet_slp_switch PROC FRAME
+NESTED_ENTRY tealet_slp_switch, _TEXT$00
 	; save all registers that the x64 ABI specifies as non-volatile.
 	; This includes some mmx registers.  May not always be necessary,
 	; unless our application is doing 3D, but better safe than sorry.
@@ -97,7 +97,7 @@ EXIT:
 	add rsp, 168
 	ret
 	
-NESTED_END slp_switch, _TEXT$00
-;slp_switch ENDP 
+NESTED_END tealet_slp_switch, _TEXT$00
+;tealet_slp_switch ENDP 
 	
 END

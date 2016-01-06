@@ -32,7 +32,7 @@
  */
 #define STACK_DIRECTION 0   
 
-#include "platf_tealet/slp_platformselect.h"
+#include "platf_tealet/tealet_platformselect.h"
 
 #if STACK_DIRECTION == 0
 #define STACK_FAR_MAIN     ((char*) -1)     /* for stack_far */
@@ -484,7 +484,7 @@ static void *tealet_restore_state(void *new_stack_pointer, void *main)
 static int tealet_switchstack(tealet_main_t *g_main)
 {
     /* note: we can't pass g_target simply as an argument here, because
-     of the mix between different call stacks: after slp_switch() it
+     of the mix between different call stacks: after tealet_switch() it
      might end up with a different value.  But g_main is safe, because
      it should have always the same value before and after the switch. */
     void *res;
@@ -507,7 +507,8 @@ static int tealet_switchstack(tealet_main_t *g_main)
          * into a register
          */
         tealet_sub_t * volatile *ptarget = &g_main->g_target;
-        res = slp_switch(tealet_save_state, tealet_restore_state, g_main);
+        res = tealet_slp_switch(tealet_save_state, tealet_restore_state,
+				g_main);
         g_main->g_target = *ptarget;
     }
     if ((intptr_t)res >= 0)
