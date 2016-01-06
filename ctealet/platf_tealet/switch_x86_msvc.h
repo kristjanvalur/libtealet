@@ -1,7 +1,7 @@
 /* The actual stack saving function, which just stores the stack,
  * this declared in an .asm file
  */
-extern void *slp_switch_raw(void *(*save_state)(void*, void*),
+extern void *tealet_slp_switch_raw(void *(*save_state)(void*, void*),
                         void *(*restore_state)(void*, void*),
                         void *extra);
 
@@ -12,13 +12,13 @@ extern void *slp_switch_raw(void *(*save_state)(void*, void*),
 #pragma optimize("", off) /* so that autos are stored on the stack */
 #pragma warning(disable:4733) /* disable warning about modifying FS[0] */
 
-static void *slp_switch(void *(*save_state)(void*, void*),
+static void *tealet_slp_switch(void *(*save_state)(void*, void*),
                         void *(*restore_state)(void*, void*),
                         void *extra)
 {
     /* store the structured exception state for this stack */
     DWORD seh_state = __readfsdword(FIELD_OFFSET(NT_TIB, ExceptionList));
-    void * result = slp_switch_raw(save_state, restore_state, extra);
+    void * result = tealet_slp_switch_raw(save_state, restore_state, extra);
     __writefsdword(FIELD_OFFSET(NT_TIB, ExceptionList), seh_state);
     return result;
 }

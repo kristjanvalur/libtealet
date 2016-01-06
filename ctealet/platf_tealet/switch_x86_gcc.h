@@ -1,5 +1,5 @@
 
-static void *slp_switch(void *(*save_state)(void*, void*),
+static void *tealet_slp_switch(void *(*save_state)(void*, void*),
                         void *(*restore_state)(void*, void*),
                         void *extra)
 {
