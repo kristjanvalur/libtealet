@@ -14,9 +14,18 @@ static int newmode = 0;
 
 
 static tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
+static int talloc_fail = 0;
+void *failmalloc(size_t size, void *context)
+{
+  if (talloc_fail)
+    return 0;
+  return malloc(size);
+}
+
 
 void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
     assert(g_main == NULL);
+    talloc.malloc_p = failmalloc;
     if (alloc == NULL)
         alloc = &talloc;
     g_main = tealet_initialize(alloc, extrasize);
@@ -612,6 +621,30 @@ void test_stats(void)
     fini_test();
 }
 
+tealet_t *mem_error_tealet(tealet_t *t1, void *arg)
+{
+  void *myarg;
+  int res;
+  tealet_t *peer = (tealet_t*)arg;
+  talloc_fail = 1;
+  res = tealet_switch(peer, &myarg);
+  assert(res == TEALET_ERR_MEM);
+  tealet_exit(peer, myarg, TEALET_EXIT_DEFAULT);
+  assert(0); // never runs
+  return NULL;
+}
+
+void test_mem_error(void)
+{
+  void *myarg;
+  tealet_t *t1;
+  init_test_extra(NULL, 0);
+  myarg = (void*)g_main;
+  t1 = tealet_new(g_main, mem_error_tealet, &myarg);
+  talloc_fail = 0;
+  fini_test();
+}
+
 
 static void (*test_list[])(void) = {
   test_main_current,
@@ -626,6 +659,7 @@ static void (*test_list[])(void) = {
   test_extra,
   test_memstats,
   test_stats,
+  test_mem_error,
   NULL
 };
 

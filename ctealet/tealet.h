@@ -135,7 +135,7 @@ int tealet_switch(tealet_t *target, void **parg);
  * It also allows passing of an *arg to the target tealet, plus allows
  * control over whether the tealet is automatically deleted or not.
  * Returning with 'p' from the tealet's run funciton is equivalent to calling
- * tealet_exit(p, NULL, 1).
+ * tealet_exit(p, NULL, TEALET_EXIT_DEFAULT).
  * This function can be used as an emergency measure to return to the
  * main tealet if tealet_switch() fails due to inability to save the stack.
  * Note that exiting to the main tealet is always guaranteed to work.

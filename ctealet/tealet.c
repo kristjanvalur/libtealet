@@ -181,7 +181,7 @@ static int tealet_stack_grow(tealet_main_t *main,
     tsize = offsetof(tealet_chunk_t, data[0]) + diff;
     chunk = (tealet_chunk_t*)tealet_int_malloc(main, tsize);
     if (!chunk)
-        return -1;
+        return TEALET_ERR_MEM;
 #if STACK_DIRECTION == 0
     chunk->stack_near = stack->chunk.stack_near + stack->saved;
     memcpy(&chunk->data[0], chunk->stack_near, diff);
@@ -500,7 +500,7 @@ static int tealet_switchstack(tealet_main_t *g_main)
     * -2 = error, target tealet corrupt
     */
     if (g_main->g_target->stack == (tealet_stack_t*)-1)
-        return -2;
+        return TEALET_ERR_DEFUNCT;
     {
         /* make sure that optimizers, e.g. gcc -O2, won't assume that
          * g_main->g_target stays unchanged across the switch and optimize it
@@ -513,6 +513,8 @@ static int tealet_switchstack(tealet_main_t *g_main)
     }
     if ((intptr_t)res >= 0)
         g_main->g_current = g_main->g_target;
+    else
+        return TEALET_ERR_MEM;
     g_main->g_target = NULL;
     return (int)(intptr_t)res;
 }
