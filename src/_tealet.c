@@ -389,7 +389,11 @@ static PyObject *
 pytealet_get_state(PyObject *_self, void *_closure)
 {
 	PyTealetObject *self = (PyTealetObject *)_self;
+#if PY_MAJOR_VERSION >= 3
+	return PyLong_FromLong(self->state);
+#else
 	return PyInt_FromLong(self->state);
+#endif
 }
 PyDoc_STRVAR(pytealet_get_state_doc,
 "The current state of the objects, one of:\n\
@@ -424,7 +428,11 @@ pytealet_get_tid(PyObject *_self, void *_closure)
 		main_data *mdata = (main_data*)*tealet_main_userpointer(self->tealet);
 		tid = mdata->tid;
 	}
+#if PY_MAJOR_VERSION >= 3
+	return PyLong_FromLong(tid);
+#else
 	return PyInt_FromLong(tid);
+#endif
 }
 PyDoc_STRVAR(pytealet_get_tid_doc,
 "The thread id of the thread this tealet belongs to.");
@@ -737,8 +745,22 @@ PyDoc_STRVAR(tealet_defuncterror_doc,"The tealet is corrupt, its state could not
 PyDoc_STRVAR(tealet_invaliderror_doc,"The tealet is not part of the current group.");
 PyDoc_STRVAR(tealet_stateerror_doc,"The tealet is in an invalid state");
 
-PyMODINIT_FUNC
-init_tealet(void)
+#if PY_MAJOR_VERSION >= 3
+  static struct PyModuleDef moduledef = {
+    PyModuleDef_HEAD_INIT,
+    "_tealet", /* m_name */
+    module_doc,          /* m_doc */
+    -1,                  /* m_size */
+    module_methods,      /* m_methods */
+    NULL,                /* m_reload */
+    NULL,                /* m_traverse */
+    NULL,                /* m_clear */
+    NULL,                /* m_free */
+  };
+#endif
+
+static PyObject *
+moduleinit(void)
 {
 	PyObject *m;
 	PyTealetObject *tmain;
@@ -747,17 +769,21 @@ init_tealet(void)
 
 	/* init the type */
 	if (PyType_Ready(&PyTealetType))
-		return;
+		return NULL;
 
 	tmain = GetMain();
 	if (!tmain)
-		return;
-	
+		return NULL;
+#if PY_MAJOR_VERSION >= 3
+    m = PyModule_Create(&moduledef);
+#else
 	m = Py_InitModule3("_tealet", module_methods, module_doc);
+#endif
 	if (m == NULL)
-		return;
+		return m;
 
 	/* Todo: Improve error handling */
+	Py_INCREF(&PyTealetType);
 	PyModule_AddObject(m, "tealet", (PyObject*)&PyTealetType);
 	TealetError = PyErr_NewExceptionWithDoc(
 		"_tealet.TealetError", tealet_error_doc, NULL, NULL);
@@ -776,5 +802,19 @@ init_tealet(void)
 	PyModule_AddIntMacro(m, STATE_STUB);
 	PyModule_AddIntMacro(m, STATE_RUN);
 	PyModule_AddIntMacro(m, STATE_EXIT);
-	return;
+	return m;
 }
+
+#if PY_MAJOR_VERSION < 3
+    PyMODINIT_FUNC
+    init_tealet(void)
+    {
+        moduleinit();
+    }
+#else
+    PyMODINIT_FUNC
+    PyInit__tealet(void)
+    {
+        return moduleinit();
+    }
+#endif
