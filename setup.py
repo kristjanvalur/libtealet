@@ -1,6 +1,7 @@
 #setup.py
 # coding=utf-8
 # the setuping code
+from __future__ import print_function
 import os
 import os.path
 import subprocess
@@ -27,7 +28,6 @@ try:
        asm.append("ctealet/" + l)
 except subprocess.CalledProcessError:
     pass
-print asm
 
 #patch type to allow assembly sources
 UnixCCompiler.src_extensions.append(".s")
