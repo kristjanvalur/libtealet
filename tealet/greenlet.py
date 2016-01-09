@@ -18,7 +18,7 @@ class ErrorWrapper(object):
         if isinstance(val, _tealet.TealetError):
             # want to create a new exception with an existing traceback.
             # six doesn't quite support that, so we help it along.
-            if six.PY3:
+            if not six.PY2:
                 # don't use illegal python2 syntax
                 e = error(str(val))
                 e.__cause__ = val
@@ -105,7 +105,7 @@ class greenlet(object):
     def dead(self):
         return self._tealet.state == _tealet.STATE_EXIT
 
-    if six.PY3:
+    if not six.PY2:
         def __bool__(self):
             return self._tealet.state == _tealet.STATE_RUN
     else:
