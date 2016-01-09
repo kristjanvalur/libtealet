@@ -7,65 +7,7 @@
 #include <pythread.h>
 
 #include "tealet.h"
-
-/****************************************************************
- *Implement copyable stubs by using a trampoline
- */
-struct stub_arg
-{
-	tealet_t *current;
-	tealet_run_t run;
-	void *runarg;
-};
-static tealet_t *
-stub_main(tealet_t *current, void *arg)
-{
-	void *myarg = 0;
-	/* the caller is in arg, return right back to him */
-	tealet_switch((tealet_t*)arg, &myarg);
-	/* now we are back, myarg should contain the arg to the run function.
-	 * We were possibly duplicated, so can't trust the original function args.
-	 */
-	{
-		struct stub_arg sarg = *(struct stub_arg*)myarg;
-		tealet_free(sarg.current, myarg);
-		return (sarg.run)(sarg.current, sarg.runarg);
-	}
-}
-
-/* create a stub and return it */
-static tealet_t *
-stub_new(tealet_t *t) {
-	void *arg = (void*)tealet_current(t);
-	return tealet_new(t, stub_main, &arg);
-}
-
-/* run a stub */
-static int
-stub_run(tealet_t *stub, tealet_run_t run, void **parg)
-{
-	int result;
-	void *myarg;
-	/* we cannot pass arguments to a different tealet on the stack */
-	struct stub_arg *psarg = (struct stub_arg*)tealet_malloc(stub, sizeof(struct stub_arg));
-	if (!psarg)
-		return TEALET_ERR_MEM;
-	psarg->current = stub;
-	psarg->run = run;
-	psarg->runarg = parg ? *parg : NULL;
-	myarg = (void*)psarg;
-	result = tealet_switch(stub, &myarg);
-	if (result) {
-		/* failure */
-		tealet_free(stub, psarg);
-		return result;
-	}
-	/* pass back the arg value from the switch */
-	if (parg)
-		*parg = myarg;
-	return 0;
-}
-/***************************************************************/
+#include "tools.h"
 
 
 #define STATE_NEW 0
@@ -275,7 +217,7 @@ pytealet_stub(PyObject *self)
 	tmain = GetMain();
 	if (!tmain)
 		return NULL;
-	tresult = stub_new(tmain->tealet);
+	tresult = tealet_stub_new(tmain->tealet);
 	if (!tresult)
 		return PyErr_NoMemory();
 	pytealet->tealet = tresult;
@@ -284,6 +226,12 @@ pytealet_stub(PyObject *self)
 	Py_INCREF(self);
 	return self;
 }
+PyDoc_STRVAR(pytealet_stub_doc,
+"stub() -> None\n\n"
+"turn this tealet into a stub that can be duplicated by passing it\n"
+"to the Tealet constructor.  This captures the current stack position\n"
+"for re-use in other tealets.\n"
+"Can only be called on a new Tealet object.");
 
 /* run a tealet and optinonally run */
 static PyObject *
@@ -335,7 +283,7 @@ pytealet_run(PyObject *self, PyObject *args, PyObject *kwds)
 
 	save_tstate(current, tstate);
 	if (ptarg->stub) {
-		fail = stub_run(target->tealet, pytealet_main, &switch_arg);
+		fail = tealet_stub_run(target->tealet, pytealet_main, &switch_arg);
 		if (fail) {
 			PyObject_Free(ptarg);
 			PyErr_NoMemory();
@@ -360,6 +308,10 @@ err:
 	dustbin_clear(current->tealet);
 	return result;
 }
+PyDoc_STRVAR(pytealet_run_doc,
+"run(function, arg=None) -> arg\n\n\
+Start a tealet running in function, passing a single optional arg.\n\
+Returns the switch argument used when switching back to the original tealet.");
 
 /* switch to a different tealet */
 static PyObject *
@@ -408,11 +360,14 @@ pytealet_switch(PyObject *_self, PyObject *args)
 	pyarg = (PyObject *)switch_arg;
 	return pyarg;
 }
+PyDoc_STRVAR(pytealet_switch_doc,
+"switch(arg=None) -> arg\n\n\
+Switch to this tealet.  Returns the arg used when switching back.");
 	
 static struct PyMethodDef pytealet_methods[] = {
-	{"stub", (PyCFunction) pytealet_stub, METH_NOARGS, ""},
-	{"run", (PyCFunction) pytealet_run, METH_VARARGS|METH_KEYWORDS, ""},
-	{"switch", (PyCFunction) pytealet_switch, METH_VARARGS, ""},
+	{"stub", (PyCFunction) pytealet_stub, METH_NOARGS, pytealet_stub_doc},
+	{"run", (PyCFunction) pytealet_run, METH_VARARGS|METH_KEYWORDS, pytealet_run_doc},
+	{"switch", (PyCFunction) pytealet_switch, METH_VARARGS, pytealet_switch_doc},
 	{NULL,       NULL}          /* sentinel */
 };
 
@@ -427,6 +382,8 @@ pytealet_get_main(PyObject *_self, void *_closure)
 	Py_INCREF(tmain);
 	return (PyObject*)tmain;
 }
+PyDoc_STRVAR(pytealet_get_main_doc, 
+"The main tealet associated with this tealet.");
 
 static PyObject *
 pytealet_get_state(PyObject *_self, void *_closure)
@@ -434,6 +391,9 @@ pytealet_get_state(PyObject *_self, void *_closure)
 	PyTealetObject *self = (PyTealetObject *)_self;
 	return PyInt_FromLong(self->state);
 }
+PyDoc_STRVAR(pytealet_get_state_doc,
+"The current state of the objects, one of:\n\
+STATE_NEW, STATE_STUB, STATE_RUN, STATE_EXIT.");
 
 static PyObject *
 pytealet_get_frame(PyObject *_self, void *_closure)
@@ -452,6 +412,8 @@ pytealet_get_frame(PyObject *_self, void *_closure)
 	Py_INCREF(frame);
 	return frame;
 }
+PyDoc_STRVAR(pytealet_get_frame_doc,
+"The frame of the tealet if it is in the STATE_RUN state.");
 
 static PyObject *
 pytealet_get_tid(PyObject *_self, void *_closure)
@@ -464,16 +426,22 @@ pytealet_get_tid(PyObject *_self, void *_closure)
 	}
 	return PyInt_FromLong(tid);
 }
-
+PyDoc_STRVAR(pytealet_get_tid_doc,
+"The thread id of the thread this tealet belongs to.");
 
 static struct PyGetSetDef pytealet_getset[] = {
-	{"main", pytealet_get_main, NULL, "", NULL},
-	{"state", pytealet_get_state, NULL, "", NULL},
-	{"frame", pytealet_get_frame, NULL, "", NULL},
-	{"thread_id", pytealet_get_tid, NULL, "", NULL},
+	{"main", pytealet_get_main, NULL, pytealet_get_main_doc, NULL},
+	{"state", pytealet_get_state, NULL, pytealet_get_state_doc, NULL},
+	{"frame", pytealet_get_frame, NULL, pytealet_get_frame_doc, NULL},
+	{"thread_id", pytealet_get_tid, NULL, pytealet_get_tid_doc, NULL},
 	{0}
 };
 
+PyDoc_STRVAR(pytealet_type_doc,
+"tealet(t=None) -> new tealet object\n\n\
+Creates a new tealet object, ready to be run.  If passed a stub tealet,\n\
+the new one is also a stub, a copy of the original.  This can be useful\n\
+to make new tealets start at a fixed position on the stack.");
 
 static PyTypeObject PyTealetType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -496,7 +464,7 @@ static PyTypeObject PyTealetType = {
 	0,                                          /* tp_setattro */
 	0,                                          /* tp_as_buffer */
 	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
-	"",                                         /* tp_doc */
+	pytealet_type_doc,                          /* tp_doc */
 	0,                                          /* tp_traverse */
 	0,                                          /* tp_clear */
 	0,                                          /* tp_richcompare */
@@ -702,6 +670,9 @@ module_current(void)
 	Py_XINCREF(current);
 	return (PyObject*)current;
 }
+PyDoc_STRVAR(module_current_doc,
+"current() -> t\n\n\
+Get the currently executing tealet object.");
 
 static PyObject *
 module_main(void)
@@ -710,6 +681,10 @@ module_main(void)
 	Py_XINCREF(tmain);
 	return (PyObject*)tmain;
 }
+PyDoc_STRVAR(module_main_doc,
+"main() -> t\n\n\
+Get the main tealet of the currently executing tealet object.\n\
+Equivalent to current().main.");
 
 static PyObject *
 hide_frame(PyObject *self, PyObject *_args)
@@ -737,15 +712,30 @@ hide_frame(PyObject *self, PyObject *_args)
 	tstate->frame = f;
 	return result;
 }
+PyDoc_STRVAR(hide_frame_doc,
+"hide_frame(func, args=(), kwds={}) -> result\n\n\
+Call 'func(*args, **kwds)' and return the result.\n\
+Cuts the frame chain so that a traceback will not show the calling\n\
+stack.  This can be useful to hide trampoline functions and so on\n\
+to make sure unittests pass.");
 
 static PyMethodDef module_methods[] = {
-	{"current", (PyCFunction)module_current, METH_NOARGS, ""},
-	{"main", (PyCFunction)module_main, METH_NOARGS, ""},
-	{"hide_frame", (PyCFunction)hide_frame, METH_VARARGS, ""},
- {NULL,                      NULL}            /* Sentinel */
+	{"current", (PyCFunction)module_current, METH_NOARGS, module_current_doc},
+	{"main", (PyCFunction)module_main, METH_NOARGS, module_main_doc},
+	{"hide_frame", (PyCFunction)hide_frame, METH_VARARGS, hide_frame_doc},
+	{NULL,                      NULL}            /* Sentinel */
 };
 
 
+PyDoc_STRVAR(module_doc,
+"This module provides a simple interface to the Tealet stack slicing library.\n"
+"It allows the creation of execution contexts and explicit switching between\n"
+"them.");
+
+PyDoc_STRVAR(tealet_error_doc,"Base class for tealet errors");
+PyDoc_STRVAR(tealet_defuncterror_doc,"The tealet is corrupt, its state could not be saved.");
+PyDoc_STRVAR(tealet_invaliderror_doc,"The tealet is not part of the current group.");
+PyDoc_STRVAR(tealet_stateerror_doc,"The tealet is in an invalid state");
 
 PyMODINIT_FUNC
 init_tealet(void)
@@ -763,19 +753,23 @@ init_tealet(void)
 	if (!tmain)
 		return;
 	
-	m = Py_InitModule3("_tealet", module_methods, "");
+	m = Py_InitModule3("_tealet", module_methods, module_doc);
 	if (m == NULL)
 		return;
 
 	/* Todo: Improve error handling */
 	PyModule_AddObject(m, "tealet", (PyObject*)&PyTealetType);
-	TealetError = PyErr_NewException("_tealet.TealetError", NULL, NULL);
+	TealetError = PyErr_NewExceptionWithDoc(
+		"_tealet.TealetError", tealet_error_doc, NULL, NULL);
 	PyModule_AddObject(m, "TealetError", TealetError);
-	DefunctError = PyErr_NewException("_tealet.DefunctError", TealetError, NULL);
+	DefunctError = PyErr_NewExceptionWithDoc(
+		"_tealet.DefunctError", tealet_defuncterror_doc, TealetError, NULL);
 	PyModule_AddObject(m, "DefunctError", DefunctError);
-	InvalidError = PyErr_NewException("_tealet.InvalidError", TealetError, NULL);
+	InvalidError = PyErr_NewExceptionWithDoc(
+		"_tealet.InvalidError", tealet_invaliderror_doc, TealetError, NULL);
 	PyModule_AddObject(m, "InvalidError", InvalidError);
-	StateError = PyErr_NewException("_tealet.StateError", TealetError, NULL);
+	StateError = PyErr_NewExceptionWithDoc(
+		"_tealet.StateError", tealet_stateerror_doc, StateError, NULL);
 	PyModule_AddObject(m, "StateError", StateError);
 
 	PyModule_AddIntMacro(m, STATE_NEW);
