@@ -236,7 +236,7 @@ class GreenletTests(unittest.TestCase):
 
         greenlet(f).switch()
 
-    for k in locals().keys():
+    for k in list(locals().keys()):
         if False and k.startswith('test') and "test_exception" not in k:
             del locals()[k]
 
