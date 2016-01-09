@@ -795,7 +795,7 @@ moduleinit(void)
 		"_tealet.InvalidError", tealet_invaliderror_doc, TealetError, NULL);
 	PyModule_AddObject(m, "InvalidError", InvalidError);
 	StateError = PyErr_NewExceptionWithDoc(
-		"_tealet.StateError", tealet_stateerror_doc, StateError, NULL);
+		"_tealet.StateError", tealet_stateerror_doc, TealetError, NULL);
 	PyModule_AddObject(m, "StateError", StateError);
 
 	PyModule_AddIntMacro(m, STATE_NEW);
