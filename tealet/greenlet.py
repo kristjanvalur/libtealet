@@ -1,6 +1,7 @@
 # A greenlet emulation module using tealets
 import weakref
 import sys
+import six
 
 import _tealet
 
@@ -15,7 +16,15 @@ class ErrorWrapper(object):
         pass
     def __exit__(self, tp, val, tb):
         if isinstance(val, _tealet.TealetError):
-            raise error, val, tb
+            # want to create a new exception with an existing traceback.
+            # six doesn't quite support that, so we help it along.
+            if six.PY3:
+                # don't use illegal python2 syntax
+                e = error(str(val))
+                e.__cause__ = val
+                raise e
+            else:
+                six.reraise(error, val, tb)
 ErrorWrapper = ErrorWrapper() # stateless singleton
 
 tealetmap = weakref.WeakValueDictionary()
@@ -46,10 +55,21 @@ class greenlet(object):
             self.parent = parent
             self._main = parent._main
             # perform housekeeping
-            del self._main._garbage[:]
+            self._housekeeping()
         tealetmap[self._tealet] = self
 
+    def _housekeeping(self):
+        if self._main._garbage:
+            garbage = self._main._garbage[:]
+            del self._main._garbage[:]
+            for g in garbage:
+                g._kill()
+
     def __del__(self):
+        # since 3.4, __del__ is invoked only once.
+        self._kill()
+
+    def _kill(self):
         try:
             if self:
                 if _tealet.current() == self._tealet:
@@ -85,8 +105,12 @@ class greenlet(object):
     def dead(self):
         return self._tealet.state == _tealet.STATE_EXIT
 
-    def __nonzero__(self):
-        return self._tealet.state == _tealet.STATE_RUN
+    if six.PY3:
+        def __bool__(self):
+            return self._tealet.state == _tealet.STATE_RUN
+    else:
+        def __nonzero__(self):
+            return self._tealet.state == _tealet.STATE_RUN
 
     def switch(self, *args, **kwds):
         return self._switch((False, args, kwds))
@@ -114,7 +138,10 @@ class greenlet(object):
         # The return value is stored in the current greenlet.
         err, args, kwds = arg
         if err:
-            raise err, args, kwds
+            try:
+                six.reraise(err, args, kwds)
+            finally:
+                err = args = kwds = arg = None
         if args and kwds:
             return (args, kwds)
         elif kwds:
@@ -133,7 +160,10 @@ class greenlet(object):
                 result = _tealet.hide_frame(run, args, kwds)
                 arg = (False, (result,), None)
             else:
-                raise err, args, kwds
+                try:
+                    six.reraise(err, args, kwds)
+                finally:
+                    err = args = kwds = arg = None
         except GreenletExit as e:
             arg = (False, (e,), None)
         except:
