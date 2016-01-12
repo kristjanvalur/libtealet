@@ -57,4 +57,5 @@ setup(
     ext_modules=[_tealet,],
     packages=["tealet"],
     test_suite="tealet.tests",
+    install_requires=["six"],
 )
