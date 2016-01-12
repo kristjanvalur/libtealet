@@ -74,10 +74,14 @@ class GreenletTests(unittest.TestCase):
             lst.append(1)
             g = greenlet(f)
             g.switch()
+            g.dodo = 1
             lst.append(1)
         g = greenlet(g)
         g.switch()
+        print("check", sys.exc_info())
+
         self.assertEqual(len(lst), 3)
+        gc.collect()
         self.assertEqual(sys.getrefcount(g), 2)
 
     def test_threads(self):
