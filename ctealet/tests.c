@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#if !defined _MSC_VER || _MSC_VER >= 1600 /* VS2010 and above */
 #include <stdint.h>
+#endif
 
 #include "tealet.h"
 #include "tools.h"

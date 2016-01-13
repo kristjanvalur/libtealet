@@ -8,7 +8,9 @@
 #include "tealet.h"
 
 #include <stddef.h>
+#if !defined _MSC_VER || _MSC_VER >= 1600 /* VS2010 and above */
 #include <stdint.h> /* for intptr_t */
+#endif
 #include <assert.h>
 #include <string.h>
 
