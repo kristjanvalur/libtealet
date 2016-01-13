@@ -67,8 +67,6 @@ class greenlet(object):
 
     def __del__(self):
         # since 3.4, __del__ is invoked only once.
-        if getattr(self, "dodo", 0):
-            print("wow", self)
         self._kill()
 
     def _kill(self):
@@ -133,10 +131,7 @@ class greenlet(object):
                 if not self:
                     return self._parent()._switch(arg)
                 arg = self._tealet.switch(arg)
-        try:
-            return self._Result(arg)
-        finally:
-            arg = None
+        return self._Result(arg)
 
     @staticmethod
     def _Result(arg):
@@ -144,8 +139,6 @@ class greenlet(object):
         err, args, kwds = arg
         if err:
             try:
-                print(err, args, kwds)
-                raise args
                 six.reraise(err, args, kwds)
             finally:
                 err = args = kwds = arg = None
@@ -171,18 +164,12 @@ class greenlet(object):
                     six.reraise(err, args, kwds)
                 finally:
                     err = args = kwds = arg = None
-        except GreenletExit:# as e:
-        #    e.__traceback__ = None
-            e = None
+        except GreenletExit as e:
             arg = (False, (e,), None)
-            arg = (False, None, None)
         except:
             arg = sys.exc_info()
         p = getcurrent()._parent()
-        try:
-            return p._tealet, arg
-        finally:
-            arg = e = None
+        return p._tealet, arg
 
     def _parent(self):
         # Find the closest parent alive
