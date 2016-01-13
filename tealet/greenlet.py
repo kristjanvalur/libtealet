@@ -5,6 +5,33 @@ import six
 
 import _tealet
 
+# reimplement six.reraise to avoid reference cycles
+if not six.PY2:
+    def _reraise(tp, value, tb):
+        # two changes to six.reraise for py3:
+        # 1 clear locals to avoid traceback cycles
+        # 2 allow tp to be an instance, and val to be 0
+        try:
+            if six.PY2:
+                six.reraise(tp, value, tb)  # use this to avoid invalid py2 raise syntax in py3 code
+            if value is None:
+                if issubclass(tp, BaseException):
+                    value = tp()
+                else:
+                    value = tp
+            if value.__traceback__ is not tb:
+                raise value.with_traceback(tb)
+            raise value
+        finally:
+            # avoid traceback refrence cycle
+            tp = value = tb = None
+else:
+    six.exec_("""def _reraise(tp, value, tb):
+        try:
+            raise tp, value, tb;
+        finally:
+            del tb
+        """, globals(), locals())
 
 class error(Exception):
     pass
@@ -15,16 +42,20 @@ class ErrorWrapper(object):
     def __enter__(self):
         pass
     def __exit__(self, tp, val, tb):
-        if isinstance(val, _tealet.TealetError):
-            # want to create a new exception with an existing traceback.
-            # six doesn't quite support that, so we help it along.
-            if not six.PY2:
-                # don't use illegal python2 syntax
-                e = error(str(val))
-                e.__cause__ = val
-                raise e
-            else:
-                six.reraise(error, val, tb)
+        try:
+            if isinstance(val, _tealet.TealetError):
+                # want to create a new exception with an existing traceback.
+                # six doesn't quite support that, so we help it along.
+                if not six.PY2:
+                    # don't use illegal python2 syntax
+                    e = error(str(val))
+                    e.__cause__ = val
+                    raise e.with_traceback(tb)
+                else:
+                    _reraise(error, val, tb)
+        finally:
+            # avoid traceback refrence cycle
+            tp = val = tb = None
 ErrorWrapper = ErrorWrapper() # stateless singleton
 
 tealetmap = weakref.WeakValueDictionary()
@@ -34,8 +65,11 @@ def getcurrent():
     try:
         return tealetmap[t]
     except KeyError:
-        assert _tealet.main() is t
-        return greenlet(parent=t)
+        if _tealet.main() is t:
+            # this is the main tealet, so create a main greenlet
+            return greenlet(parent=t)
+        # otherwise, this is a a foreign tealet.
+        return None
 
 class greenlet(object):
     def __init__(self, run=None, parent=None):
@@ -76,8 +110,14 @@ class greenlet(object):
                     # Can't kill ourselves from here
                     return
                 tealetmap[self._tealet] = self # re-insert
+                current = getcurrent()
+                if not current:
+                    # this is a foreign tealet, not a greenlet
+                    self._main._garbage.append(self)
+                    return
+
                 old = self.parent
-                self.parent = getcurrent()
+                self.parent = current
                 try:
                     self.throw()
                 except error:
@@ -131,7 +171,11 @@ class greenlet(object):
                 if not self:
                     return self._parent()._switch(arg)
                 arg = self._tealet.switch(arg)
-        return self._Result(arg)
+        try:
+            return self._Result(arg) # can raise arg
+        finally:
+            # avoid traceback refrence cycle
+            arg = None
 
     @staticmethod
     def _Result(arg):
@@ -139,8 +183,9 @@ class greenlet(object):
         err, args, kwds = arg
         if err:
             try:
-                six.reraise(err, args, kwds)
+                _reraise(err, args, kwds)
             finally:
+                # avoid traceback refrence cycle
                 err = args = kwds = arg = None
         if args and kwds:
             return (args, kwds)
@@ -161,15 +206,20 @@ class greenlet(object):
                 arg = (False, (result,), None)
             else:
                 try:
-                    six.reraise(err, args, kwds)
+                    _reraise(err, args, kwds)
                 finally:
+                    # avoid traceback refrence cycle
                     err = args = kwds = arg = None
         except GreenletExit as e:
             arg = (False, (e,), None)
         except:
             arg = sys.exc_info()
         p = getcurrent()._parent()
-        return p._tealet, arg
+        try:
+            return p._tealet, arg
+        finally:
+            # avoid exception reference cycle
+            arg = None
 
     def _parent(self):
         # Find the closest parent alive
