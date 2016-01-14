@@ -58,7 +58,7 @@ def new_compiler():
 def find_asm():
     compiler = new_compiler()
     source = 'ctealet/platf_tealet/tealet_platformselect.c'
-    a_out = "a_out"
+    a_out = "./a_out"
     compiler.compile([source])
     compiler.link_executable(compiler.object_filenames([source]), a_out)
     exe = compiler.executable_filename(a_out)
