@@ -48,6 +48,17 @@ def run_setup(extra_src, extra_obj):
         packages=["tealet"],
         test_suite="tealet.tests",
         install_requires=["six"],
+        classifiers=[
+            'Development Status :: 3 - Alpha',
+            'Intended Audience :: Developers',
+            'Topic :: Software Development :: Libraries',
+            'License :: OSI Approved :: MIT License',
+            'Programming Language :: Python :: 2',
+            'Programming Language :: Python :: 2.6',
+            'Programming Language :: Python :: 2.7',
+            'Programming Language :: Python :: 3',
+        ],
+        keywords='development stack-slicing lightweight-threads',
     )
 
 
