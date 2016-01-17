@@ -9,6 +9,7 @@
 #include "tealet.h"
 #include "tools.h"
 
+#define PYTEALET_VERSION "0.1.0"
 
 #define STATE_NEW 0
 #define STATE_STUB 1
@@ -782,27 +783,35 @@ moduleinit(void)
 	if (m == NULL)
 		return m;
 
-	/* Todo: Improve error handling */
+	if (PyModule_AddStringConstant(m, "__version__", PYTEALET_VERSION)) goto ERR;
+
 	Py_INCREF(&PyTealetType);
-	PyModule_AddObject(m, "tealet", (PyObject*)&PyTealetType);
+	if (PyModule_AddObject(m, "tealet", (PyObject*)&PyTealetType)) goto ERR;
 	TealetError = PyErr_NewExceptionWithDoc(
 		"_tealet.TealetError", tealet_error_doc, NULL, NULL);
-	PyModule_AddObject(m, "TealetError", TealetError);
+	if (PyModule_AddObject(m, "TealetError", TealetError)) goto ERR;
 	DefunctError = PyErr_NewExceptionWithDoc(
 		"_tealet.DefunctError", tealet_defuncterror_doc, TealetError, NULL);
-	PyModule_AddObject(m, "DefunctError", DefunctError);
+	if (PyModule_AddObject(m, "DefunctError", DefunctError)) goto ERR;
 	InvalidError = PyErr_NewExceptionWithDoc(
 		"_tealet.InvalidError", tealet_invaliderror_doc, TealetError, NULL);
-	PyModule_AddObject(m, "InvalidError", InvalidError);
+	if (PyModule_AddObject(m, "InvalidError", InvalidError)) goto ERR;
 	StateError = PyErr_NewExceptionWithDoc(
 		"_tealet.StateError", tealet_stateerror_doc, TealetError, NULL);
-	PyModule_AddObject(m, "StateError", StateError);
+	if (PyModule_AddObject(m, "StateError", StateError)) goto ERR;
 
-	PyModule_AddIntMacro(m, STATE_NEW);
-	PyModule_AddIntMacro(m, STATE_STUB);
-	PyModule_AddIntMacro(m, STATE_RUN);
-	PyModule_AddIntMacro(m, STATE_EXIT);
+	if (PyModule_AddIntMacro(m, STATE_NEW)) goto ERR;
+	if (PyModule_AddIntMacro(m, STATE_STUB)) goto ERR;
+	if (PyModule_AddIntMacro(m, STATE_RUN)) goto ERR;
+	if (PyModule_AddIntMacro(m, STATE_EXIT)) goto ERR;
+	
 	return m;
+	
+	ERR:
+#if PY_MAJOR_VERSION >= 3
+    Py_DECREF(m);
+#endif
+    return NULL;
 }
 
 #if PY_MAJOR_VERSION < 3
