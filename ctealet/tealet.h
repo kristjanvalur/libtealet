@@ -4,6 +4,8 @@
 
 #include <stddef.h>
 
+#define TEALET_VERSION "0.1.0"
+
 #ifdef WIN32
 #if defined TEALET_EXPORTS
 #define TEALET_API __declspec(dllexport)
