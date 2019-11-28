@@ -1,3 +1,5 @@
+.. image:: https://travis-ci.com/kristjanvalur/libtealet.svg?token=1kY5V8pKgPJBQxq635zc&branch=master
+    :target: https://travis-ci.com/kristjanvalur/libtealet
 Tealet
 ===================
 
