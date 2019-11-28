@@ -815,6 +815,8 @@ void *tealet_get_far(tealet_t *_tealet)
     return tealet->stack_far;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-local-addr"
 void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
 {
     tealet_sub_t *result;
@@ -826,6 +828,7 @@ void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
     r = (void*)&result;
     return r;
 }
+#pragma GCC diagnostic pop
 
 size_t tealet_get_stacksize(tealet_t *_tealet)
 {
