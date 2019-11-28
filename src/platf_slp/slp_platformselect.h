@@ -4,30 +4,43 @@
 
 #if   defined(_M_IX86)
 #include "switch_x86_msvc.h" /* MS Visual Studio on X86 */
+#define SLP_PLATFORM x86_msvc
 #elif defined(_M_X64)
 #include "switch_x64_msvc.h" /* MS Visual Studio on X64 */
+#define SLP_PLATFORM x64_msvc
 #elif defined(__GNUC__) && defined(__i386__)
 #include "switch_x86_unix.h" /* gcc on X86 */
+#define SLP_PLATFORM x86_unix
 #elif defined(__GNUC__) && defined(__amd64__)
 #include "switch_amd64_unix.h" /* gcc on amd64 */
+#define SLP_PLATFORM amd64_unix
 #elif defined(__GNUC__) && defined(__PPC__) && defined(__linux__)
 #include "switch_ppc_unix.h" /* gcc on PowerPC */
+#define SLP_PLATFORM ppc_unix
 #elif defined(__GNUC__) && defined(__ppc__) && defined(__APPLE__)
 #include "switch_ppc_macosx.h" /* Apple MacOS X on PowerPC */
+#define SLP_PLATFORM ppc_macosx
 #elif defined(__GNUC__) && defined(sparc) && defined(sun)
 #include "switch_sparc_sun_gcc.h" /* SunOS sparc with gcc */
+#define SLP_PLATFORM sparc_sun_gcc
 #elif defined(__GNUC__) && defined(__s390__) && defined(__linux__)
 #include "switch_s390_unix.h"	/* Linux/S390 */
+#define SLP_PLATFORM s390_unix
 #elif defined(__GNUC__) && defined(__s390x__) && defined(__linux__)
 #include "switch_s390_unix.h"	/* Linux/S390 zSeries (identical) */
+#define SLP_PLATFORM s390_unix
 #elif defined(__GNUC__) && defined(__arm__) && defined(__thumb__)
 #include "switch_arm_thumb_gcc.h" /* gcc using arm thumb */
+#define SLP_PLATFORM arm_thumb_gcc
 #elif defined(__GNUC__) && defined(__arm32__)
 #include "switch_arm32_gcc.h" /* gcc using arm32 */
+#define SLP_PLATFORM arm32_gcc
 #elif defined(__GNUC__) && defined(__mips__) && defined(__linux__)
 #include "switch_mips_unix.h" /* MIPS */
+#define SLP_PLATFORM mips_unix
 #elif defined(SN_TARGET_PS3)
 #include "switch_ps3_SNTools.h" /* Sony PS3 */
+#define SLP_PLATFORM ps3_sntools
 #else
 #error "platform unsupported by stackless python"
 #endif
