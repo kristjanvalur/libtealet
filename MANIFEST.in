@@ -1,2 +1,0 @@
-# Additional files needed for extension
-recursive-include ctealet *.c *.h *.s *.asm
