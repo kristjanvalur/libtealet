@@ -1,1 +1,4 @@
 language: c
+arch:
+        - amd64
+        - arm64

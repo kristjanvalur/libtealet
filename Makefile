@@ -1,4 +1,3 @@
-CC = gcc
 CPPFLAGS = -Isrc
 ASM = $(shell cc src/platf_tealet/tealet_platformselect.c && ./a.out)
 
