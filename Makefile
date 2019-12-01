@@ -1,43 +1,30 @@
-CPPFLAGS = -Isrc
+CPPFLAGS += -Isrc
+#CFLAGS += -fPIC
 all: libtealet.so
 
-SOSRC = src/tealet.c src/switch.S src/switch.c
-SODEPS = src/*.h src/*.c 
-libtealet.so: $(SODEPS)
-	$(CC) $(LDFLAGS) -fPIC -shared -O2 -o $@ $(SOSRC)
+dude.so: src/tealet.o src/switch_S.o src/switch_c.o
+	$(CC) $(LDFLAGS) -fPIC -shared -o $@ $^
 
-libtealet_g.so: $(SODEPS)
-	$(CC) $(LDFLAGS) -fPIC -shared -g -o $@ $(SOSRC)
+coreobj = src/tealet.o src/switch_S.o src/switch_c.o
+libtealet.so: $(coreobj)
+	$(LD) $(LDFLAGS) -shared -o $@ $^
 
 clean:
-	rm -fr libtealet.so libtealet_g.so
-	rm -fr platform.out
-	rm -fr run_tests_*_[go].out
+	rm -fr *.o *.out *.so
 
 DEBUG = #-DDEBUG_DUMP
 
-.PHONY: test
-test: tests-static-g.out tests-static-o.out tests-dynamic-g.out tests-dynamic-o.out
+.PHONY: test tests
+tests: tests-static.out tests-dynamic.out 
 test: export LD_LIBRARY_PATH = .
-test: 
-	./tests-static-g.out
-	./tests-static-o.out
-	./tests-dynamic-g.out
-	./tests-dynamic-o.out
+test: tests
+	./tests-static.out
+	./tests-dynamic.out
 	@echo "*** All test suites passed ***"
 
-TSSRC = $(SOSRC) tests/tests.c src/tools.c
-TSDEPS = $(SODEPS) $(TSSRC) src/tools.h 
-tests-static-g.out: $(TSDEPS)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -g -o $@ $(TSSRC) ${DEBUG}
+testobj = tests/tests.o src/tools.o
+tests-static.out: $(coreobj) $(testobj)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ ${DEBUG}
 
-tests-static-o.out: $(TSDEPS)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -g -O2 -o $@ $(TSSRC) ${DEBUG}
-
-TDSRC = tests/tests.c src/tools.c
-TDDEPS = $(TDSRC) src/tools.h 
-tests-dynamic-g.out: libtealet_g.so $(TDDEPS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -L. -g -o $@ $(TDSRC) ${DEBUG} -ltealet_g
-
-tests-dynamic-o.out: libtealet.so $(TDDEPS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -L. -g -O2 -o $@ $(TDSRC) ${DEBUG} -ltealet
+tests-dynamic.out: $(coreobj) $(testobj) libtealet.so
+	$(CC) $(CPPFLAGS) $(CFLAGS) -L. -g -o $@ $(coreobj) $(testobj) ${DEBUG} -ltealet
