@@ -128,8 +128,19 @@ typedef struct tealet_main_t {
 
 /************************************************************/
 
+#if __GNUC__
+#define NOINLINE __attribute__ ((noinline))
+#define TEALET_SWITCHSTACK tealet_switchstack
+#define TEALET_INITIALSTUB tealet_initialstub
+#else
+#define NOINLINE
+#define NO_NOINLINE
+/* force no inlining using function pointers */
+#define TEALET_SWITCHSTACK _tealet_switchstack
+#define TEALET_INITIALSTUB _tealet_initialstub
 int (*_tealet_switchstack)(tealet_main_t*);
 int (*_tealet_initialstub)(tealet_main_t*, tealet_run_t run, void*);
+#endif
 
 /************************************************************
  * helpers to call the malloc functions provided by the user
@@ -484,7 +495,7 @@ static void *tealet_restore_state(void *new_stack_pointer, void *main)
     return NULL;
 }
 
-static int tealet_switchstack(tealet_main_t *g_main)
+static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
 {
     /* note: we can't pass g_target simply as an argument here, because
      of the mix between different call stacks: after tealet_switch() it
@@ -493,6 +504,10 @@ static int tealet_switchstack(tealet_main_t *g_main)
     void *res;
     assert(g_main->g_target);
     assert(g_main->g_target != g_main->g_current);
+
+    /* extra anti-inline protection */
+    asm("");
+
     /* if the target saved stack is invalid (due to a failure to save it
     * during the exit of another tealet), we detect this here and
     * report an error
@@ -528,7 +543,7 @@ static int tealet_switchstack(tealet_main_t *g_main)
  * far enough that local variables in this function get saved.
  * A stack variable in the calling function is sufficient.
  */
-static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *stack_far)
+static NOINLINE int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *stack_far)
 {
     int result;
     tealet_sub_t *g = g_main->g_current;
@@ -536,8 +551,12 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *sta
     assert(g_target->stack == NULL); /* it is fresh */
     
     assert(run);
+
+    /* extra anti-inline protection */
+    asm("");
+
     g_target->stack_far = (char *)stack_far;
-    result = _tealet_switchstack(g_main);
+    result = TEALET_SWITCHSTACK(g_main);
     if (result < 0) {
         /* couldn't allocate stack */
         g_main->g_current = g;
@@ -638,10 +657,12 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     assert(g_main->g_counter == 1); /* set in alloc_raw */
 #endif
     assert(TEALET_IS_MAIN_STACK(g_main));
+#ifdef NO_NOINLINE
     /* set up the following field with an indirection, which is needed
      to prevent any inlining */
     _tealet_initialstub = tealet_initialstub;
     _tealet_switchstack = tealet_switchstack;
+#endif
     return (tealet_t *)g_main;
 }
 
@@ -680,7 +701,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
 #if TEALET_WITH_STATS
     g_main->g_tealets ++;
 #endif
-    fail = _tealet_initialstub(g_main, run, (void*)&result);
+    fail = TEALET_INITIALSTUB(g_main, run, (void*)&result);
     if (fail) {
         /* could not save stack */
         tealet_int_free(g_main, result);
@@ -707,7 +728,7 @@ int tealet_switch(tealet_t *stub, void **parg)
 #endif
     g_main->g_target = g_target;
     g_main->g_arg = parg ? *parg : NULL;
-    result = _tealet_switchstack(g_main);
+    result = TEALET_SWITCHSTACK(g_main);
     if (parg)
         *parg = g_main->g_arg;
 #ifdef DEBUG_DUMP
@@ -733,7 +754,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
         g_current->stack = (tealet_stack_t*) -1; /* signal do-not-delete */
     g_main->g_target = g_target;
     g_main->g_arg = arg;
-    result = _tealet_switchstack(g_main);
+    result = TEALET_SWITCHSTACK(g_main);
     assert(result < 0); /* only return here if there was failure */
     g_target->stack_far = stack_far;
     g_current->stack = NULL;
@@ -816,8 +837,10 @@ void *tealet_get_far(tealet_t *_tealet)
     return tealet->stack_far;
 }
 
+#if __GNUC__ > 4
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-local-addr"
+#endif
 void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
 {
     tealet_sub_t *result;
@@ -829,7 +852,9 @@ void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
     r = (void*)&result;
     return r;
 }
+#if __GNUC__ > 4
 #pragma GCC diagnostic pop
+#endif
 
 size_t tealet_get_stacksize(tealet_t *_tealet)
 {
