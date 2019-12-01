@@ -1,4 +1,9 @@
+/*
+ * Include the proper files to define the tealet_slp_switch() function,
+ * either as C source or assembler source
+ */
 
+#pragma once
 /* define USE_SLP_FALLBACK here if you want to test the SLP_FALLBACK mechanism */
 #define ENABLE_SLP_FALLBACK
 /* #define USE_SLP_FALLBACK */
@@ -34,6 +39,13 @@
 
 #ifdef USE_SLP_FALLBACK
 /* hope this is standard C */
-#pragma message("fallback to stackless platform support. Switching is not thread-safe")
+#warning "fallback to stackless platform support. Switching is not thread-safe"
 #include "../platf_slp/slp_fallback.h"
 #endif
+
+#if defined TEALET_SWITCH_IMPL && !defined __ASSEMBLER__
+#define STRING2(X) #X
+#define STRING(X) STRING2(X)
+#pragma message ("Platform: " STRING(TEALET_PLATFORM))
+#endif
+

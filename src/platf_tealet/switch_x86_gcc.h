@@ -1,5 +1,7 @@
+/* gcc implementationfor X86 (32 bit), inline assembly */
 
-static void *tealet_slp_switch(void *(*save_state)(void*, void*),
+#ifdef TEALET_SWITCH_IMPL
+void *tealet_slp_switch(void *(*save_state)(void*, void*),
                         void *(*restore_state)(void*, void*),
                         void *extra)
 {
@@ -51,3 +53,4 @@ static void *tealet_slp_switch(void *(*save_state)(void*, void*),
      );
   return result;
 }
+#endif /* TEALET_SWITCH_IMPL */

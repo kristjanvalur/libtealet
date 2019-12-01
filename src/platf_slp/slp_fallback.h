@@ -12,7 +12,6 @@
 /* staic vars to pass information around.  This is what makes this
  * non-threadsafe
  */
-typedef void *(*save_restore_t)(void*, void*);
 static save_restore_t fallback_save_state=NULL, fallback_restore_state=NULL;
 static void *fallback_extra=NULL;
 static void *fallback_newstack = NULL;
@@ -43,8 +42,8 @@ static void *fallback_newstack = NULL;
 #include "slp_platformselect.h"
 
 /* This is a wrapper that takes care of setting the appropriate globals */
-static void *tealet_slp_switch(save_restore_t save_state,
-                        save_restore_t restore_state,
+void *tealet_slp_switch(tealet_save_restore_t save_state,
+                        tealet_save_restore_t restore_state,
                         void *extra)
 {
 	/* need to store the restore information on the stack */

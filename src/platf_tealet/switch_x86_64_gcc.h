@@ -1,5 +1,8 @@
+/* gnu C AMD64 switching code, done with in-line assembly in a .c file */
+#ifdef TEALET_SWITCH_IMPL
+#ifndef __ASSEMBLER__
 
-static void *tealet_slp_switch(void *(*save_state)(void*, void*),
+void *tealet_slp_switch(void *(*save_state)(void*, void*),
                         void *(*restore_state)(void*, void*),
                         void *extra)
 {
@@ -64,3 +67,5 @@ static void *tealet_slp_switch(void *(*save_state)(void*, void*),
      );
   return result;
 }
+#endif /* !__ASSEMBLER__*/
+#endif /* TEALET_SWITCH_IMPL */

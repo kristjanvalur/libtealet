@@ -14,7 +14,7 @@ extern void *tealet_slp_switch_raw(void *(*save_state)(void*, void*),
 #pragma optimize("", off) /* so that autos are stored on the stack */
 #pragma warning(disable:4733) /* disable warning about modifying FS[0] */
 
-static void *tealet_slp_switch(void *(*save_state)(void*, void*),
+void *tealet_slp_switch(void *(*save_state)(void*, void*),
                         void *(*restore_state)(void*, void*),
                         void *extra)
 {
