@@ -1,5 +1,5 @@
 CPPFLAGS += -Isrc
-#CFLAGS += -fPIC
+CFLAGS += -fPIC
 all: libtealet.so
 
 dude.so: src/tealet.o src/switch_S.o src/switch_c.o
