@@ -37,15 +37,19 @@
 #endif
 #endif
 
-#ifdef USE_SLP_FALLBACK
 /* hope this is standard C */
+#if defined TEALET_SWITCH_IMPL && !defined __ASSEMBLER__
+#ifdef USE_SLP_FALLBACK
 #warning "fallback to stackless platform support. Switching is not thread-safe"
-#include "../platf_slp/slp_fallback.h"
+#include "slp_fallback.h"
 #endif
 
-#if defined TEALET_SWITCH_IMPL && !defined __ASSEMBLER__
 #define STRING2(X) #X
 #define STRING(X) STRING2(X)
+#if defined TEALET_PLATFORM
 #pragma message ("Platform: " STRING(TEALET_PLATFORM))
+#elif defined SLP_PLATFORM
+#pragma message ("Platform (slp): " STRING(SLP_PLATFORM))
+#endif
 #endif
 

@@ -8,11 +8,12 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>
 
 /* staic vars to pass information around.  This is what makes this
  * non-threadsafe
  */
-static save_restore_t fallback_save_state=NULL, fallback_restore_state=NULL;
+static tealet_save_restore_t fallback_save_state=NULL, fallback_restore_state=NULL;
 static void *fallback_extra=NULL;
 static void *fallback_newstack = NULL;
 
@@ -39,8 +40,9 @@ static void *fallback_newstack = NULL;
 /* include standard stackless python switching code. */
 #define SLP_EVAL
 /* Rename the slp_switch function that the slp headers will define */
-#include "slp_platformselect.h"
+#include "../platf_slp/slp_platformselect.h"
 
+#if defined TEALET_SWITCH_IMPL && ! defined __ASSEMBLER__
 /* This is a wrapper that takes care of setting the appropriate globals */
 void *tealet_slp_switch(tealet_save_restore_t save_state,
                         tealet_save_restore_t restore_state,
@@ -67,4 +69,4 @@ void *tealet_slp_switch(tealet_save_restore_t save_state,
 	/* otherwise it is 1 or -1 */
 	return result;
 }
-
+#endif
