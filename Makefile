@@ -10,7 +10,7 @@ libtealet.so: $(coreobj)
 	$(LD) $(LDFLAGS) -shared -o $@ $^
 
 clean:
-	rm -fr *.o *.out *.so
+	rm -f src/*.o test/*.o *.out *.so
 
 DEBUG = #-DDEBUG_DUMP
 
