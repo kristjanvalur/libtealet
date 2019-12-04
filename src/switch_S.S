@@ -4,5 +4,5 @@
  */
 
 /* pick an implementation, basef on platform */
-#define TEALET_IMPL_SWITCH
+#define TEALET_SWITCH_IMPL
 #include "platf_tealet/tealet_platformselect.h"

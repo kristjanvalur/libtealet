@@ -135,7 +135,7 @@ typedef struct tealet_main_t {
 #else
 #define NOINLINE
 #define NO_NOINLINE
-/* force no inlining using function pointers */
+/* force no inlining using extern function pointers */
 #define TEALET_SWITCHSTACK _tealet_switchstack
 #define TEALET_INITIALSTUB _tealet_initialstub
 int (*_tealet_switchstack)(tealet_main_t*);
@@ -505,8 +505,10 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
     assert(g_main->g_target);
     assert(g_main->g_target != g_main->g_current);
 
+#ifdef __GNUC__
     /* extra anti-inline protection */
-    asm("");
+    __asm__("");
+#endif
 
     /* if the target saved stack is invalid (due to a failure to save it
     * during the exit of another tealet), we detect this here and
@@ -552,8 +554,10 @@ static NOINLINE int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, 
     
     assert(run);
 
+#if __GNUC__
     /* extra anti-inline protection */
-    asm("");
+    __asm__("");
+#endif
 
     g_target->stack_far = (char *)stack_far;
     result = TEALET_SWITCHSTACK(g_main);
