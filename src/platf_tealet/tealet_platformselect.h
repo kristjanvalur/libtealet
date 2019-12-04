@@ -28,6 +28,9 @@
 #elif defined(__GNUC__) && defined(__arm__) && defined (__thumb__)
 #include "switch_arm_thumb_gcc.h" /* gcc using arm thumb */
 #define TEALET_PLATFORM arm_thumb
+#elif defined(__GNUC__) && defined(__arm__)
+#include "switch_arm_gcc.h" /* gcc using arm */
+#define TEALET_PLATFORM arm
 #else
 #ifdef ENABLE_SLP_FALLBACK
 #define USE_SLP_FALLBACK
