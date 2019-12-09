@@ -35,15 +35,19 @@
 /* these are the core registers that must be preserved. We save them because
  * we have no idea what happens after the switch, and the caller of this function
  * assumes that they are left in place when we return to him.
+ * r11 is not explicitly mentioned, gcc uses it as fp and pushes it
+ * implicitly.
  */
-#define NV_REGISTERS "v1", "v2","v3", "v4", "v5", "v6", "v7" /*"v8" is used as fp by gcc and cannot be used */
+#define NV_REGISTERS "r4", "r5","r6", "r7", "r8", "r9", "r10" /*, "r11"*/
 /* These are the floating point extension registers. Same applies, we must preserve them in
  * case the calling function was doing any floating point logic.  Note that we do not
  * preserve the FPSCR and VPR registers since they have complex rules about preservation.
  * it may be optionally disabled to store these floating point registers by not
  * defining them here.
  */
+#ifndef __thumb__
 #define CP_REGISTERS "d8","d9","d10","d11","d12","d13","d14","d15"
+#endif
 
 __attribute__((optimize("O", "omit-frame-pointer")))
 void *tealet_slp_switch(tealet_save_restore_t save_state,
@@ -68,7 +72,7 @@ void *tealet_slp_switch(tealet_save_restore_t save_state,
 	/* set stack pointer from sp using assembly */
 	__asm__ ("mov sp, %[result]" : : [result] "r" (sp));
 	sp = restore_state(sp, extra);
-	/* retstore register */
+	/* restore registers */
 	return sp;
 }
 #endif
