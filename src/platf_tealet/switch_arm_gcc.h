@@ -7,8 +7,9 @@
 #ifdef TEALET_SWITCH_IMPL
 #if ! __ASSEMBLER__
 
-#ifdef DEV
-/* inline assembly does not produce code that is usable because depending
+#ifndef USE_ASSEMBLER
+/* inline assembly does not by default produce code that is usable
+ *  because depending
  * on optimization,the fp (r11) register may be used to restore the
  * stack pointer on function exit, thereby invalidating our changes
  * To arrive at reasonable assembler, follow some approach similar to:
@@ -19,6 +20,12 @@
  * version is better than no-optimized because the latter uses stack
  * variables for arguments.  And it turns out that this version actually
  * runs because it does not use fp for restoring the stack pointer
+ * 
+ * However, for now the optimizer can be instructed to omit frame
+ * ponter, so we simply use that method. the -fomit-frame-pointer
+ * option is applied with an __attribute__.
+ * we must also enable optimization level "O" so that intermediates
+ * aren't stored on the stack.
  */
 
 #include <stdint.h>
@@ -38,6 +45,7 @@
  */
 #define CP_REGISTERS "d8","d9","d10","d11","d12","d13","d14","d15"
 
+__attribute__((optimize("O", "omit-frame-pointer")))
 void *tealet_slp_switch(tealet_save_restore_t save_state,
                         tealet_save_restore_t restore_state,
                         void *extra)
@@ -66,6 +74,5 @@ void *tealet_slp_switch(tealet_save_restore_t save_state,
 #endif
 #else
 /* assembler code here, if the above cannot be done in in-line assembly */
-#include "switch_arm_gcc.s"
 #endif
 #endif
