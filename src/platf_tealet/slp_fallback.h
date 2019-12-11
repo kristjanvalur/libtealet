@@ -13,8 +13,8 @@
 /* staic vars to pass information around.  This is what makes this
  * non-threadsafe
  */
-static tealet_save_restore_t fallback_save_state=NULL, fallback_restore_state=NULL;
-static void *fallback_extra=NULL;
+static tealet_save_restore_t fallback_save_restore_cb = NULL;
+static void *fallback_context = NULL;
 static void *fallback_newstack = NULL;
 
 /* call the provided save_state method with its arguments.
@@ -24,17 +24,15 @@ static void *fallback_newstack = NULL;
 	intptr_t stsizeb; \
 	void *newstack; \
 	stackref += STACK_MAGIC; \
-	newstack = fallback_save_state(stackref, fallback_extra); \
+	newstack = fallback_save_restore_cb(fallback_context, stackref); \
 	fallback_newstack = newstack; /* store this for restore_state */ \
-	if ((intptr_t)newstack & 1) \
-		return (int)newstack; \
 	/* compute the delta expected by old switching code */ \
 	stsizediff = ((intptr_t*) newstack - (intptr_t*)stackref) * sizeof(intptr_t); \
 } while (0)
 
 /* call the restore_state using the stored data */
 #define SLP_RESTORE_STATE() do { \
-	fallback_restore_state(fallback_newstack, fallback_extra); \
+	fallback_newstack = fallback_save_restore_cb(fallback_context, stackref); \
 } while(0)
 
 /* include standard stackless python switching code. */
@@ -44,29 +42,20 @@ static void *fallback_newstack = NULL;
 
 #if defined TEALET_SWITCH_IMPL && ! defined __ASSEMBLER__
 /* This is a wrapper that takes care of setting the appropriate globals */
-void *tealet_slp_switch(tealet_save_restore_t save_state,
-                        tealet_save_restore_t restore_state,
-                        void *extra)
+void *tealet_slp_switch(tealet_save_restore_t save_restore_cb,
+                        void *context)
 {
 	/* need to store the restore information on the stack */
 	void *result;
-	fallback_save_state = save_state;
-	fallback_restore_state = restore_state;
-	fallback_extra = extra;
+	fallback_save_restore_cb = save_restore_cb;
+	fallback_context = context;
 
 	slp_switch();
 	result = fallback_newstack;
 	
 	/* clearing them again is prudent */
-	fallback_save_state = fallback_restore_state = NULL;
-	fallback_extra = fallback_newstack = NULL;
-
-	/* successful switch was indicated by save_state returning
-	 * an even result
-	 */
-	if (! ((intptr_t)result & 1))
-		result = NULL;
-	/* otherwise it is 1 or -1 */
+	fallback_save_restore_cb = NULL;
+	fallback_context = fallback_newstack = NULL;
 	return result;
 }
 #endif
