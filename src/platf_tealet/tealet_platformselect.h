@@ -30,7 +30,10 @@
 #define TEALET_PLATFORM arm_thumb
 #elif defined(__GNUC__) && defined(__arm__)
 #include "switch_arm_gcc.h" /* gcc using arm */
-#define TEALET_PLATFORM arm
+#define TEALET_PLATFORM arm32
+#elif defined(__GNUC__) && defined(__ARM_ARCH_ISA_A64)
+#include "switch_aarch64_gcc.h" /* gcc using arm aarch64*/
+#define TEALET_PLATFORM aarch64_gcc
 #else
 #ifdef ENABLE_SLP_FALLBACK
 #define USE_SLP_FALLBACK
