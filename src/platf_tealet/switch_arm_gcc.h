@@ -50,9 +50,8 @@
 #endif
 
 __attribute__((optimize("O", "omit-frame-pointer")))
-void *tealet_slp_switch(tealet_save_restore_t save_state,
-                        tealet_save_restore_t restore_state,
-                        void *extra)
+void *tealet_slp_switch(tealet_save_restore_t save_restore_cb,
+                        void *context)
 {
 	void *sp;
 	__asm__ volatile ("" : : : NV_REGISTERS);
@@ -66,12 +65,10 @@ void *tealet_slp_switch(tealet_save_restore_t save_state,
 	/* sp = get stack pointer from assembly code */
 	__asm__ ("mov %[result], sp" : [result] "=r" (sp));
 	/* store stack */
-	sp = save_state(sp, extra);
-	if ((intptr_t)sp & 1)
-		return sp; /* error, or save only operation */
+	sp = save_restore_cb(context, sp);
 	/* set stack pointer from sp using assembly */
 	__asm__ ("mov sp, %[result]" : : [result] "r" (sp));
-	sp = restore_state(sp, extra);
+	sp = save_restore_cb(context, sp);
 	/* restore registers */
 	return sp;
 }
