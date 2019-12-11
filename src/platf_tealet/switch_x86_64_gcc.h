@@ -1,71 +1,48 @@
-/* gnu C AMD64 switching code, done with in-line assembly in a .c file */
 #ifdef TEALET_SWITCH_IMPL
-#ifndef __ASSEMBLER__
+#if ! __ASSEMBLER__
+#include <stdint.h>
+#include "../switch.h"
 
-void *tealet_slp_switch(void *(*save_state)(void*, void*),
-                        void *(*restore_state)(void*, void*),
-                        void *extra)
+/* This is the System V ABI for x86-64.
+ * It is used on linux and other similar systems (other than
+ * windows).
+ * https://wiki.osdev.org/System_V_ABI
+ * Note that we don't preserve the mmx mxcsr register or the
+ * fp x87 cw (control word) as is strictly required by the ABI
+ * since it requires more custom assembly.  switching between
+ * floating point functions is therefore dangerous.
+ */
+
+#define PRESERVE "rbx","r12", "r13", "r14", "r15","rbp"
+
+/* Need the optimization level to avoid storing 'stack_pointer'
+ * on the stack which would cause the wrong value to be sent to 
+ * the second callback call (it would be read from stack).
+ * Also, avoid a frame being put in rbp, allowing us to push it.
+ */
+__attribute__((optimize("O", "omit-frame-pointer")))
+void *tealet_slp_switch(tealet_save_restore_t save_restore_cb,
+                        void *context)
 {
-  void *result;
-  __asm__ volatile (
-     "pushq %%rbp\n"
-     "pushq %%rbx\n"       /* push the registers that may contain  */
-     "pushq %%rsi\n"       /* some value that is meant to be saved */
-     "pushq %%rdi\n"
-     "pushq %%rcx\n"
-     "pushq %%rdx\n"
-     "pushq %%r8\n"
-     "pushq %%r9\n"
-     "pushq %%r10\n"
-     "pushq %%r11\n"
-     "pushq %%r12\n"
-     "pushq %%r13\n"
-     "pushq %%r14\n"
-     "pushq %%r15\n"
+	void *stack_pointer;
+	/* assembly to save non-volatile registers */
+	__asm__ volatile ("" : : : PRESERVE);
+	/* sp = get stack pointer from assembly code */
+	__asm__ ("movq %%rsp, %[result]" : [result] "=r" (stack_pointer));
+	stack_pointer = save_restore_cb(context, stack_pointer);
 
-     "movq %%rax, %%r12\n" /* save 'restore_state' for later */
-     "movq %%rsi, %%r13\n" /* save 'extra' for later         */
+	/* set stack pointer from sp using assembly */
+	__asm__ ("movq %[result], %%rsp" :: [result] "r" (stack_pointer));
 
-                           /* arg 2: extra                       */
-     "movq %%rsp, %%rdi\n" /* arg 1: current (old) stack pointer */
-     "call *%%rcx\n"       /* call save_state()                  */
-
-     "testb $1, %%al\n"        /* skip the rest if the return value is odd */
-     "jnz 0f\n"
-
-     "movq %%rax, %%rsp\n"     /* change the stack pointer */
-
-     /* From now on, the stack pointer is modified, but the content of the
-        stack is not restored yet.  It contains only garbage here. */
-
-     "movq %%r13, %%rsi\n" /* arg 2: extra                       */
-     "movq %%rax, %%rdi\n" /* arg 1: current (new) stack pointer */
-     "call *%%r12\n"       /* call restore_state()               */
-
-     /* The stack's content is now restored. */
-
-     "0:\n"
-     "popq %%r15\n"
-     "popq %%r14\n"
-     "popq %%r13\n"
-     "popq %%r12\n"
-     "popq %%r11\n"
-     "popq %%r10\n"
-     "popq %%r9\n"
-     "popq %%r8\n"
-     "popq %%rdx\n"
-     "popq %%rcx\n"
-     "popq %%rdi\n"
-     "popq %%rsi\n"
-     "popq %%rbx\n"
-     "popq %%rbp\n"
-
-     : "=a"(result)              /* output variables */
-     : "a"(restore_state),       /* input variables  */
-       "c"(save_state),
-       "S"(extra)
-     );
-  return result;
+	/* read it back, so that the value isnt read from a stack var
+	 * for the next call. For -O1, this is optimized away.
+	 */
+	__asm__ ("movq %%rsp, %[result]" : [result] "=r" (stack_pointer));
+	stack_pointer = save_restore_cb(context, stack_pointer);
+	/* restore non-volatile registers from stack */
+	return stack_pointer;
 }
-#endif /* !__ASSEMBLER__*/
-#endif /* TEALET_SWITCH_IMPL */
+#else
+/* assembler code here, if the above cannot be done in in-line assembly */
+#endif
+#endif

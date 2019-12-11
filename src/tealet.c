@@ -70,7 +70,7 @@ typedef struct tealet_chunk_t
 
 /* The main stack structure, contains the initial chunk and a link to further
  * segments.  Stacks can be shared by different tealets, hence the reference
- * count.  They can also be linked into a list of partiallty unsaved
+ * count.  They can also be linked into a list of partially unsaved
  * stacks, that are saved only on demand.
  */
 typedef struct tealet_stack_t
@@ -87,7 +87,7 @@ typedef struct tealet_stack_t
 /* the actual tealet structure as used internally 
  * The main tealet will have stack_far set to the end of memory.
  * "stack" is zero for a running tealet, otherwise it points
- * to the saved stack, or is -1 if the sate is invalid.
+ * to the saved stack, or is -1 if the state is invalid.
  * In addition, stack_far is set to NULL value to indicate
  * that a tealet is exiting.
  */
@@ -106,6 +106,17 @@ typedef struct tealet_nonmain_t {
   double _extra[1];                /* start of any extra data */
 } tealet_nonmain_t;
 
+/* an enum to maintain state for the save/restore callback
+ * which is called twice (with old and new stack pointer)
+ */
+typedef enum tealet_sr_e
+{
+    SW_NOP,     /* do nothing (no-restore stack) */
+    SW_SAVE,    /* save stack (or discard when exiting task) */
+    SW_RESTORE, /* restore stack */
+    SW_ERR,     /* error occurred when saving */
+} tealet_sr_e;
+
 /* The main tealet has additional fields for housekeeping */
 typedef struct tealet_main_t {
   tealet_sub_t base;
@@ -115,11 +126,12 @@ typedef struct tealet_main_t {
   void         *g_arg;      /* argument passed around when switching */
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
-  size_t       g_extrasize; /* amount of extra memory in tealets */
+  tealet_sr_e   g_sw;       /* save/restore state */
 #if TEALET_WITH_STATS
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
 #endif
+  size_t       g_extrasize; /* amount of extra memory in tealets */
   double _extra[1];         /* start of any extra data */
 } tealet_main_t;
 
@@ -363,7 +375,7 @@ static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char*
     return 0;
 }
 
-/* Grow a list og stacks to a certain limit.  Unlink those that
+/* Grow a list of stacks to a certain limit.  Unlink those that
  * become fully saved.
  */
 static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list, 
@@ -414,10 +426,8 @@ static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list,
  * target->stack can be NULL, indicating that the target stack
  * needs not be restored.
  */
-static void *tealet_save_state(void *old_stack_pointer, void *main)
+static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer)
 {
-    /* must free all the C stack up to target->stack_stop */
-    tealet_main_t *g_main = (tealet_main_t *)main;
     tealet_sub_t *g_target = g_main->g_target;
     tealet_sub_t *g_current = g_main->g_current;
     char* target_stop = g_target->stack_far;
@@ -426,6 +436,11 @@ static void *tealet_save_state(void *old_stack_pointer, void *main)
     assert(g_current != g_target);
     
     exiting = g_current->stack_far == NULL;
+    /* if task is exiting, failure cannot be signalled. the switch
+     * must proceed. A stack failing to get saved (due to memory shortage)
+     * with this flag set will be set as invalid, so that it cannot
+     * be switched back to again.
+     */
     fail_ok = !exiting;
 
     /* save and unlink older stacks on demand */
@@ -436,7 +451,7 @@ static void *tealet_save_state(void *old_stack_pointer, void *main)
     }
     fail = tealet_stack_grow_list(g_main, g_main->g_prev, target_stop, g_target->stack, fail_ok);
     if (fail)
-        return (void*) -1;
+        return -1;
     /* when returning to main, there should now be no list of unsaved stacks */
     if (TEALET_IS_MAIN_STACK(g_main->g_target))
         assert(g_main->g_prev == NULL);
@@ -462,7 +477,7 @@ static void *tealet_save_state(void *old_stack_pointer, void *main)
             g_current->stack_far, target_stop, &full);
         if (!stack) {
             if (fail_ok)
-                return (void*) -1;
+                return -1;
             assert(!TEALET_IS_MAIN_STACK(g_current));
             g_current->stack = (tealet_stack_t *)-1; /* signal invalid stack */
         } else {
@@ -474,17 +489,11 @@ static void *tealet_save_state(void *old_stack_pointer, void *main)
                 tealet_stack_link(stack, &g_main->g_prev);
         }
     }
-
-    if (g_target->stack == NULL)
-        return (void *) 1; /* don't restore */
-
-    /* return the stack pointer, it was saved here */
-    return g_target->stack->chunk.stack_near;
+    return 0;
 }
 
-static void *tealet_restore_state(void *new_stack_pointer, void *main)
+static void tealet_restore_state(tealet_main_t *g_main, void *new_stack_pointer)
 {
-    tealet_main_t *g_main = (tealet_main_t *)main;
     tealet_sub_t *g = g_main->g_target;
 
     /* Restore the heap copy back into the C stack */
@@ -492,6 +501,42 @@ static void *tealet_restore_state(void *new_stack_pointer, void *main)
     tealet_stack_restore(g->stack);
     tealet_stack_decref(g_main, g->stack);
     g->stack = NULL;
+}
+
+/* this callback is called twice from the raw switch code, once after saving
+ * registers, where it should save the stack (if needed) and once after
+ * updating the stack pointer, where it should restore the stack (if needed)
+ */
+static void *tealet_save_restore_cb(void *context, void *stack_pointer)
+{
+    tealet_main_t *g_main = (tealet_main_t *)context;
+    tealet_sub_t *g_target = g_main->g_target;
+        
+    if (g_main->g_sw == SW_SAVE) {
+        int result = tealet_save_state(g_main, stack_pointer);
+        if (result) {
+            g_main->g_sw = SW_ERR;
+            return stack_pointer;
+        }
+        if (g_target->stack == NULL) {
+            /* save only, no restore, keep stack pointer */
+            g_main->g_sw = SW_NOP;
+            return stack_pointer;
+        } else {
+            /* return new stack pointer and flag us for restore */
+            g_main->g_sw = SW_RESTORE;
+            return g_target->stack->chunk.stack_near;
+        }
+    }
+    if (g_main->g_sw == SW_RESTORE) {
+        tealet_restore_state(g_main, stack_pointer);
+        return NULL;
+    } else if (g_main->g_sw == SW_ERR) {
+        /* called second time, but error happened the first time */
+        return (void*) -1;
+    } 
+    /* called second time but no restore should happen */
+    assert(g_main->g_sw == SW_NOP);
     return NULL;
 }
 
@@ -501,7 +546,6 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
      of the mix between different call stacks: after tealet_switch() it
      might end up with a different value.  But g_main is safe, because
      it should have always the same value before and after the switch. */
-    void *res;
     assert(g_main->g_target);
     assert(g_main->g_target != g_main->g_current);
 
@@ -521,22 +565,22 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
     */
     if (g_main->g_target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
+    g_main->g_sw = SW_SAVE;
     {
         /* make sure that optimizers, e.g. gcc -O2, won't assume that
          * g_main->g_target stays unchanged across the switch and optimize it
          * into a register
          */
         tealet_sub_t * volatile *ptarget = &g_main->g_target;
-        res = tealet_slp_switch(tealet_save_state, tealet_restore_state,
-				g_main);
+        tealet_slp_switch(tealet_save_restore_cb, (void*)g_main);
         g_main->g_target = *ptarget;
     }
-    if ((intptr_t)res >= 0)
+    if (g_main->g_sw != SW_ERR)
         g_main->g_current = g_main->g_target;
     else
         return TEALET_ERR_MEM;
     g_main->g_target = NULL;
-    return (int)(intptr_t)res;
+    return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
 
 /* We are initializing and switching to a new stub,
