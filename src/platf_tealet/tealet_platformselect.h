@@ -21,13 +21,10 @@
 #define TEALET_PLATFORM x64_msvc
 #elif defined(__GNUC__) && defined(__amd64__)
 #include "switch_x86_64_gcc.h" /* gcc on amd64 */
-#define TEALET_PLATFORM x64_gcc
+#define TEALET_PLATFORM x86_64_gcc
 #elif defined(__GNUC__) && defined(__i386__)
 #include "switch_x86_gcc.h" /* gcc on X86 */
 #define TEALET_PLATFORM x86_gcc
-#elif defined(__GNUC__) && defined(__arm__) && defined (__thumb__)
-#include "switch_arm_thumb_gcc.h" /* gcc using arm thumb */
-#define TEALET_PLATFORM arm_thumb
 #elif defined(__GNUC__) && defined(__arm__)
 #include "switch_arm_gcc.h" /* gcc using arm */
 #define TEALET_PLATFORM arm32
