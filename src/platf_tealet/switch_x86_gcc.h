@@ -1,56 +1,65 @@
 /* gcc implementationfor X86 (32 bit), inline assembly */
 
+/* Follow System V i386 abi, including 16 byte stack alignment 
+ * https://wiki.osdev.org/System_V_ABI#i386
+ * eax, ecx, edx are scratch regs, 
+ * ebp, ebx, esi, edi are callee-preserved
+ * We have compiler construct a frame and push ebp
+ * an then we fix an aligned stack pointer and just store
+ * the arguments in proper places.
+ * The function calls need to be assembler coded because a compiler
+ * generated call will adjust stack pointer, but the restore
+ * opcode will be placed _after_ we ourselves then modify esp,
+ * ruining everything.
+ * So, we use C to set up frame, pass arguments in and out,
+ * and preserve registers. But we ourselves assemble the 
+ * calls and stack pointer changes 
+ */
+
+# define PRESERVED "ebx", "esi", "edi"
+
 #ifdef TEALET_SWITCH_IMPL
-void *tealet_slp_switch(void *(*save_state)(void*, void*),
-                        void *(*restore_state)(void*, void*),
-                        void *extra)
+#if !__ASSEMBLER__
+#include "../switch.h"
+__attribute__((optimize("O1", "no-omit-frame-pointer")))
+void *tealet_slp_switch(tealet_save_restore_t save_restore_cb,
+                        void *context)
 {
-  void *result;
-  __asm__ volatile (
-     "pushl %%ebp\n"
-     "pushl %%ebx\n"       /* push the registers that may contain  */
-     "pushl %%esi\n"       /* some value that is meant to be saved */
-     "pushl %%edi\n"
-     "pushl %%ecx\n"
-     "pushl %%edx\n"
+void *result;
+  /* push registers, set up stack pointer on boundary */
+    __asm__("" ::: PRESERVED);
+    __asm__(
 
-     "movl %%eax, %%esi\n" /* save 'restore_state' for later */
-     "movl %%edx, %%edi\n" /* save 'extra' for later         */
+      /* adjust stack pointer to be 16 bit aligned with 
+       * room for call args
+       * since the call instruction, 5 four bytes have
+       * been pushed (ip, bp, bx, si, di), need extra 12 bytes
+       */
+    "subl $12, %%esp\n"
+    "movl %[cb], %%esi\n"  /* save 'save_restore_cb' for later */
+    "movl %[ctx], %%edi\n" /* save 'context' for later         */
 
-     "movl %%esp, %%eax\n"
+    /* first call */
+    "movl %%esp, 4(%%esp)\n"  /* arg 1 */
+    "movl %%edi, 0(%%esp)\n"  /* arg 0 */
+    "call *%%esi\n"
 
-     "pushl %%edx\n"       /* arg 2: extra                       */
-     "pushl %%eax\n"       /* arg 1: current (old) stack pointer */
-     "call *%%ecx\n"       /* call save_state()                  */
+    /* restore esp */
+    "movl %%eax, %%esp\n"
+     
+    /* second call */
+    "movl %%eax, 4(%%esp)\n"
+    "movl %%edi, 0(%%esp)\n"
+    "call *%%esi\n"
 
-     "testl $1, %%eax\n"       /* skip the rest if the return value is odd */
-     "jnz 0f\n"
+    "movl %%eax, %[result]\n"
 
-     "movl %%eax, %%esp\n"     /* change the stack pointer */
-
-     /* From now on, the stack pointer is modified, but the content of the
-        stack is not restored yet.  It contains only garbage here. */
-
-     "pushl %%edi\n"       /* arg 2: extra                       */
-     "pushl %%eax\n"       /* arg 1: current (new) stack pointer */
-     "call *%%esi\n"       /* call restore_state()               */
-
-     /* The stack's content is now restored. */
-
-     "0:\n"
-     "addl $8, %%esp\n"
-     "popl %%edx\n"
-     "popl %%ecx\n"
-     "popl %%edi\n"
-     "popl %%esi\n"
-     "popl %%ebx\n"
-     "popl %%ebp\n"
-
-     : "=a"(result)              /* output variables */
-     : "a"(restore_state),       /* input variables  */
-       "c"(save_state),
-       "d"(extra)
-     );
-  return result;
+    "addl $12, %%esp\n"
+    : [result] "=r" (result)              /* output variables */
+    : [cb] "r" (save_restore_cb),       /* input variables  */
+      [ctx] "r" (context)
+    );
+    return result;
 }
+#endif
 #endif /* TEALET_SWITCH_IMPL */

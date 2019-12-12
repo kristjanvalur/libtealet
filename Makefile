@@ -7,10 +7,10 @@ dude.so: src/tealet.o src/switch_S.o src/switch_c.o
 
 coreobj = src/tealet.o src/switch_S.o src/switch_c.o
 libtealet.so: $(coreobj)
-	$(LD) $(LDFLAGS) -shared -o $@ $^
+	$(CC) $(LDFLAGS) -shared -o $@ $^
 
 clean:
-	rm -f src/*.o test/*.o *.out *.so
+	rm -f src/*.o tests/*.o *.out *.so
 
 DEBUG = #-DDEBUG_DUMP
 
@@ -24,7 +24,7 @@ test: tests
 
 testobj = tests/tests.o src/tools.o
 tests-static.out: $(coreobj) $(testobj)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ ${DEBUG}
+	$(CC) $(LDFLAGS) -o $@ $^ ${DEBUG}
 
 tests-dynamic.out: $(coreobj) $(testobj) libtealet.so
-	$(CC) $(CPPFLAGS) $(CFLAGS) -L. -g -o $@ $(coreobj) $(testobj) ${DEBUG} -ltealet
+	$(CC) $(LDFLAGS) -L. -g -o $@ $(coreobj) $(testobj) ${DEBUG} -ltealet
