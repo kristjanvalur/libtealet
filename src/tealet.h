@@ -177,6 +177,13 @@ void tealet_delete(tealet_t *target);
 TEALET_API
 tealet_t *tealet_current(tealet_t *tealet);
 
+/* Return the previous tealet, i.e. the one that switched to us.
+* "tealet" can be any tealet derived from the
+ * main tealet.
+ */
+TEALET_API
+tealet_t *tealet_previous(tealet_t *tealet);
+
 /* Get the address of a the tealet's main user pointer, a single
  * void pointer associated with the main tealet.  Use this to
  * associate a (void*)value with the main tealet.

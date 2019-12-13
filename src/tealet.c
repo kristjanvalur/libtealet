@@ -122,6 +122,7 @@ typedef struct tealet_main_t {
   tealet_sub_t base;
   void         *g_user;     /* user data pointer for main */
   tealet_sub_t *g_current;
+  tealet_sub_t *g_previous;
   tealet_sub_t *g_target;   /* Temporary store when switching */
   void         *g_arg;      /* argument passed around when switching */
   tealet_alloc_t g_alloc;   /* the allocation context used */
@@ -546,6 +547,7 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
      of the mix between different call stacks: after tealet_switch() it
      might end up with a different value.  But g_main is safe, because
      it should have always the same value before and after the switch. */
+    tealet_sub_t *previous = g_main->g_previous;
     assert(g_main->g_target);
     assert(g_main->g_target != g_main->g_current);
 
@@ -565,6 +567,7 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
     */
     if (g_main->g_target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
+    g_main->g_previous = g_main->g_current;
     g_main->g_sw = SW_SAVE;
     {
         /* make sure that optimizers, e.g. gcc -O2, won't assume that
@@ -575,10 +578,12 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
         tealet_slp_switch(tealet_save_restore_cb, (void*)g_main);
         g_main->g_target = *ptarget;
     }
-    if (g_main->g_sw != SW_ERR)
+    if (g_main->g_sw != SW_ERR) {
         g_main->g_current = g_main->g_target;
-    else
+    } else {
+        g_main->g_previous = previous;
         return TEALET_ERR_MEM;
+    }
     g_main->g_target = NULL;
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
@@ -694,6 +699,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g->stack_far = STACK_FAR_MAIN;
     g_main->g_user = NULL;
     g_main->g_current = g;
+    g_main->g_previous = NULL;
     g_main->g_target = NULL;
     g_main->g_arg = NULL;
     g_main->g_alloc = *alloc;
@@ -845,6 +851,12 @@ tealet_t *tealet_current(tealet_t *tealet)
 {
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     return (tealet_t *)g_main->g_current;
+}
+
+tealet_t *tealet_previous(tealet_t *tealet)
+{
+    tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+    return (tealet_t *)g_main->g_previous;
 }
 
 void **tealet_main_userpointer(tealet_t *tealet)
