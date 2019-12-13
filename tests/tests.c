@@ -234,13 +234,13 @@ void test_exit(void)
   init_test();
   stub1 = tealet_new(g_main, NULL, NULL);
   stub2 = tealet_duplicate(stub1);
-  arg = (void*)TEALET_EXIT_NODELETE;
+  arg = (void*)TEALET_FLAG_NONE;
   result = tealet_stub_run(stub1, test_exit_run, &arg);
   assert(result == 0);
   assert(status == 1);
   assert(tealet_status(stub1) == TEALET_STATUS_EXITED);
   tealet_delete(stub1);
-  arg = (void*)TEALET_EXIT_DEFAULT;
+  arg = (void*)TEALET_FLAG_DELETE;
   result = tealet_stub_run(stub2, test_exit_run, &arg);
   assert(status == 2);
   fini_test();
@@ -356,7 +356,7 @@ tealet_t *test_arg_1(tealet_t *t1, void *arg)
   tealet_switch(peer, &myarg);
   assert(myarg == (void*)2);
   myarg = (void*)3;
-  tealet_exit(peer, myarg, TEALET_EXIT_DEFAULT);
+  tealet_exit(peer, myarg, TEALET_FLAG_DELETE);
   return NULL;
 }
 
@@ -631,7 +631,7 @@ tealet_t *mem_error_tealet(tealet_t *t1, void *arg)
   talloc_fail = 1;
   res = tealet_switch(peer, &myarg);
   assert(res == TEALET_ERR_MEM);
-  tealet_exit(peer, myarg, TEALET_EXIT_DEFAULT);
+  tealet_exit(peer, myarg, TEALET_FLAG_DELETE);
   assert(0); // never runs
   return NULL;
 }

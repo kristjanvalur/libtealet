@@ -630,8 +630,8 @@ static NOINLINE int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, 
         #ifdef DEBUG_DUMP
         printf("ending %p -> %p\n", g, g_target);
         #endif
-        if (tealet_exit((tealet_t*)g_target, NULL, TEALET_EXIT_DEFAULT))
-            tealet_exit((tealet_t*)g_main, NULL, TEALET_EXIT_DEFAULT); /* failsafe */
+        if (tealet_exit((tealet_t*)g_target, NULL, TEALET_FLAG_DELETE))
+            tealet_exit((tealet_t*)g_main, NULL, TEALET_FLAG_DELETE); /* failsafe */
         assert(!"This point should not be reached");
     } else {
         /* this is a switch back into the calling tealet */
@@ -804,7 +804,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
 
     g_current->stack_far = NULL; /* signal exit */
     assert (g_current->stack == NULL);
-    if (flags & TEALET_EXIT_NODELETE)
+    if (!(flags & TEALET_FLAG_DELETE))
         g_current->stack = (tealet_stack_t*) -1; /* signal do-not-delete */
     g_main->g_target = g_target;
     g_main->g_arg = arg;

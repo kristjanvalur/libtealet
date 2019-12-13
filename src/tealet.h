@@ -134,16 +134,19 @@ int tealet_switch(tealet_t *target, void **parg);
 
 /* Exit the current tealet.  Similar to tealet_switch except that it only
  * ever returns if the target tealet is defunct.
- * It also allows passing of an *arg to the target tealet, plus allows
+ * It also allows passing of an arg to the target tealet, plus allows
  * control over whether the tealet is automatically deleted or not.
- * Returning with 'p' from the tealet's run funciton is equivalent to calling
- * tealet_exit(p, NULL, TEALET_EXIT_DEFAULT).
+ * This is the recommended way to exit a tealet, because it is symmetric
+ * to the entry point, allowing us to pass back a value.
  * This function can be used as an emergency measure to return to the
  * main tealet if tealet_switch() fails due to inability to save the stack.
  * Note that exiting to the main tealet is always guaranteed to work.
+ * Returning with 'p' from the tealet's run funciton is equivalent to calling
+ * tealet_exit(p, NULL, TEALET_FLAG_DELETE), but the explicit way is
+ * recommended.
  */
-#define TEALET_EXIT_DEFAULT 0
-#define TEALET_EXIT_NODELETE 1
+#define TEALET_FLAG_NONE 0
+#define TEALET_FLAG_DELETE 1
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
 
