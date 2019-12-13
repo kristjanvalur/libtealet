@@ -21,7 +21,7 @@
  * the second callback call (it would be read from stack).
  * Also, ensure a frame pointer is made, pushing rbp.
  */
-__attribute__((optimize("O", "-no-omit-frame-pointer")))
+__attribute__((optimize("O", "no-omit-frame-pointer")))
 void *tealet_slp_switch(tealet_save_restore_t save_restore_cb,
                         void *context)
 {
