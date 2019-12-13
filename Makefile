@@ -11,16 +11,21 @@ libtealet.so: $(coreobj)
 
 clean:
 	rm -f src/*.o tests/*.o *.out *.so
+	rm -f tests/setcontext
 
 DEBUG = #-DDEBUG_DUMP
 
 .PHONY: test tests
-tests: tests-static.out tests-dynamic.out 
+tests: tests-static.out tests-dynamic.out
+tests: tests/setcontext
 test: export LD_LIBRARY_PATH = .
 test: tests
 	./tests-static.out
 	./tests-dynamic.out
+	./tests/setcontext
 	@echo "*** All test suites passed ***"
+
+tests/setcontext: $(coreobj)
 
 testobj = tests/tests.o src/tools.o
 tests-static.out: $(coreobj) $(testobj)
