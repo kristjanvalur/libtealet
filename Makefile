@@ -1,35 +1,43 @@
 CPPFLAGS += -Isrc
 CFLAGS += -fPIC
-all: libtealet.so
+LDFLAGS += -Lbin
 
-dude.so: src/tealet.o src/switch_S.o src/switch_c.o
-	$(CC) $(LDFLAGS) -fPIC -shared -o $@ $^
+all: libtealet.so libtealet.a
 
 coreobj = src/tealet.o src/switch_S.o src/switch_c.o
-libtealet.so: $(coreobj)
+allobj = $(coreobj) src/tools.o
+
+bin/libtealet.so: $(allobj)
 	$(CC) $(LDFLAGS) -shared -o $@ $^
+
+bin/libtealet.a: $(allobj)
+	$(AR) $(ARFLAGS) -s $@ $^
 
 clean:
 	rm -f src/*.o tests/*.o *.out *.so
-	rm -f tests/setcontext
+	rm -f bin/*
 
 DEBUG = #-DDEBUG_DUMP
 
 .PHONY: test tests
-tests: tests-static.out tests-dynamic.out
-tests: tests/setcontext
-test: export LD_LIBRARY_PATH = .
+
+tests: bin/test-static bin/test-dynamic
+tests: bin/setcontext
+tests: LDLIBS := -ltealet
+tests: export LD_RUN_PATH := bin
+
 test: tests
-	./tests-static.out
-	./tests-dynamic.out
-	./tests/setcontext
+	bin/test-static
+	bin/test-dynamic
+	bin/setcontext
 	@echo "*** All test suites passed ***"
 
-tests/setcontext: $(coreobj)
 
-testobj = tests/tests.o src/tools.o
-tests-static.out: $(coreobj) $(testobj)
-	$(CC) $(LDFLAGS) -o $@ $^ ${DEBUG}
+bin/setcontext: tests/setcontext.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -static -o $@ $< ${DEBUG} $(LDLIBS)
 
-tests-dynamic.out: $(coreobj) $(testobj) libtealet.so
-	$(CC) $(LDFLAGS) -L. -g -o $@ $(coreobj) $(testobj) ${DEBUG} -ltealet
+bin/test-static: tests/tests.o bin/libtealet.a
+	$(CC) $(LDFLAGS) -static -o $@ $< ${DEBUG} $(LDLIBS)
+
+bin/test-dynamic: tests/tests.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -g -o $@ $< ${DEBUG} $(LDLIBS)
