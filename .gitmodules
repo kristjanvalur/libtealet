@@ -1,0 +1,3 @@
+[submodule "stackman.git"]
+	path = stackman
+	url = https://github.com/kristjanvalur/stackman.git
