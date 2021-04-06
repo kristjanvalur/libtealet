@@ -1,7 +1,19 @@
 .. image:: https://travis-ci.com/kristjanvalur/libtealet.svg?token=1kY5V8pKgPJBQxq635zc&branch=master
     :target: https://travis-ci.com/kristjanvalur/libtealet
-Tealet
+LibTealet
 ===================
+LibTealet is a lightweight co-routine library for C.  It has no external
+library dependencies except for memcpy().  It is based on the
+technique of stack-slicing and contains C and assember implementation
+for the most common modern hardware and OS platforms.
+
+Co-Routines
+-----------
+In today's common parlance, co-routines refer to individual execution
+contexts within a single operating system thread, which can pass control
+and data between each other.  They are available as native constructs
+in some higher level language and also as libraries on some operating
+systems.  Windows has fibers, which are 
 
 The Tealet library is a C and assembler implemantation of stack slicing
 for various platforms.  It has no external dependencies, apart from
@@ -11,6 +23,11 @@ inlined by the compilers[*]_.
 .. [*] Debug builds will use `assert()` that do rely on other parts of the runtime.
 
 The library can thus be used to add stack slicing to any C application.
+
+Stack Slicing
+-------------
+Stack slicing is a tecnique used to implement co-routines.  
+
 
 Tealets are derived from Greenlets, but don't have any Python dependancies and
 their semantics are even more primitive than those of Greenlets, not 
