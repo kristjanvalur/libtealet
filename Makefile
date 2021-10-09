@@ -2,7 +2,8 @@ CPPFLAGS += -Isrc
 CFLAGS += -fPIC
 LDFLAGS += -Lbin
 
-all: libtealet.so libtealet.a
+.PHONY: all
+all: bin/libtealet.so bin/libtealet.a
 
 coreobj = src/tealet.o src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tools.o
