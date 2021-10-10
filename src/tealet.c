@@ -87,7 +87,6 @@ typedef struct tealet_nonmain_t {
 typedef enum tealet_sr_e
 {
     SW_NOP,     /* do nothing (no-restore stack) */
-    SW_SAVE,    /* save stack (or discard when exiting task) */
     SW_RESTORE, /* restore stack */
     SW_ERR,     /* error occurred when saving */
 } tealet_sr_e;
@@ -488,7 +487,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
     tealet_main_t *g_main = (tealet_main_t *)context;
     tealet_sub_t *g_target = g_main->g_target;
         
-    if (g_main->g_sw == SW_SAVE) {
+    if (opcode == STACKMAN_OP_SAVE) {
         int result = tealet_save_state(g_main, stack_pointer);
         if (result) {
             g_main->g_sw = SW_ERR;
@@ -504,6 +503,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
             return g_target->stack->chunk.stack_near;
         }
     }
+    assert(opcode == STACKMAN_OP_RESTORE);
     if (g_main->g_sw == SW_RESTORE) {
         tealet_restore_state(g_main, stack_pointer);
         return NULL;
@@ -543,7 +543,6 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
     if (g_main->g_target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
     g_main->g_previous = g_main->g_current;
-    g_main->g_sw = SW_SAVE;
     {
         /* make sure that optimizers, e.g. gcc -O2, won't assume that
          * g_main->g_target stays unchanged across the switch and optimize it
