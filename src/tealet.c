@@ -6,7 +6,7 @@
  */
 
 #include "tealet.h"
-#include "switch.h"
+#include <stackman.h>
 
 #include <stddef.h>
 #if !defined _MSC_VER || _MSC_VER >= 1600 /* VS2010 and above */
@@ -508,7 +508,7 @@ static void tealet_restore_state(tealet_main_t *g_main, void *new_stack_pointer)
  * registers, where it should save the stack (if needed) and once after
  * updating the stack pointer, where it should restore the stack (if needed)
  */
-static void *tealet_save_restore_cb(void *context, void *stack_pointer)
+static void *tealet_save_restore_cb(void *context, int opcode, void *stack_pointer)
 {
     tealet_main_t *g_main = (tealet_main_t *)context;
     tealet_sub_t *g_target = g_main->g_target;
@@ -575,7 +575,7 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
          * into a register
          */
         tealet_sub_t * volatile *ptarget = &g_main->g_target;
-        tealet_slp_switch(tealet_save_restore_cb, (void*)g_main);
+        stackman_switch(tealet_save_restore_cb, (void*)g_main);
         g_main->g_target = *ptarget;
     }
     if (g_main->g_sw != SW_ERR) {

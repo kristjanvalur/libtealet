@@ -1,11 +1,19 @@
-CPPFLAGS += -Isrc
+CPPFLAGS += -Isrc -Istackman/stackman
 CFLAGS += -fPIC
 LDFLAGS += -Lbin
+
+# Add the path to the correct stackman libs
+ABI := $(shell sh stackman/tools/abiname.sh "$(CC)" "$(CFLAGS)")
+ifndef ABI
+$(error Could not determine platform)
+endif
+LIB := stackman/lib/$(ABI)
+LDFLAGS += -L$(LIB)
 
 .PHONY: all
 all: bin/libtealet.so bin/libtealet.a
 
-coreobj = src/tealet.o src/switch_S.o src/switch_c.o
+coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tools.o
 
 bin/libtealet.so: $(allobj)
@@ -24,7 +32,7 @@ DEBUG = #-DDEBUG_DUMP
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/setcontext
-tests: LDLIBS := -ltealet
+tests: LDLIBS := -ltealet -lstackman
 tests: export LD_RUN_PATH := bin
 
 test: tests
