@@ -113,22 +113,6 @@ typedef struct tealet_main_t {
 #define TEALET_IS_MAIN_STACK(t)  (((tealet_sub_t *)(t))->stack_far == STACKMAN_SP_FURTHEST)
 #define TEALET_GET_MAIN(t)     ((tealet_main_t *)(((tealet_t *)(t))->main))
 
-/************************************************************/
-
-#if __GNUC__
-#define NOINLINE __attribute__ ((noinline))
-#define TEALET_SWITCHSTACK tealet_switchstack
-#define TEALET_INITIALSTUB tealet_initialstub
-#else
-#define NOINLINE
-#define NO_NOINLINE
-/* force no inlining using extern function pointers */
-#define TEALET_SWITCHSTACK _tealet_switchstack
-#define TEALET_INITIALSTUB _tealet_initialstub
-int (*_tealet_switchstack)(tealet_main_t*);
-int (*_tealet_initialstub)(tealet_main_t*, tealet_run_t run, void*);
-#endif
-
 /************************************************************
  * helpers to call the malloc functions provided by the user
  */
@@ -516,7 +500,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
     return NULL;
 }
 
-static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
+static int tealet_switchstack(tealet_main_t *g_main)
 {
     /* note: we can't pass g_target simply as an argument here, because
      of the mix between different call stacks: after tealet_switch() it
@@ -525,11 +509,6 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
     tealet_sub_t *previous = g_main->g_previous;
     assert(g_main->g_target);
     assert(g_main->g_target != g_main->g_current);
-
-#ifdef __GNUC__
-    /* extra anti-inline protection */
-    __asm__("");
-#endif
 
     /* if the target saved stack is invalid (due to a failure to save it
     * during the exit of another tealet), we detect this here and
@@ -568,7 +547,7 @@ static NOINLINE int tealet_switchstack(tealet_main_t *g_main)
  * far enough that local variables in this function get saved.
  * A stack variable in the calling function is sufficient.
  */
-static NOINLINE int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *stack_far)
+static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *stack_far)
 {
     int result;
     tealet_sub_t *g = g_main->g_current;
@@ -583,7 +562,7 @@ static NOINLINE int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, 
 #endif
 
     g_target->stack_far = (char *)stack_far;
-    result = TEALET_SWITCHSTACK(g_main);
+    result = tealet_switchstack(g_main);
     if (result < 0) {
         /* couldn't allocate stack */
         g_main->g_current = g;
@@ -685,12 +664,6 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     assert(g_main->g_counter == 1); /* set in alloc_raw */
 #endif
     assert(TEALET_IS_MAIN_STACK(g_main));
-#ifdef NO_NOINLINE
-    /* set up the following field with an indirection, which is needed
-     to prevent any inlining */
-    _tealet_initialstub = tealet_initialstub;
-    _tealet_switchstack = tealet_switchstack;
-#endif
     return (tealet_t *)g_main;
 }
 
@@ -729,7 +702,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
 #if TEALET_WITH_STATS
     g_main->g_tealets ++;
 #endif
-    fail = TEALET_INITIALSTUB(g_main, run, (void*)&result);
+    fail = tealet_initialstub(g_main, run, (void*)&result);
     if (fail) {
         /* could not save stack */
         tealet_int_free(g_main, result);
@@ -756,7 +729,7 @@ int tealet_switch(tealet_t *stub, void **parg)
 #endif
     g_main->g_target = g_target;
     g_main->g_arg = parg ? *parg : NULL;
-    result = TEALET_SWITCHSTACK(g_main);
+    result = tealet_switchstack(g_main);
     if (parg)
         *parg = g_main->g_arg;
 #ifdef DEBUG_DUMP
@@ -782,7 +755,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
         g_current->stack = (tealet_stack_t*) -1; /* signal do-not-delete */
     g_main->g_target = g_target;
     g_main->g_arg = arg;
-    result = TEALET_SWITCHSTACK(g_main);
+    result = tealet_switchstack(g_main);
     assert(result < 0); /* only return here if there was failure */
     g_target->stack_far = stack_far;
     g_current->stack = NULL;
