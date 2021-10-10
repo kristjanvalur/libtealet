@@ -21,31 +21,6 @@
 #define TEALET_WITH_STATS 1
 #endif
 
-/************************************************************
- * platform specific code
- */
-
-/* The default stack direction is downwards, 0, but platforms
- * can redefine it to upwards growing, 1.
- * Since we support both architectures with descending and
- * ascending stacks, we use the terms "near" and "far"
- * to describe stack boundaries.  In a typical architecture
- * with descending stacks, "near" corresponds to a low
- * address and "far" to a high address.
- */
-#define STACK_DIRECTION 0   
-
-#include "platf_tealet/tealet_platformselect.h"
-
-#if STACK_DIRECTION == 0
-#define STACK_FAR_MAIN     ((char*) -1)     /* for stack_far */
-#define STACK_LE(a, b)      ((a) <= (b))    /* to compare stack position */
-#define STACK_SUB(a, b)     ((a) - (b))     /* to subtract stack pointers */
-#else
-#define STACK_FAR_MAIN     ((char*) 1)      /* for stack_far */
-#define STACK_LE(a, b)      ((b) <= (a))    /* to compare stack position */
-#define STACK_SUB(a, b)     ((b) - (a))     /* to subtract stack pointers */
-#endif
 
 /************************************************************/
 
@@ -136,7 +111,7 @@ typedef struct tealet_main_t {
   double _extra[1];         /* start of any extra data */
 } tealet_main_t;
 
-#define TEALET_IS_MAIN_STACK(t)  (((tealet_sub_t *)(t))->stack_far == STACK_FAR_MAIN)
+#define TEALET_IS_MAIN_STACK(t)  (((tealet_sub_t *)(t))->stack_far == STACKMAN_SP_FURTHEST)
 #define TEALET_GET_MAIN(t)     ((tealet_main_t *)(((tealet_t *)(t))->main))
 
 /************************************************************/
@@ -317,13 +292,13 @@ static tealet_stack_t *tealet_stack_saveto(tealet_main_t *main,
     char *stack_near, char *stack_far, char *saveto, int *full)
 {
     ptrdiff_t size;
-    if (STACK_LE(stack_far, saveto)) {
+    if (STACKMAN_SP_LE(stack_far, saveto)) {
         saveto = stack_far;
         *full = 1;
     } else
         *full = 0;
-    assert(saveto != STACK_FAR_MAIN); /* can't save all of memory */
-    size = STACK_SUB(saveto, stack_near);
+    assert(saveto != STACKMAN_SP_FURTHEST); /* can't save all of memory */
+    size = STACKMAN_SP_DIFF(saveto, stack_near);
     if (size < 0)
         size = 0;
     return tealet_stack_new(main, (char*) stack_near, stack_far, size);
@@ -348,19 +323,19 @@ static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char*
     int fail;
 
     /* We shouldn't be completely saved already */
-    if (stack->stack_far != STACK_FAR_MAIN)
-        assert(STACK_SUB(stack->stack_far, stack->chunk.stack_near) > saved);
+    if (stack->stack_far != STACKMAN_SP_FURTHEST)
+        assert(STACKMAN_SP_DIFF(stack->stack_far, stack->chunk.stack_near) > saved);
  
     /* truncate the "stop" */
-    if (STACK_LE(stack->stack_far, saveto)) {
+    if (STACKMAN_SP_LE(stack->stack_far, saveto)) {
         saveto = stack->stack_far;
         *full = 1;
     } else
         *full = 0;
     
     /* total saved size expected after this */
-    assert(saveto != STACK_FAR_MAIN); /* can't save them all */
-    size = STACK_SUB(saveto, stack->chunk.stack_near);
+    assert(saveto != STACKMAN_SP_FURTHEST); /* can't save them all */
+    size = STACKMAN_SP_DIFF(saveto, stack->chunk.stack_near);
     if (size <= saved)
         return 0; /* nothing to do */
     
@@ -696,7 +671,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
         return NULL;
     g_main = (tealet_main_t *)g;
     g->stack = NULL;
-    g->stack_far = STACK_FAR_MAIN;
+    g->stack_far = STACKMAN_SP_FURTHEST;
     g_main->g_user = NULL;
     g_main->g_current = g;
     g_main->g_previous = NULL;
@@ -888,7 +863,7 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
 
 ptrdiff_t tealet_stack_diff(void *a, void *b)
 {
-    return STACK_SUB((ptrdiff_t)a, (ptrdiff_t)(b));
+    return STACKMAN_SP_DIFF((ptrdiff_t)a, (ptrdiff_t)(b));
 }
 
 void *tealet_get_far(tealet_t *_tealet)
