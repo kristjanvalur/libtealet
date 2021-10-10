@@ -847,6 +847,9 @@ void *tealet_get_far(tealet_t *_tealet)
 #if __GNUC__ > 4
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-local-addr"
+#elif _MSC_VER
+#pragma warning(push)
+#pragma warning( disable : 4172 )
 #endif
 void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
 {
@@ -861,6 +864,8 @@ void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
 }
 #if __GNUC__ > 4
 #pragma GCC diagnostic pop
+#elif _MSC_VER
+#pragma warning(pop)
 #endif
 
 size_t tealet_get_stacksize(tealet_t *_tealet)
