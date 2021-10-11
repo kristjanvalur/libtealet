@@ -39,3 +39,4 @@
 core
 bin/test*
 bin/setcontext
+.vscode
