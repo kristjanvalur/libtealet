@@ -1,5 +1,5 @@
 CPPFLAGS += -Isrc -Istackman/stackman
-CFLAGS += -fPIC
+CFLAGS += -fPIC -Wall
 LDFLAGS += -Lbin
 
 # Add the path to the correct stackman libs

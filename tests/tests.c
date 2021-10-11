@@ -65,6 +65,7 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
 {
     int boo[10];
     boo[9] = 0;
+    (void)boo;
     if (level > 0)
         return tealet_new_descend(t, level-1, run, parg);
     if (run)
@@ -223,6 +224,7 @@ tealet_t *test_exit_run(tealet_t *t1, void *arg)
   status += 1;
   result = tealet_exit(g_main, NULL, (intptr_t)arg);
   assert(0);
+  assert(result==0);
   return (tealet_t*)-1;
 }
 
@@ -643,6 +645,7 @@ void test_mem_error(void)
   init_test_extra(NULL, 0);
   myarg = (void*)g_main;
   t1 = tealet_new(g_main, mem_error_tealet, &myarg);
+  assert(t1);
   talloc_fail = 0;
   fini_test();
 }

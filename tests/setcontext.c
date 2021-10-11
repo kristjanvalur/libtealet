@@ -40,13 +40,13 @@ int main(void)
 {
     /* initialize main tealet using malloc based allocation */
     tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
-    tealet_t *main = tealet_initialize(&talloc, 0);
+    tealet_t *tmain = tealet_initialize(&talloc, 0);
     tealet_t *loop;
     void *data; /* data exchange object */
 
     /* how many rounds? */
     data = (void*)10;
-    loop = tealet_new(main, loop_func, &data);
+    loop = tealet_new(tmain, loop_func, &data);
        
     /* loop until the tealet has exited */
     while(tealet_status(loop) == TEALET_STATUS_ACTIVE) {
@@ -58,6 +58,6 @@ int main(void)
             
         }
     tealet_delete(loop);
-    tealet_finalize(main);
+    tealet_finalize(tmain);
     return 0;
 }
