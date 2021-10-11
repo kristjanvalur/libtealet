@@ -37,3 +37,5 @@
 
 # End of https://www.gitignore.io/api/c++
 core
+bin/test*
+bin/setcontext
