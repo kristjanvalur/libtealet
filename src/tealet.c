@@ -626,8 +626,14 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
 
 static tealet_sub_t *tealet_alloc_main(tealet_alloc_t *alloc, size_t extrasize)
 {
+    tealet_sub_t *result;
     size_t basesize = offsetof(tealet_main_t, _extra);
-    return tealet_alloc_raw(NULL, alloc, basesize, extrasize);
+    if (alloc->context)
+        alloc->context->main = NULL;
+    result = tealet_alloc_raw(NULL, alloc, basesize, extrasize);
+    if (alloc->context)
+        alloc->context->main = &result->base;
+    return result;
 }
 
 static tealet_sub_t *tealet_alloc(tealet_main_t *g_main)
@@ -672,6 +678,8 @@ void tealet_finalize(tealet_t *tealet)
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(TEALET_IS_MAIN_STACK(g_main));
     assert(g_main->g_current == (tealet_sub_t *)g_main);
+    if(g_main->g_alloc.context)
+        g_main->g_alloc.context->main = NULL;
     tealet_int_free(g_main, g_main);
 }
 

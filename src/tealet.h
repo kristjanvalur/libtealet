@@ -19,16 +19,34 @@
 #endif
 
 
+/* The user-visible tealet structure.  If an "extrasize" is provided when
+ * the main tealet was initialized, "extra" points to a private block of
+ * that size, otherwise it is initialized to NULL
+ */
+typedef struct tealet_t {
+  struct tealet_t *main;   /* pointer to the main tealet */
+  void *extra;
+  /* private fields follow */
+} tealet_t;
+
 /* A structure to define the memory allocation api used.
- * the functions have C89 semantics and take an additional "context"
+ * the functions have C89 semantics and take an optional "context"
  * pointer that they can use as they please
+ * The context, if non-zero, is defined to start with a tealet_t*, which
+ * tealet_initialize() will set _after_ it has been allocated,
+ * thus allowing the malloc callbacks to call the tealet api
+ * whenever it is non-zero.  The context can be made bigger
+ * to store additional data.
  */
 typedef void*(*tealet_malloc_t)(size_t size, void *context);
 typedef void(*tealet_free_t)(void *ptr, void *context);
+typedef struct tealet_alloc_context_t {
+  tealet_t *main;
+} tealet_alloc_context_t;
 typedef struct tealet_alloc_t {
   tealet_malloc_t malloc_p;
   tealet_free_t free_p;
-  void *context;
+  tealet_alloc_context_t *context;
 } tealet_alloc_t;
 
 /* use the following macro to initialize a tealet_alloc_t
@@ -45,16 +63,6 @@ typedef struct tealet_alloc_t {
 #define TEALET_ALLOC_MALLOC(alloc, size) (alloc)->malloc_p((size), (alloc)->context)
 #define TEALET_ALLOC_FREE(alloc, ptr) (alloc)->free_p((ptr), (alloc)->context)
 
-
-/* The user-visible tealet structure.  If an "extrasize" is provided when
- * the main tealet was initialized, "extra" points to a private block of
- * that size, otherwise it is initialized to NULL
- */
-typedef struct tealet_t {
-  struct tealet_t *main;   /* pointer to the main tealet */
-  void *extra;
-  /* private fields follow */
-} tealet_t;
 
 /* The "run" function of a tealet.  It is called with the
  * current tealet and the argument provided to its start function 
