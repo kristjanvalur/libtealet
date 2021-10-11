@@ -1,5 +1,5 @@
 CPPFLAGS += -Isrc -Istackman/stackman
-CFLAGS += -fPIC
+CFLAGS += -fPIC -g
 LDFLAGS += -Lbin
 
 # Add the path to the correct stackman libs
@@ -15,6 +15,9 @@ all: bin/libtealet.so bin/libtealet.a
 
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tools.o
+
+src/tealet.o: src/tealet.c src/tealet.h
+src/tools.o: src/tools.c src/tools.h
 
 bin/libtealet.so: $(allobj)
 	$(CC) $(LDFLAGS) -shared -o $@ $^
@@ -32,7 +35,7 @@ DEBUG = #-DDEBUG_DUMP
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/setcontext
-tests: LDLIBS := -ltealet -lstackman
+LDLIBS := -ltealet -lstackman
 tests: export LD_RUN_PATH := bin
 
 test: tests
