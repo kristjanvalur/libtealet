@@ -722,8 +722,10 @@ int tealet_switch(tealet_t *stub, void **parg)
     tealet_sub_t *g_target = (tealet_sub_t *)stub;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
     int result;
-    if (g_target == g_main->g_current)
+    if (g_target == g_main->g_current) {
+        g_main->g_previous = g_main->g_current;
         return 0; /* switch to self */
+    }
 #ifdef DEBUG_DUMP
     printf("switch %p -> %p\n", g_main->g_current, g_target);
 #endif
