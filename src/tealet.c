@@ -102,6 +102,7 @@ typedef struct tealet_main_t {
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e   g_sw;       /* save/restore state */
+  int           g_flags;     /* default flags when tasklet exits */
 #if TEALET_WITH_STATS
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
@@ -597,8 +598,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
         #ifdef DEBUG_DUMP
         printf("ending %p -> %p\n", g, g_target);
         #endif
-        if (tealet_exit((tealet_t*)g_target, NULL, TEALET_FLAG_DELETE))
-            tealet_exit((tealet_t*)g_main, NULL, TEALET_FLAG_DELETE); /* failsafe */
+        tealet_exit((tealet_t*)g_target, NULL, TEALET_FLAG_DELETE);
         assert(!"This point should not be reached");
     } else {
         /* this is a switch back into the calling tealet */
@@ -678,6 +678,8 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_alloc = *alloc;
     g_main->g_prev =  NULL;
     g_main->g_extrasize = extrasize;
+    g_main->g_sw = SW_NOP;
+    g_main->g_flags = 0;
 #if TEALET_WITH_STATS
     /* init these.  the main tealet counts as one */
     g_main->g_tealets = 1;
@@ -801,7 +803,7 @@ int tealet_switch(tealet_t *stub, void **parg)
     return result;
 }
  
-int tealet_exit(tealet_t *target, void *arg, int flags)
+static int tealet_exit_inner(tealet_t *target, void *arg, int flags)
 {
     tealet_sub_t *g_target = (tealet_sub_t *)target;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
@@ -823,6 +825,36 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
     g_target->stack_far = stack_far;
     g_current->stack = NULL;
     return result;
+}
+
+int tealet_exit(tealet_t *target, void *arg, int flags)
+{
+    tealet_sub_t *g_target = (tealet_sub_t *)target;
+    tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
+    int result;
+    if (flags & TEALET_FLAG_DEFER)
+    {
+        /* setting up arg and flags for the run() return value */
+        g_main->g_arg = arg;
+        g_main->g_flags = flags;
+        return 0;
+    }
+    if (g_main->g_flags & TEALET_FLAG_DEFER)
+    {
+        /* Called second time (e.g. from return of run())
+         * use arg and flags from last time
+         */
+        flags = g_main->g_flags & (~TEALET_FLAG_DEFER);
+        arg = g_main->g_arg;
+        g_main->g_flags = 0;
+        g_main->g_arg = 0;
+    }
+    result = tealet_exit_inner(target, arg, flags);
+    assert(result < 0);
+    /* fallback: switch to main */
+    result = tealet_exit_inner(target->main, arg, flags);
+    /* should never reach here */
+    assert(0);
 }
 
 tealet_t *tealet_duplicate(tealet_t *tealet)
