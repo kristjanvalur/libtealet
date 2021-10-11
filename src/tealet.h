@@ -136,21 +136,29 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run);
 TEALET_API
 int tealet_switch(tealet_t *target, void **parg);
 
-/* Exit the current tealet.  Similar to tealet_switch except that it only
- * ever returns if the target tealet is defunct.
- * It also allows passing of an arg to the target tealet, plus allows
- * control over whether the tealet is automatically deleted or not.
+/* Exit the current tealet and switch to a target.
+ * Similar to tealet_switch except that never returns
+ * unless the TEALET_FLAG_DEFER flag is set.
+ * In case the desired target is defunct, it will switch to the
+ * main tealet instead.
+ * This allows passing of an arg to the target tealet, in addition to
+ * controlling whether the exiting tealet is automatically deleted or not.
  * This is the recommended way to exit a tealet, because it is symmetric
  * to the entry point, allowing us to pass back a value.
  * This function can be used as an emergency measure to return to the
  * main tealet if tealet_switch() fails due to inability to save the stack.
  * Note that exiting to the main tealet is always guaranteed to work.
- * Returning with 'p' from the tealet's run funciton is equivalent to calling
+ * Returning with 'p' from the tealet's run function is equivalent to calling
  * tealet_exit(p, NULL, TEALET_FLAG_DELETE), but the explicit way is
  * recommended.
+ * If the TEALET_FLAG_DEFER flag is set, then this function merely sets the
+ * flag and arg values.  It returns 0, and the calling function can proceed to
+ * return with 'p' from its run() function.  This is useful if a clean "return" is desired,
+ * for example to call destructors.
  */
 #define TEALET_FLAG_NONE 0
 #define TEALET_FLAG_DELETE 1
+#define TEALET_FLAG_DEFER 2
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
 
