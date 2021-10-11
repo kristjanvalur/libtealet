@@ -60,6 +60,29 @@ void fini_test() {
 
 /**************************************/
 
+// create a tealet, either with tealet_create or tealet_new
+static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg)
+{
+  static int counter=0;
+  int i;
+  tealet_t *r;
+  
+  counter += 1;
+  if (counter % 1)
+    return tealet_new(m, run, parg);
+
+  r = tealet_create(m, run);
+  if (!r)
+    return r;
+  i = tealet_switch(r, parg);
+  if (i != 0) {
+    tealet_delete(r);
+    return 0;
+  }
+  return r;
+}
+
+
 /* create a tealet or stub low on the stack */
 static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, void **parg)
 {
@@ -68,7 +91,7 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
     if (level > 0)
         return tealet_new_descend(t, level-1, run, parg);
     if (run)
-        return tealet_new(t, run, parg);
+        return tealet_new_x(t, run, parg);
     else
         return tealet_stub_new(t);
 }
@@ -176,6 +199,7 @@ void test_main_current(void)
 tealet_t *test_simple_run(tealet_t *t1, void *arg)
 {
   assert(t1 != g_main);
+  assert(tealet_previous(g_main) == t1->main);
   status = 1;
   return g_main;
 }
@@ -185,6 +209,27 @@ void test_simple(void)
   init_test();
   tealet_new(g_main, test_simple_run, NULL);
   assert(status == 1);
+  fini_test();
+}
+
+void test_simple_create(void)
+{
+  tealet_t *t;
+  init_test();
+  t = tealet_create(g_main, test_simple_run);
+  assert(status == 0);
+  tealet_delete(t);
+  fini_test();
+}
+
+void test_simple_create_and_run(void)
+{
+  tealet_t *t;
+  init_test();
+  t = tealet_create(g_main, test_simple_run);
+  tealet_switch(t, NULL);
+  assert(status == 1);
+  assert(tealet_previous(g_main) == t);
   fini_test();
 }
 
@@ -651,6 +696,7 @@ void test_mem_error(void)
 static void (*test_list[])(void) = {
   test_main_current,
   test_simple,
+  test_simple_create,
   test_status,
   test_exit,
   test_switch,

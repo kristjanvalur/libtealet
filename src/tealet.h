@@ -57,10 +57,13 @@ typedef struct tealet_t {
 } tealet_t;
 
 /* The "run" function of a tealet.  It is called with the
- * current tealet and the argument provided to its start function 
+ * current tealet and the argument provided to its invocation function, 
+ * see tealet_create() and tealet_switch().
+ * The return value of run() must be the next tealet in which to continue
+ * execution, which must be a different one, like for example the main tealet.
+ * When 'run(g)' returns, the tealet 'g' is freed.
  */
 typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
-
 
 /* error codes.  API functions that return int return a negative value
  * to signal an error.
@@ -69,7 +72,6 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
  */
 #define TEALET_ERR_MEM -1       /* memory allocation failed */
 #define TEALET_ERR_DEFUNCT -2   /* the target tealet is corrupt */
-
 
 /* Initialize and return the main tealet.  The main tealet contains the whole
  * "normal" execution of the program; it starts when the program starts and
@@ -102,7 +104,9 @@ void *tealet_malloc(tealet_t *tealet, size_t s);
 TEALET_API
 void tealet_free(tealet_t *tealet, void *p);
 
-/* Allocate a new tealet 'g', and call 'run(g, *arg)' in it.
+/* Allocate a new tealet 'g' with a callback 'run'.
+ * The tealet can subsequently be run by calling
+ * tealet_switch(g, arg) which will invoke 'run(g, *arg)' in it.
  * The return value of run() must be the next tealet in which to continue
  * execution, which must be a different one, like for example the main tealet.
  * When 'run(g)' returns, the tealet 'g' is freed.
@@ -115,7 +119,7 @@ void tealet_free(tealet_t *tealet, void *p);
  * argument is passed.
  */
 TEALET_API
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg);
+tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run);
 
 /* Switch to another tealet.  Execution continues there.  The tealet
  * passed in must not have been freed yet and must descend from
@@ -149,6 +153,16 @@ int tealet_switch(tealet_t *target, void **parg);
 #define TEALET_FLAG_DELETE 1
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
+
+/* Allocate and switch to a new tealet.
+ * This is semantically equvalent to
+ * tealet_create() followed by tealet_switch(), but may be slightly faster.
+ * The return value is the new tealet, or NULL if memory allocation failed.
+ * Note that this tealet may have been alread freed should run(g) have
+ * returned by the time this function returns.
+ */
+TEALET_API
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg);
 
 /* Duplicate a tealet. The active tealet is duplicated
  * along with its stack contents.
