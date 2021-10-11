@@ -547,12 +547,13 @@ static int tealet_switchstack(tealet_main_t *g_main)
  * far enough that local variables in this function get saved.
  * A stack variable in the calling function is sufficient.
  */
-static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *stack_far)
+static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet_run_t run, void *stack_far, int run_on_create)
 {
     int result;
+    int created;
     tealet_sub_t *g = g_main->g_current;
     tealet_sub_t *g_target = g_main->g_target;
-    assert(g_target->stack == NULL); /* it is fresh */
+    assert(g_new->stack == NULL); /* it is fresh */
     
     assert(run);
 
@@ -561,19 +562,32 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *sta
     __asm__("");
 #endif
 
-    g_target->stack_far = (char *)stack_far;
+    g_new->stack_far = (char *)stack_far;
     result = tealet_switchstack(g_main);
     if (result < 0) {
         /* couldn't allocate stack */
-        g_main->g_current = g;
         return result;
     }
-    if (result == 1) {
-        /* We successfully saved the source state (our caller) and initialized
-         * the current target without restoring state. We are the new tealet.
+ 
+    /* 'created' is true if this was just the neccary stack 'save' to create
+     * a new tasklet, with no restore of an existing stack
+     */
+    assert(result == 0 || result == 1);
+    created = result == 1;  
+    if (created == run_on_create) {
+        /* need to run the actual code.  In the 'run_on_create' case this is
+         * done on the initial save.  The current tasklet is the new tasklet,
+         * the previous tasklet's stack was saved, and we run as then new one.
+         * In the '!run_on_create' case, the initial save was the new tasklet
+         * and we just returned immediately to the calling one.  We are now
+         * returning here on a switch, to run the tasklet
          */
         g = g_main->g_current;
-        assert(g == g_target);
+        /* the following assertion may be invalid, if a tealet_create() tealet
+         * was duplicated.  We may now be a copy
+         */
+        if (run_on_create)
+            assert(g == g_new);        /* only valid for tealet_new */
         assert(g->stack == NULL);     /* running */      
     
         #ifdef DEBUG_DUMP
@@ -588,7 +602,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_run_t run, void *sta
         assert(!"This point should not be reached");
     } else {
         /* this is a switch back into the calling tealet */
-        assert(result == 0);
+        ;
     }
     return 0;
 }
@@ -710,7 +724,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
 #if TEALET_WITH_STATS
     g_main->g_tealets ++;
 #endif
-    fail = tealet_initialstub(g_main, run, (void*)&result);
+    fail = tealet_initialstub(g_main, result, run, (void*)&result, 1);
     if (fail) {
         /* could not save stack */
         tealet_int_free(g_main, result);
@@ -725,13 +739,54 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
     return (tealet_t*)result;
 }
 
+tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
+{
+    tealet_sub_t *result; /* store this until we return */
+    int fail;
+    tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+    tealet_sub_t *previous = g_main->g_previous;
+    assert(TEALET_IS_MAIN_STACK(g_main));
+    assert(!g_main->g_target);
+    result = tealet_alloc(g_main);
+    if (result == NULL)
+        return NULL; /* Could not allocate */
+    /* we turn into the new tealet and switch back, in order
+     * to save the new tealet's stack at this position
+     */
+    g_main->g_target = g_main->g_current;
+    g_main->g_current = result;
+#if TEALET_WITH_STATS
+    g_main->g_tealets ++;
+#endif
+    fail = tealet_initialstub(g_main, result, run, (void*)&result, 0);
+    if (fail) {
+        /* could not save stack */
+        tealet_int_free(g_main, result);
+        g_main->g_current = g_main->g_target;
+        g_main->g_target = NULL;
+#if TEALET_WITH_STATS
+        g_main->g_tealets --;
+#endif
+        return NULL;
+    } else {
+        /* restore g_previous to whatever it was.  We don't count
+         * this switch from the temporary tealet back to us
+         * as proper switch in that sense
+         */
+        g_main->g_previous = previous;
+    }
+    return (tealet_t*)result;
+}
+
 int tealet_switch(tealet_t *stub, void **parg)
 {
     tealet_sub_t *g_target = (tealet_sub_t *)stub;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
     int result;
-    if (g_target == g_main->g_current)
+    if (g_target == g_main->g_current) {
+        g_main->g_previous = g_main->g_current;
         return 0; /* switch to self */
+    }
 #ifdef DEBUG_DUMP
     printf("switch %p -> %p\n", g_main->g_current, g_target);
 #endif
