@@ -583,7 +583,11 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
          * returning here on a switch, to run the tasklet
          */
         g = g_main->g_current;
-        assert(g == g_new);
+        /* the following assertion may be invalid, if a tealet_create() tealet
+         * was duplicated.  We may now be a copy
+         */
+        if (run_on_create)
+            assert(g == g_new);        /* only valid for tealet_new */
         assert(g->stack == NULL);     /* running */      
     
         #ifdef DEBUG_DUMP

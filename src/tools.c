@@ -59,20 +59,15 @@ struct stub_arg
 static tealet_t *
 _tealet_stub_main(tealet_t *current, void *arg)
 {
-    void *myarg = 0;
-    /* original call.
-     * the caller is in arg, return right back to him
-     */
-    tealet_switch((tealet_t*)arg, &myarg);
-
-    /* now we are back, through a call to tealet_stub_run.  We may be 
+    
+    /* now we are here, through a call to tealet_stub_run.  We may be 
      * duplicate of the original stub.
      * myarg should contain the arg to the run function.
      * We were possibly duplicated, so can't trust the original function args.
      */
     {
-        struct stub_arg sarg = *(struct stub_arg*)myarg;
-        tealet_free(sarg.current, myarg);
+        struct stub_arg sarg = *(struct stub_arg*)arg;
+        tealet_free(sarg.current, arg);
         return (sarg.run)(sarg.current, sarg.runarg);
     }
 }
@@ -80,8 +75,7 @@ _tealet_stub_main(tealet_t *current, void *arg)
 /* create a stub and return it */
 tealet_t *
 tealet_stub_new(tealet_t *t) {
-    void *arg = (void*)tealet_current(t);
-    return tealet_new(t, _tealet_stub_main, &arg);
+    return tealet_create(t, _tealet_stub_main);
 }
 
 /*
