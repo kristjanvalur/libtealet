@@ -179,7 +179,7 @@ static int tealet_stack_grow(tealet_main_t *main,
     chunk->next = stack->chunk.next;
     stack->chunk.next = chunk;
     stack->saved = size;
-    return 0;
+    return TEALET_SUCCESS;
 }
 
 static void tealet_stack_restore(tealet_stack_t *stack)
@@ -529,12 +529,10 @@ static int tealet_switchstack(tealet_main_t *g_main)
      */
     stackman_switch(tealet_save_restore_cb, (void*)g_main);
     
-    if (g_main->g_sw != SW_ERR) {
-        g_main->g_current = g_main->g_target;
-    } else {
-        g_main->g_previous = previous;
+    if (g_main->g_sw == SW_ERR)
         return TEALET_ERR_MEM;
-    }
+    g_main->g_previous = g_main->g_current;
+    g_main->g_current = g_main->g_target;
     g_main->g_target = NULL;
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
@@ -761,6 +759,48 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
         g_main->g_previous = previous;
     }
     return (tealet_t*)result;
+}
+
+
+int tealet_capture(tealet_t *tealet, tealet_t **result, void *stack_far, void **parg)
+{
+    tealet_sub_t *g_new; /* store this until we return */
+    int switch_res;
+    tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+    tealet_sub_t *previous = g_main->g_previous;
+    assert(TEALET_IS_MAIN_STACK(g_main));
+    assert(!g_main->g_target);
+    assert(result);
+    g_new = tealet_alloc(g_main);
+    if (g_new == NULL)
+        return TEALET_ERR_MEM; /* Could not allocate */
+    
+    /* we turn into the new tealet and switch back, in order
+     * to save the new tealet's stack at this position
+     */
+    g_main->g_target = g_main->g_current;
+    g_main->g_current = g_new;
+    g_new->stack_far = (char*)stack_far;
+    switch_res = tealet_switchstack(g_main);
+    if (switch_res < 0) {
+        tealet_delete((tealet_t*)g_new);
+        g_main->g_current = g_main->g_target;
+        g_main->g_target = NULL;
+        return switch_res;
+    }
+    if (switch_res == 1)
+    {
+        /* tealet was created */
+        g_main->g_previous = previous;
+        *result = (tealet_t*)g_new;
+        return TEALET_SUCCESS;
+    } else {
+        /* we are the new tealet */
+        *result = NULL;
+        if (parg)
+            *parg = g_main->g_arg;
+    }
+    return TEALET_SUCCESS;
 }
 
 int tealet_switch(tealet_t *stub, void **parg)

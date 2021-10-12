@@ -70,6 +70,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
  * Those that return tealet_t pointers return NULL to signal a memory
  * error.
  */
+#define TEALET_SUCCESS 0
 #define TEALET_ERR_MEM -1       /* memory allocation failed */
 #define TEALET_ERR_DEFUNCT -2   /* the target tealet is corrupt */
 
@@ -171,6 +172,25 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  */
 TEALET_API
 tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg);
+
+
+/* Capture the current execution context in a new tealet
+ * and return it.  This is reminescent of the fork() call.
+ * stack_far must point to a place in the parent function stack so that
+ * the entire stack of the current function is guaranteed to be saved.
+ * if successful, and *result is non-zero on return, it is the
+ * newly created tealet, and needs to be switched to.
+ * if *result is zero, the caller is now a new tealet.  He can
+ * get it by calling tealet_current(). The argument passed to tealet_switch() is
+ * available in *parg.
+ * The new tealet must exit in the current function scope by calling tealet_exit().
+ * 
+ * Use this function with care.  the `stack_far` pointer needs to be properly set
+ * and the captured tealet _must_ call tealet_exit().  The use of tealet_create()
+ * avoids these pitfalls.
+ */
+TEALET_API
+int tealet_capture(tealet_t *tealet, tealet_t **result, void *stack_far,  void **parg);
 
 /* Duplicate a tealet. The active tealet is duplicated
  * along with its stack contents.
