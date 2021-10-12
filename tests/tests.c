@@ -695,6 +695,37 @@ void test_mem_error(void)
   fini_test();
 }
 
+/****************/
+void test_capture_1(void)
+{
+  tealet_t *t;
+  void *stack_far;
+  void *arg;
+  static int count = 0;
+  /* need a utility for this */
+  stack_far = (void*)((intptr_t)&t + 128);
+  count = 0;
+  init_test_extra(NULL, 0);
+  tealet_capture(g_main, &t, stack_far, &arg);
+  if (t) {
+    assert(count == 0);
+    count ++;
+    arg = (void*)9;
+    tealet_switch(t, &arg);
+    assert(count == 2);
+    assert(arg == (void*)10);
+    tealet_delete(t);
+  } else {
+    /* child */
+    assert(count == 1);
+    count ++;
+    assert(arg == (void*)9);
+    tealet_exit(g_main, (void*)10, TEALET_FLAG_NONE);
+    assert(0);
+  }
+  fini_test();
+}
+
 
 static void (*test_list[])(void) = {
   test_main_current,
@@ -711,6 +742,7 @@ static void (*test_list[])(void) = {
   test_memstats,
   test_stats,
   test_mem_error,
+  test_capture_1,
   NULL
 };
 
