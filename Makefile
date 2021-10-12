@@ -1,3 +1,10 @@
+# The following can be controlled from the shell
+# to run a debug build you can execute
+# `CFLAGS=-g make test`
+# or to test with full optimization
+# `CFLAGS="-O3 -flto" LDFLAGS="-O3 -flto" make test
+#
+
 CPPFLAGS += -Isrc -Istackman/stackman
 CFLAGS += -fPIC -Wall
 LDFLAGS += -Lbin
@@ -34,18 +41,18 @@ DEBUG = #-DDEBUG_DUMP
 .PHONY: test tests
 
 tests: bin/test-static bin/test-dynamic
-tests: bin/setcontext
+tests: bin/test-setcontext
 LDLIBS := -ltealet -lstackman
 tests: export LD_RUN_PATH := bin
 
 test: tests
-	bin/test-static
-	bin/test-dynamic
-	bin/setcontext
+	bin/test-static > /dev/null
+	bin/test-dynamic > /dev/null
+	bin/test-setcontext > /dev/null
 	@echo "*** All test suites passed ***"
 
 
-bin/setcontext: tests/setcontext.o bin/libtealet.so
+bin/test-setcontext: tests/setcontext.o bin/libtealet.so
 	$(CC) $(LDFLAGS) -static -o $@ $< ${DEBUG} $(LDLIBS)
 
 bin/test-static: tests/tests.o bin/libtealet.a
