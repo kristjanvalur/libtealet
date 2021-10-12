@@ -523,15 +523,13 @@ static int tealet_switchstack(tealet_main_t *g_main)
     if (g_main->g_target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
     g_main->g_previous = g_main->g_current;
-    {
-        /* make sure that optimizers, e.g. gcc -O2, won't assume that
-         * g_main->g_target stays unchanged across the switch and optimize it
-         * into a register
-         */
-        tealet_sub_t * volatile *ptarget = &g_main->g_target;
-        stackman_switch(tealet_save_restore_cb, (void*)g_main);
-        g_main->g_target = *ptarget;
-    }
+    
+    /* stackman switch is an external function so an optizer
+     * cannot assume that any pointers reachable by
+     * g_main stay unchanged across the switch
+     */
+    stackman_switch(tealet_save_restore_cb, (void*)g_main);
+    
     if (g_main->g_sw != SW_ERR) {
         g_main->g_current = g_main->g_target;
     } else {
