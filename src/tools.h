@@ -9,7 +9,6 @@
 
 typedef struct tealet_statsalloc_t
 {
-    tealet_alloc_context_t basectxt;
     tealet_alloc_t alloc;
     tealet_alloc_t *base;
     size_t n_allocs;
