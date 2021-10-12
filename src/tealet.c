@@ -638,9 +638,14 @@ static tealet_sub_t *tealet_alloc_main(tealet_alloc_t *alloc, size_t extrasize)
 
 static tealet_sub_t *tealet_alloc(tealet_main_t *g_main)
 {
+    tealet_sub_t *result;
     size_t basesize = offsetof(tealet_nonmain_t, _extra);
     size_t extrasize = g_main->g_extrasize;
-    return tealet_alloc_raw(g_main, &g_main->g_alloc, basesize, extrasize);
+    result = tealet_alloc_raw(g_main, &g_main->g_alloc, basesize, extrasize);
+#if TEALET_WITH_STATS
+    g_main->g_tealets++;
+#endif
+    return result;
 }
 
 
@@ -710,17 +715,11 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
         return NULL; /* Could not allocate */
     g_main->g_target = result;
     g_main->g_arg = parg ? *parg : NULL;
-#if TEALET_WITH_STATS
-    g_main->g_tealets ++;
-#endif
     fail = tealet_initialstub(g_main, result, run, (void*)&result, 1);
     if (fail) {
         /* could not save stack */
-        tealet_int_free(g_main, result);
+        tealet_delete((tealet_t*)result);
         g_main->g_target = NULL;
-#if TEALET_WITH_STATS
-        g_main->g_tealets --;
-#endif
         return NULL;
     }
     if (parg)
@@ -748,18 +747,12 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
      */
     g_main->g_target = g_main->g_current;
     g_main->g_current = result;
-#if TEALET_WITH_STATS
-    g_main->g_tealets ++;
-#endif
     fail = tealet_initialstub(g_main, result, run, (void*)&result, 0);
     if (fail) {
         /* could not save stack */
-        tealet_int_free(g_main, result);
+        tealet_delete((tealet_t*)result);
         g_main->g_current = g_main->g_target;
         g_main->g_target = NULL;
-#if TEALET_WITH_STATS
-        g_main->g_tealets --;
-#endif
         return NULL;
     } else {
         /* restore g_previous to whatever it was.  We don't count
@@ -858,10 +851,8 @@ tealet_t *tealet_duplicate(tealet_t *tealet)
     g_copy = tealet_alloc(g_main);
     if (g_copy == NULL)
         return NULL;
-#if TEALET_WITH_STATS
-    g_main->g_tealets++;
-#endif
     g_copy->stack_far = g_tealet->stack_far;
+    /* can't fail */
     g_copy->stack = tealet_stack_dup(g_tealet->stack);
     if (g_main->g_extrasize)
         memcpy(g_copy->base.extra, g_tealet->base.extra, g_main->g_extrasize);
