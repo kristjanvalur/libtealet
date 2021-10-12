@@ -102,7 +102,7 @@ typedef struct tealet_main_t {
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e   g_sw;       /* save/restore state */
-  int           g_flags;     /* default flags when tasklet exits */
+  int           g_flags;     /* default flags when tealet exits */
 #if TEALET_WITH_STATS
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
@@ -540,8 +540,9 @@ static int tealet_switchstack(tealet_main_t *g_main)
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
 
-/* We are initializing and switching to a new stub,
- * in order to immediately start a new tealet's execution.
+/* We are initializing a new tealet, either switching to it and
+ * running it, or switching from it (saving its virgin stack) back
+ * to the caller, in order to switch to it later and run it.
  * stack_far is the far end of this stack and must be
  * far enough that local variables in this function get saved.
  * A stack variable in the calling function is sufficient.
@@ -549,17 +550,9 @@ static int tealet_switchstack(tealet_main_t *g_main)
 static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet_run_t run, void *stack_far, int run_on_create)
 {
     int result;
-    int created;
-    tealet_sub_t *g = g_main->g_current;
-    tealet_sub_t *g_target = g_main->g_target;
-    assert(g_new->stack == NULL); /* it is fresh */
-    
+    tealet_sub_t *g_target;
+    assert(g_new->stack == NULL); /* it is fresh */    
     assert(run);
-
-#if __GNUC__
-    /* extra anti-inline protection */
-    __asm__("");
-#endif
 
     g_new->stack_far = (char *)stack_far;
     result = tealet_switchstack(g_main);
@@ -568,38 +561,39 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
         return result;
     }
  
-    /* 'created' is true if this was just the neccary stack 'save' to create
-     * a new tasklet, with no restore of an existing stack
-     */
     assert(result == 0 || result == 1);
-    created = result == 1;  
-    if (created == run_on_create) {
+    /* 'result' is 1 if this was just the neccary stack 'save' to create
+     * a new tealetlet, with no restore of an existing stack
+     */
+    if (run_on_create == result) {
         /* need to run the actual code.  In the 'run_on_create' case this is
-         * done on the initial save.  The current tasklet is the new tasklet,
-         * the previous tasklet's stack was saved, and we run as then new one.
-         * In the '!run_on_create' case, the initial save was the new tasklet
+         * done on the initial save.  The current teallet is the new teallet,
+         * the previous tealet's stack was saved, and we run as then new one.
+         * In the '!run_on_create' case, the initial save was the new teallet
          * and we just returned immediately to the calling one.  We are now
-         * returning here on a switch, to run the tasklet
+         * returning here on a switch, to run the teallet
          */
-        g = g_main->g_current;
+        
         /* the following assertion may be invalid, if a tealet_create() tealet
          * was duplicated.  We may now be a copy
          */
         if (run_on_create)
-            assert(g == g_new);        /* only valid for tealet_new */
-        assert(g->stack == NULL);     /* running */      
+            assert(g_main->g_current == g_new);        /* only valid for tealet_new */
+        assert(g_main->g_current->stack == NULL);     /* running */      
     
         #ifdef DEBUG_DUMP
         printf("starting %p\n", g);
         #endif
-        g_target = (tealet_sub_t *)(run((tealet_t *)g, g_main->g_arg));
+        g_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, g_main->g_arg));
         #ifdef DEBUG_DUMP
         printf("ending %p -> %p\n", g, g_target);
         #endif
         tealet_exit((tealet_t*)g_target, NULL, TEALET_FLAG_DELETE);
         assert(!"This point should not be reached");
     } else {
-        /* this is a switch back into the calling tealet */
+        /* Either just a create, with no run, or a switch back
+         * into the tealet_new()
+         */
         ;
     }
     return 0;
@@ -701,6 +695,9 @@ void tealet_free(tealet_t *tealet, void *p)
     tealet_int_free(g_main, p);
 }
 
+/* create a tealet by saving the current stack and starting 
+ * immediate execution of a new one
+ */
 tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
 {
     tealet_sub_t *result; /* store this until we return */
@@ -731,6 +728,10 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
     return (tealet_t*)result;
 }
 
+/* create a tealet by saving the target stack and switching
+ * back to the caller, allowing the caller to run the
+ * tealet proper later, by switching to it.
+ */
 tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
 {
     tealet_sub_t *result; /* store this until we return */
