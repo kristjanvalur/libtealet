@@ -507,6 +507,7 @@ static int tealet_switchstack(tealet_main_t *g_main)
      of the mix between different call stacks: after tealet_switch() it
      might end up with a different value.  But g_main is safe, because
      it should have always the same value before and after the switch. */
+    tealet_sub_t *previous = g_main->g_previous;
     assert(g_main->g_target);
     assert(g_main->g_target != g_main->g_current);
 
