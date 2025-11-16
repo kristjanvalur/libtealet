@@ -1,5 +1,7 @@
 # Libtealet
 
+**Version 0.1.0**
+
 LibTealet is a lightweight co-routine library for C.  It is based on the
 technique of stack-slicing, where the execution stack is saved and restored
 in order to maintain separate execution context.
@@ -61,6 +63,9 @@ The tealet code was originally extracted from the Python [Greenlet][greenlet]
 project by Armin Rigo and the original version was written by him.  Armin had
 previously created the Greenlet project by extracting the stack slicing code from
 from [Stackless Python][stackless].
+
+# Changelog
+See [CHANGELOG.md](CHANGELOG.md) for release history and version information.
 
 [stackman]: https://github.com/stackless-dev/stackman
 [greenlet]: https://pypi.python.org/pypi/greenlet
