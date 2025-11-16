@@ -165,3 +165,144 @@ See `tests/setcontext.c` for a practical example implementing `longjmp()`-like f
 5. Use convenience macros: `TEALET_MAIN()`, `TEALET_IS_MAIN()`, `TEALET_EXTRA()`
 6. Follow C89 style (declarations at block start, no C99/C11 features)
 7. Consider thread safety in multi-threaded contexts
+
+## Documentation Style Guide
+
+### Tone and Voice
+- **Direct and concise**: Avoid unnecessary verbosity; state facts clearly
+- **Technical but accessible**: Explain complex concepts without condescension
+- **Pragmatic focus**: Emphasize practical usage and real-world implications
+- **Honest about limitations**: Clearly state experimental features, platform constraints, and known issues
+
+### Structure Principles
+
+#### README Structure
+1. **Brief introductory paragraph**: What the library does in 2-3 sentences
+2. **Key differentiator upfront**: Lead with what makes it unique
+3. **Installation section**: Simple, clear commands with platform notes
+4. **Features overview**: Bullet points or short sections highlighting capabilities
+5. **Usage examples**: Working code snippets early in the document
+6. **Detailed API reference**: Organized by category, not alphabetically
+7. **Platform/compatibility information**: Clear support matrix
+8. **History/credits**: Acknowledge origins and contributors
+
+#### API Documentation
+- Lead with a one-sentence summary
+- Explain the "why" before the "how"
+- Provide practical examples inline
+- Use tables for comparing approaches or versions
+- Include "When to use" guidance
+- Note performance characteristics when relevant
+
+### Formatting Conventions
+
+#### Headers
+- Use sentence case for headers (not title case)
+- Main sections: `##` (two hashes)
+- Subsections: `###` (three hashes)  
+- Use descriptive names: "Getting Started" not "Usage"
+
+#### Code Examples
+- Always include complete, runnable examples
+- Show both the problem and the solution
+- Add comments explaining non-obvious parts
+- Use realistic variable names, not `foo`/`bar`
+- Demonstrate error handling when relevant
+
+#### Lists
+- Use bullet points (`-`) for features, benefits, characteristics
+- Use numbered lists for step-by-step procedures
+- Keep list items parallel in structure
+- Start with verbs for action items
+
+#### Emphasis
+- **Bold** for important concepts, warnings, or key terms
+- `backticks` for code, function names, filenames, parameters
+- _Italics_ sparingly for subtle emphasis
+- 🎯 Emoji occasionally for visual scanning (installation, warnings, performance notes)
+
+### Specific Patterns
+
+#### Version/Platform Compatibility
+```markdown
+### Platform Support
+- Linux (x86_64, ARM64, ARM32, RISC-V64)
+- macOS (x86_64, ARM64)
+- Windows (x86, x86_64, ARM, ARM64)
+```
+
+#### Feature Descriptions
+Format: Brief description → Use case → Code example → Notes/caveats
+```markdown
+### `function_name()` - Brief description
+
+One-sentence summary of what it does and why it matters.
+
+Use this when you need to [specific use case].
+
+\`\`\`c
+// Practical example
+tealet_t *t = tealet_new(main, my_func, &arg);
+\`\`\`
+
+**Note:** Platform-specific behavior or limitations.
+```
+
+#### Warnings and Notes
+```markdown
+⚠️ **Warning:** Never pass stack-allocated data between tealets
+
+> **Note:** For Python 3.10+, prefer the native implementation
+```
+
+#### Changelog Entries
+Follow Keep a Changelog format:
+- Group by: Added, Changed, Deprecated, Removed, Fixed, Security
+- Start each item with component or area in **bold**
+- Use present tense: "Add feature" not "Added feature" in headers
+- Past tense in descriptions: "Fixed bug where..."
+- Include issue/PR numbers when relevant
+
+### Writing Principles
+
+1. **Start with working code**: Show, don't just tell
+2. **Explain the why**: Don't just document what something does—explain when to use it
+3. **Progressive disclosure**: Basic usage first, advanced topics later
+4. **Real-world context**: Use practical examples from actual use cases
+5. **Compare when helpful**: "Unlike X, this library does Y"
+6. **Be specific about trade-offs**: Performance vs. simplicity, memory vs. speed
+7. **Update documentation with code**: Keep them in sync
+8. **Link liberally**: Cross-reference related functions and concepts
+
+### Technical Writing Style
+
+- Use active voice: "The function saves the stack" not "The stack is saved"
+- Prefer present tense: "This returns a pointer" not "This will return"
+- Write in second person for instructions: "You can use" or imperative "Use"
+- Keep sentences short and focused
+- One idea per paragraph
+- Use parallel structure in lists
+- Define acronyms on first use
+- Avoid jargon unless it's standard terminology in the field
+
+### Anti-Patterns to Avoid
+
+❌ Marketing speak ("revolutionary", "blazing fast", "next-generation")
+❌ Vague statements without specifics ("improves performance significantly")
+❌ Apologetic language ("This is just a simple library")
+❌ Assumed knowledge without links to explanations
+❌ Code examples that don't compile
+❌ Outdated version numbers or platform info
+❌ Tutorials that skip error handling
+❌ Overuse of "key" prefix ("key features", "key benefits", "key differentiator")—be direct instead
+
+### Examples from This Project
+
+Good concise explanation (from README):
+> "libtealet enables symmetric coroutines (co-stacks) in pure C without compiler support"
+
+Good technical detail (from stackman):
+> "When called, it will call callback function twice: First with opcode STACKMAN_OP_SAVE..."
+
+Good practical guidance:
+> "Use this either directly: ... or with a context manager: ..."
