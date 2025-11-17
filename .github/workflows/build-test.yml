@@ -129,7 +129,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: libtealet-${{ matrix.abi }}
-        path: VS\${{matrix.folder}}\Debug\tealet.lib
+        path: |
+          VS\${{matrix.folder}}\Debug\tealet.lib
+          VS\${{matrix.folder}}\Debug\tealet.dll
   
   create-release:
     runs-on: ubuntu-latest
