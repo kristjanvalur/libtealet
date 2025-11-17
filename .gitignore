@@ -30,6 +30,10 @@
 *.a
 *.lib
 
+# Stackman specific - keep static libraries in stackman/lib
+!stackman/lib/**/*.a
+!stackman/lib/**/*.lib
+
 # Executables
 *.exe
 *.out
@@ -39,4 +43,5 @@
 core
 bin/test*
 bin/setcontext
-.vscode
+.vscodetmp/
+**/tmp/

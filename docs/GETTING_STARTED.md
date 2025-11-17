@@ -58,7 +58,7 @@ int main(void) {
 
 Compile and run:
 ```bash
-gcc -o hello hello.c -Isrc -Lbin -ltealet -lstackman
+gcc -o hello hello.c -Isrc -Lbin -ltealet
 ./hello
 ```
 

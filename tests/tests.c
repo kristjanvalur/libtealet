@@ -267,7 +267,7 @@ tealet_t *test_exit_run(tealet_t *t1, void *arg)
   int result;
   assert(t1 != g_main);
   status += 1;
-  result = tealet_exit(g_main, NULL, (intptr_t)arg);
+  result = tealet_exit(g_main, NULL, (int)(intptr_t)arg);
   assert(0);
   assert(result==0);
   return (tealet_t*)-1;
@@ -519,7 +519,7 @@ void test_random(void)
 void random2_run(int index);
 tealet_t *random2_tealet(tealet_t* cur, void *arg)
 {
-  int index = (intptr_t)arg;
+  int index = (int)(intptr_t)arg;
   assert(tealet_current(g_main) == cur);
   assert(index > 0 && index < ARRAYSIZE);
   assert(tealetarray[index] == NULL);

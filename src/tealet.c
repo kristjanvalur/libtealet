@@ -839,6 +839,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags)
     result = tealet_exit_inner(target->main, arg, flags);
     /* should never reach here */
     assert(0);
+    return result;
 }
 
 tealet_t *tealet_duplicate(tealet_t *tealet)

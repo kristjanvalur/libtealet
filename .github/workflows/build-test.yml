@@ -1,0 +1,240 @@
+name: build and test
+
+on:
+  push:
+    branches: [ master, dev, issue-* ]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-linux-gnu:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [AMD64, i386, arm, aarch64, riscv64]
+        include:
+          - name: i386
+            platformflags: -m32
+          - name: arm
+            platformtools: arm-linux-gnueabi
+            emulator: qemu-arm -L /usr/arm-linux-gnueabi
+          - name: aarch64
+            platformtools: aarch64-linux-gnu
+            emulator: qemu-aarch64 -L /usr/aarch64-linux-gnu
+          - name: riscv64
+            platformtools: riscv64-linux-gnu
+            emulator: qemu-riscv64 -L /usr/riscv64-linux-gnu
+    
+    env:
+      PLATFORMFLAGS: ${{matrix.platformflags}}
+      PLATFORM_PREFIX: ${{matrix.platformtools}}
+      EMULATOR: ${{matrix.emulator}}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: install multilib
+      run: sudo apt-get install --no-install-recommends -y gcc-multilib g++-multilib
+      if: ${{ matrix.name == 'i386' }}
+    
+    - name: install qemu
+      if: matrix.emulator
+      run: sudo apt-get install --no-install-recommends -y qemu-user
+    
+    - name: install abi lib
+      if: matrix.platformtools
+      run: sudo apt-get install --no-install-recommends -y gcc-${{matrix.platformtools}} g++-${{matrix.platformtools}}
+    
+    - name: make
+      run: make all
+    
+    - name: test
+      run: make test
+    
+    - name: set abi name
+      run: echo abiname=$(make abiname) >> $GITHUB_ENV
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libtealet-${{ env.abiname }}
+        path: |
+          bin/libtealet.a
+          bin/libtealet.so
+  
+  build-macos:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, macos-latest]
+        include:
+          - os: macos-15-intel
+            abi: darwin_x86_64
+          - os: macos-latest
+            abi: darwin_arm64
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build library
+      run: make all
+    
+    - name: Run tests
+      run: make test
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libtealet-${{ matrix.abi }}
+        path: |
+          bin/libtealet.a
+          bin/libtealet.so
+  
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Win32, x64, ARM64]
+        include:
+          - platform: Win32
+            folder: Win32
+            abi: win_x86
+            native: yes
+          - platform: x64
+            folder: x64
+            abi: win_x64
+            native: yes
+          - platform: ARM64
+            folder: ARM64
+            abi: win_arm64
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: microsoft/setup-msbuild@v2
+    
+    - name: build
+      run: msbuild.exe VS\tealet.sln /p:Platform=${{matrix.platform}}
+    
+    - name: test
+      if: ${{ matrix.native == 'yes' }}
+      run: .\VS\${{matrix.folder}}\Debug\test.exe
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libtealet-${{ matrix.abi }}
+        path: |
+          VS\${{matrix.folder}}\Debug\tealet.lib
+          VS\${{matrix.folder}}\Debug\tealet.dll
+  
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [build-linux-gnu, build-macos, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    
+    - name: Create release archive
+      run: |
+        mkdir -p release/lib
+        
+        # Copy libraries maintaining the lib/{abi}/ structure
+        cp -r artifacts/libtealet-sysv_amd64 release/lib/sysv_amd64
+        cp -r artifacts/libtealet-sysv_i386 release/lib/sysv_i386
+        cp -r artifacts/libtealet-arm32 release/lib/arm32
+        cp -r artifacts/libtealet-aarch64 release/lib/aarch64
+        cp -r artifacts/libtealet-riscv64 release/lib/riscv64
+        cp -r artifacts/libtealet-darwin_x86_64 release/lib/darwin_x86_64
+        cp -r artifacts/libtealet-darwin_arm64 release/lib/darwin_arm64
+        cp -r artifacts/libtealet-win_x86 release/lib/win_x86
+        cp -r artifacts/libtealet-win_x64 release/lib/win_x64
+        cp -r artifacts/libtealet-win_arm64 release/lib/win_arm64
+        
+        # Copy headers, stackman, and documentation
+        mkdir -p release/tealet
+        cp src/tealet.h release/tealet/
+        cp src/tools.h release/tealet/
+        cp -r stackman release/
+        cp Makefile README.md LICENSE release/
+        
+        # Create version-specific archive
+        VERSION=${GITHUB_REF#refs/tags/v}
+        cd release
+        tar -czf ../libtealet-${VERSION}.tar.gz .
+        cd ..
+        
+    - name: Extract version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz
+        body: |
+          libtealet v${{ steps.get_version.outputs.VERSION }}
+          
+          ## Download
+          
+          Download `libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz` containing pre-built libraries for all platforms.
+          
+          ## Contents
+          
+          ```
+          tealet/             - Header files (tealet.h, tools.h)
+          stackman/           - Bundled stackman v${{ env.STACKMAN_VERSION }}
+          lib/
+            sysv_amd64/       - Linux x86_64
+            sysv_i386/        - Linux x86 (32-bit)
+            arm32/            - Linux ARM (32-bit, AAPCS)
+            aarch64/          - Linux ARM64 (AAPCS64)
+            riscv64/          - Linux RISC-V 64-bit (LP64D)
+            darwin_x86_64/    - macOS x86_64 (Intel)
+            darwin_arm64/     - macOS ARM64 (Apple Silicon)
+            win_x86/          - Windows x86 (32-bit)
+            win_x64/          - Windows x64
+            win_arm64/        - Windows ARM64
+          README.md
+          LICENSE
+          Makefile
+          ```
+          
+          ## Usage
+          
+          ```bash
+          # Extract
+          tar -xzf libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz
+          
+          # Build detects platform automatically
+          make abiname  # Shows detected ABI (e.g., sysv_amd64)
+          
+          # Link with your project (static or dynamic)
+          gcc -Itealet -Istackman/stackman mycode.c -Llib/sysv_amd64 -ltealet
+          
+          # Or let Makefile auto-detect platform
+          ABI=$(shell make abiname)
+          gcc -Itealet -Istackman/stackman mycode.c -Llib/$(ABI) -ltealet
+          ```
+          
+          **Note**: Both static and dynamic libraries are self-contained with stackman built in.
+          You only need to link with `-ltealet`.
+          
+          ## Platforms Supported
+          
+          - **Linux**: x86_64, i386, ARM32, ARM64, RISC-V 64
+          - **macOS**: Intel (x86_64), Apple Silicon (ARM64)
+          - **Windows**: x86, x64, ARM64

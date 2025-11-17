@@ -1,3 +1,5 @@
+[![build and test](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml/badge.svg)](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml)
+
 # Libtealet
 
 **Version 0.1.0**
@@ -77,7 +79,7 @@ int main(void) {
 }
 ```
 
-Compile: `gcc -o example example.c -Isrc -Lbin -ltealet -lstackman`
+Compile: `gcc -o example example.c -Isrc -Lbin -ltealet`
 
 # Functionalty
 The library provides the basic mechanism to create coroutine and to switch between them.
