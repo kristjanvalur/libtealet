@@ -1,3 +1,5 @@
+[![build and test](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml/badge.svg)](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml)
+
 # Libtealet
 
 **Version 0.1.0**
