@@ -1,6 +1,0 @@
-language: c
-script:
-	- make && make test
-arch:
-        - amd64
-        - arm64

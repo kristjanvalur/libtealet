@@ -26,7 +26,7 @@
 
 2. **tools.h / tools.c**: Helper utilities for the library
 
-3. **switch.c**: Platform-specific stack switching code
+3. **stackman**: Low-level stack switching (bundled distribution in `stackman/`)
 
 ### Key Data Structures
 
