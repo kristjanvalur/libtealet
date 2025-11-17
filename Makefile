@@ -5,6 +5,10 @@
 # `CFLAGS="-O3 -flto" LDFLAGS="-O3 -flto" make test
 #
 
+# Version
+VERSION = 0.2.0
+STACKMAN_VERSION = 1.2.0
+
 CPPFLAGS += -Isrc -Istackman/stackman
 CFLAGS += -fPIC -Wall
 LDFLAGS += -Lbin
@@ -35,6 +39,10 @@ bin/libtealet.a: $(allobj)
 clean:
 	rm -f src/*.o tests/*.o *.out *.so
 	rm -f bin/*
+
+.PHONY: abiname
+abiname:
+	@echo $(ABI)
 
 DEBUG = #-DDEBUG_DUMP
 
