@@ -21,6 +21,10 @@ endif
 LIB := stackman/lib/$(ABI)
 LDFLAGS += -L$(LIB)
 
+$(info Detected ABI: $(ABI))
+$(info Stackman library path: $(LIB))
+$(info Checking for libstackman.a: $(wildcard $(LIB)/libstackman.a))
+
 .PHONY: all
 all: bin/libtealet.so bin/libtealet.a
 
