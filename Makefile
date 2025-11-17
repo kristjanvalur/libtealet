@@ -21,9 +21,12 @@ endif
 LIB := stackman/lib/$(ABI)
 LDFLAGS += -L$(LIB)
 
+# Debug output (only if MAKEFILE_DEBUG is set)
+ifdef MAKEFILE_DEBUG
 $(info Detected ABI: $(ABI))
 $(info Stackman library path: $(LIB))
 $(info Checking for libstackman.a: $(wildcard $(LIB)/libstackman.a))
+endif
 
 .PHONY: all
 all: bin/libtealet.so bin/libtealet.a
