@@ -63,6 +63,12 @@ abiname:
 
 DEBUG = #-DDEBUG_DUMP
 
+# macOS doesn't support static linking
+STATIC_FLAG := -static
+ifeq ($(shell uname -s),Darwin)
+	STATIC_FLAG :=
+endif
+
 .PHONY: test tests
 
 tests: bin/test-static bin/test-dynamic
@@ -78,10 +84,10 @@ test: tests
 
 
 bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -static -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
 
 bin/test-static: bin tests/tests.o bin/libtealet.a
-	$(CC) $(LDFLAGS) -static -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
 
 bin/test-dynamic: bin tests/tests.o bin/libtealet.so
 	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
