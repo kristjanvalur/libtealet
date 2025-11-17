@@ -48,7 +48,7 @@ bin:
 	mkdir -p bin
 
 bin/libtealet.so: bin $(allobj)
-	$(CC) $(LDFLAGS) -shared -o $@ $(allobj)
+	$(CC) $(LDFLAGS) -shared -o $@ $(allobj) -lstackman
 
 bin/libtealet.a: bin $(allobj)
 	$(AR) $(ARFLAGS) -s $@ $(allobj)
@@ -78,7 +78,9 @@ tests: export LD_RUN_PATH := bin
 
 test: tests
 	$(EMULATOR) bin/test-static > /dev/null
+ifndef EMULATOR
 	$(EMULATOR) bin/test-dynamic > /dev/null
+endif
 	$(EMULATOR) bin/test-setcontext > /dev/null
 	@echo "*** All test suites passed ***"
 
