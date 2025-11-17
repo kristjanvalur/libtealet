@@ -11,7 +11,7 @@ STACKMAN_VERSION = 1.2.0
 
 CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS)
 CFLAGS += -fPIC -Wall $(PLATFORMFLAGS)
-LDFLAGS += -Lbin
+LDFLAGS += -Lbin $(PLATFORMFLAGS)
 
 # Handle cross-compilation
 ifdef PLATFORM_PREFIX
