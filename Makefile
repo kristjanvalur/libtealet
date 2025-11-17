@@ -71,9 +71,9 @@ LDLIBS := -ltealet -lstackman
 tests: export LD_RUN_PATH := bin
 
 test: tests
-	bin/test-static > /dev/null
-	bin/test-dynamic > /dev/null
-	bin/test-setcontext > /dev/null
+	$(EMULATOR) bin/test-static > /dev/null
+	$(EMULATOR) bin/test-dynamic > /dev/null
+	$(EMULATOR) bin/test-setcontext > /dev/null
 	@echo "*** All test suites passed ***"
 
 
