@@ -99,9 +99,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [x86, x64, arm64]
+        platform: [Win32, x64, ARM64]
         include:
-          - platform: x86
+          - platform: Win32
             folder: Win32
             abi: win_x86
             native: yes
@@ -109,8 +109,8 @@ jobs:
             folder: x64
             abi: win_x64
             native: yes
-          - platform: arm64
-            folder: arm64
+          - platform: ARM64
+            folder: ARM64
             abi: win_arm64
     
     steps:
