@@ -90,18 +90,20 @@
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>C:\git\libtealet\stackman\stackman;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\git\libtealet\stackman\lib\win_x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)..\stackman\lib\win_x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>C:\git\libtealet\stackman\stackman;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\git\libtealet\stackman\lib\win_x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)..\stackman\lib\win_x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\git\libtealet\stackman\stackman;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)..\stackman\lib\win_x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\git\libtealet\stackman\stackman;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)..\stackman\lib\win_x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -190,12 +192,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="tealet.c" />
-    <ClCompile Include="tools.c" />
+    <ClCompile Include="..\src\tealet.c" />
+    <ClCompile Include="..\src\tools.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="tealet.h" />
-    <ClInclude Include="tools.h" />
+    <ClInclude Include="..\src\tealet.h" />
+    <ClInclude Include="..\src\tools.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
