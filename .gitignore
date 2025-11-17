@@ -27,7 +27,9 @@
 # Compiled Static libraries
 *.lai
 *.la
+!stackman/lib/**/*.a
 *.a
+!stackman/lib/**/*.lib
 *.lib
 
 # Executables
