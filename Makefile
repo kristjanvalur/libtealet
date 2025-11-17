@@ -78,7 +78,6 @@ endif
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/test-setcontext
-LDLIBS := -ltealet -lstackman
 tests: export LD_RUN_PATH := bin
 
 test: tests
@@ -91,10 +90,10 @@ endif
 
 
 bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} -ltealet
 
 bin/test-static: bin tests/tests.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} -ltealet
 
 bin/test-dynamic: bin tests/tests.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} -ltealet
