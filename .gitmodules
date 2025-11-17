@@ -1,3 +1,0 @@
-[submodule "stackman.git"]
-	path = stackman
-	url = ../../stackless-dev/stackman.git
