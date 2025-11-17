@@ -51,7 +51,12 @@ bin/libtealet.so: bin $(allobj)
 	$(CC) $(LDFLAGS) -shared -o $@ $(allobj) -lstackman
 
 bin/libtealet.a: bin $(allobj)
-	$(AR) $(ARFLAGS) -s $@ $(allobj)
+	$(AR) -rcs $@ $(allobj)
+	@# Extract stackman objects and merge into libtealet.a
+	@mkdir -p bin/tmp_ar
+	@cd bin/tmp_ar && $(AR) -x ../../$(LIB)/libstackman.a
+	@$(AR) -rs $@ bin/tmp_ar/*.o
+	@rm -rf bin/tmp_ar
 
 clean:
 	rm -f src/*.o tests/*.o *.out *.so
@@ -89,7 +94,7 @@ bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
 
 bin/test-static: bin tests/tests.o bin/libtealet.a
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} -ltealet
 
 bin/test-dynamic: bin tests/tests.o bin/libtealet.so
 	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
