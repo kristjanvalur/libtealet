@@ -78,10 +78,10 @@ test: tests
 
 
 bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) -static -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
 
 bin/test-static: bin tests/tests.o bin/libtealet.a
-	$(CC) $(LDFLAGS) -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
+	$(CC) $(LDFLAGS) -static -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
 
 bin/test-dynamic: bin tests/tests.o bin/libtealet.so
 	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} $(LDLIBS)

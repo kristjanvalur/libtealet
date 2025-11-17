@@ -20,13 +20,13 @@ jobs:
             platformflags: -m32
           - name: arm
             platformtools: arm-linux-gnueabi
-            emulator: qemu-arm -L /usr/arm-linux-gnueabi
+            emulator: qemu-arm
           - name: aarch64
             platformtools: aarch64-linux-gnu
-            emulator: qemu-aarch64 -L /usr/aarch64-linux-gnu
+            emulator: qemu-aarch64
           - name: riscv64
             platformtools: riscv64-linux-gnu
-            emulator: qemu-riscv64 -L /usr/riscv64-linux-gnu
+            emulator: qemu-riscv64
     
     env:
       PLATFORMFLAGS: ${{matrix.platformflags}}
