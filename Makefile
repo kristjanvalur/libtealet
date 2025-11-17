@@ -9,9 +9,16 @@
 VERSION = 0.2.0
 STACKMAN_VERSION = 1.2.0
 
-CPPFLAGS += -Isrc -Istackman/stackman
-CFLAGS += -fPIC -Wall
+CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS)
+CFLAGS += -fPIC -Wall $(PLATFORMFLAGS)
 LDFLAGS += -Lbin
+
+# Handle cross-compilation
+ifdef PLATFORM_PREFIX
+CC = $(PLATFORM_PREFIX)-gcc
+CXX = $(PLATFORM_PREFIX)-g++
+AR = $(PLATFORM_PREFIX)-ar
+endif
 
 # Add the path to the correct stackman libs
 ABI := $(shell sh stackman/tools/abiname.sh "$(CC)" "$(CFLAGS)")
