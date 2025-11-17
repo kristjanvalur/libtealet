@@ -2,7 +2,7 @@
 
 # Libtealet
 
-**Version 0.1.0**
+**Version 0.2.0**
 
 LibTealet is a lightweight co-routine library for C.  It is based on the
 technique of stack-slicing, where the execution stack is saved and restored
