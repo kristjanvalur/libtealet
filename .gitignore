@@ -27,10 +27,12 @@
 # Compiled Static libraries
 *.lai
 *.la
-!stackman/lib/**/*.a
 *.a
-!stackman/lib/**/*.lib
 *.lib
+
+# Stackman specific - keep static libraries in stackman/lib
+!stackman/lib/**/*.a
+!stackman/lib/**/*.lib
 
 # Executables
 *.exe
