@@ -222,13 +222,16 @@ jobs:
           # Build detects platform automatically
           make abiname  # Shows detected ABI (e.g., sysv_amd64)
           
-          # Link with your project
-          gcc -Itealet -Istackman/stackman mycode.c -Llib/sysv_amd64 -ltealet -lstackman
+          # Link with your project (static or dynamic)
+          gcc -Itealet -Istackman/stackman mycode.c -Llib/sysv_amd64 -ltealet
           
-          # Or let Makefile auto-detect
+          # Or let Makefile auto-detect platform
           ABI=$(shell make abiname)
-          gcc -Itealet -Istackman/stackman mycode.c -Llib/$(ABI) -ltealet -Lstackman/lib/$(ABI) -lstackman
+          gcc -Itealet -Istackman/stackman mycode.c -Llib/$(ABI) -ltealet
           ```
+          
+          **Note**: Both static and dynamic libraries are self-contained with stackman built in.
+          You only need to link with `-ltealet`.
           
           ## Platforms Supported
           
