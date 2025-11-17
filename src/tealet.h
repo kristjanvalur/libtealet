@@ -264,14 +264,28 @@ size_t tealet_get_stacksize(tealet_t *tealet);
 TEALET_API
 int tealet_status(tealet_t *tealet);
 
-/* get status about the tealets. */
+/* get basic status about the tealets */
 typedef struct tealet_stats_t
 {
-    int n_active;
-    int n_total;
+    int n_active;   /* number of active tealets (excluding main) */
+    int n_total;    /* total tealets created (cumulative) */
+    /* Memory usage statistics - populated when TEALET_WITH_STATS is enabled, otherwise zero */
+    size_t bytes_allocated;       /* Current heap allocation for stacks (tracked) */
+    size_t bytes_allocated_peak;  /* Peak heap allocation (tracked continuously) */
+    size_t bytes_allocated_computed; /* Actual bytes in chunks (computed by walking) */
+    size_t num_segments;          /* Number of stack chunk references (visiting all tealets) */
+    size_t num_stacks_allocated;  /* Number of unique stack structures currently allocated */
+    size_t num_chunks_allocated;  /* Number of unique chunk structures currently allocated */
+    size_t bytes_naive;           /* Current naive memory estimate (full stack extents) */
+    size_t total_allocations;     /* Total allocation calls */
+    size_t total_frees;           /* Total free calls */
 } tealet_stats_t;
+
 TEALET_API
 void tealet_get_stats(tealet_t *t, tealet_stats_t *s);
+
+TEALET_API
+void tealet_reset_peak_stats(tealet_t *t);
 
 /* Convenience macros */
 #define TEALET_MAIN(t) ((t)->main)

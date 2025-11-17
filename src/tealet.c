@@ -16,7 +16,7 @@
 #include <string.h>
 
 
-/* enable collection of tealet stats */
+/* enable collection of tealet stats - default enabled, define TEALET_WITH_STATS=0 to disable */
 #ifndef TEALET_WITH_STATS
 #define TEALET_WITH_STATS 1
 #endif
@@ -70,6 +70,10 @@ typedef struct tealet_sub_t {
   tealet_t base;				   /* the public part of the tealet */
   char *stack_far;                 /* the "far" end of the stack or NULL when exiting */
   tealet_stack_t *stack;           /* saved stack or 0 if active or -1 if invalid*/
+#if TEALET_WITH_STATS
+  struct tealet_sub_t *next_tealet; /* next in circular list of all tealets */
+  struct tealet_sub_t *prev_tealet; /* prev in circular list of all tealets */
+#endif
 #ifndef NDEBUG
   int id;                          /* number of this tealet */
 #endif
@@ -103,9 +107,16 @@ typedef struct tealet_main_t {
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e   g_sw;       /* save/restore state */
   int           g_flags;     /* default flags when tealet exits */
-#if TEALET_WITH_STATS
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
+#if TEALET_WITH_STATS
+  /* Extended memory statistics */
+  size_t g_bytes_allocated;      /* Current heap allocation */
+  size_t g_bytes_allocated_peak; /* Peak heap allocation */
+  size_t g_total_allocations;    /* Total alloc calls */
+  size_t g_total_frees;          /* Total free calls */
+  size_t g_num_stacks_allocated; /* Number of stack structures currently allocated */
+  size_t g_num_chunks_allocated; /* Number of chunk structures currently allocated */
 #endif
   size_t       g_extrasize; /* amount of extra memory in tealets */
   double _extra[1];         /* start of any extra data */
@@ -113,6 +124,42 @@ typedef struct tealet_main_t {
 
 #define TEALET_IS_MAIN_STACK(t)  (((tealet_sub_t *)(t))->stack_far == STACKMAN_SP_FURTHEST)
 #define TEALET_GET_MAIN(t)     ((tealet_main_t *)(((tealet_t *)(t))->main))
+
+/************************************************************
+ * Statistics tracking macros
+ */
+#if TEALET_WITH_STATS
+/* Link a tealet into the circular list after main tealet */
+#define TEALET_LIST_ADD(main, t) do { \
+    (t)->next_tealet = (main)->base.next_tealet; \
+    (t)->prev_tealet = (tealet_sub_t*)(main); \
+    (main)->base.next_tealet->prev_tealet = (t); \
+    (main)->base.next_tealet = (t); \
+} while (0)
+
+/* Unlink a tealet from the circular list */
+#define TEALET_LIST_REMOVE(main, t) do { \
+    (t)->prev_tealet->next_tealet = (t)->next_tealet; \
+    (t)->next_tealet->prev_tealet = (t)->prev_tealet; \
+} while (0)
+
+#define STATS_ADD_ALLOC(main, size) do { \
+    (main)->g_bytes_allocated += (size); \
+    (main)->g_total_allocations++; \
+    if ((main)->g_bytes_allocated > (main)->g_bytes_allocated_peak) \
+        (main)->g_bytes_allocated_peak = (main)->g_bytes_allocated; \
+} while(0)
+
+#define STATS_SUB_ALLOC(main, size) do { \
+    (main)->g_bytes_allocated -= (size); \
+    (main)->g_total_frees++; \
+} while(0)
+#else
+#define TEALET_LIST_ADD(main, t) ((void)0)
+#define TEALET_LIST_REMOVE(main, t) ((void)0)
+#define STATS_ADD_ALLOC(main, size) ((void)0)
+#define STATS_SUB_ALLOC(main, size) ((void)0)
+#endif
 
 /************************************************************
  * helpers to call the malloc functions provided by the user
@@ -124,6 +171,15 @@ static void *tealet_int_malloc(tealet_main_t *main, size_t size)
 static void tealet_int_free(tealet_main_t *main, void *ptr)
 {
     main->g_alloc.free_p(ptr, main->g_alloc.context);
+}
+
+/* Free a tealet, unlinking it from the circular list first */
+static void tealet_free_tealet(tealet_main_t *main, tealet_sub_t *t)
+{
+#if TEALET_WITH_STATS
+    TEALET_LIST_REMOVE(main, t);
+#endif
+    tealet_int_free(main, t);
 }
 
 /*************************************************************
@@ -140,6 +196,10 @@ static tealet_stack_t *tealet_stack_new(tealet_main_t *main,
     s = (tealet_stack_t*)tealet_int_malloc(main, tsize);
     if (!s)
         return NULL;
+    STATS_ADD_ALLOC(main, tsize);
+#if TEALET_WITH_STATS
+    main->g_num_stacks_allocated++;
+#endif
     s->refcount = 1;
     s->prev = NULL;
     s->stack_far = stack_far;
@@ -168,6 +228,10 @@ static int tealet_stack_grow(tealet_main_t *main,
     chunk = (tealet_chunk_t*)tealet_int_malloc(main, tsize);
     if (!chunk)
         return TEALET_ERR_MEM;
+    STATS_ADD_ALLOC(main, tsize);
+#if TEALET_WITH_STATS
+    main->g_num_chunks_allocated++;
+#endif
 #if STACK_DIRECTION == 0
     chunk->stack_near = stack->chunk.stack_near + stack->saved;
     memcpy(&chunk->data[0], chunk->stack_near, diff);
@@ -237,9 +301,17 @@ static void tealet_stack_decref(tealet_main_t *main, tealet_stack_t *stack)
         tealet_stack_unlink(stack);
  
     chunk = stack->chunk.next;
+    STATS_SUB_ALLOC(main, offsetof(tealet_stack_t, chunk.data[0]) + stack->chunk.size);
+#if TEALET_WITH_STATS
+    main->g_num_stacks_allocated--;
+#endif
     tealet_int_free(main, (void*)stack);
     while(chunk) {
         tealet_chunk_t *next = chunk->next;
+        STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
+#if TEALET_WITH_STATS
+        main->g_num_chunks_allocated--;
+#endif
         tealet_int_free(main, (void*)chunk);
         chunk = next;
     }
@@ -254,6 +326,10 @@ static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack)
     stack->saved = (size_t)-1;
     while(chunk) {
         tealet_chunk_t *next = chunk->next;
+        STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
+#if TEALET_WITH_STATS
+        main->g_num_chunks_allocated--;
+#endif
         tealet_int_free(main, (void*)chunk);
         chunk = next;
     }
@@ -424,7 +500,7 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer)
 #if TEALET_WITH_STATS
             g_main->g_tealets--;
 #endif
-            tealet_int_free(g_main, g_current);
+            tealet_free_tealet(g_main, g_current);
         } else {
             /* -1 means do-not-delete */
             assert(g_current->stack == (tealet_stack_t*)-1);
@@ -609,7 +685,9 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
         return NULL;
     if (g_main == NULL) {
         g_main = (tealet_main_t *)g;
+#if TEALET_WITH_STATS
         g_main->g_counter = 0;
+#endif
     }
     g->base.main = (tealet_t *)g_main;
     if (extrasize)
@@ -626,6 +704,9 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
 #ifndef NDEBUG
     g->id = g_main->g_counter;
 #endif
+    /* Link into the circular list (but not the main tealet itself during init) */
+    if (g != (tealet_sub_t*)g_main)
+        TEALET_LIST_ADD(g_main, g);
 #endif
     return g;
 }
@@ -672,9 +753,19 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_sw = SW_NOP;
     g_main->g_flags = 0;
 #if TEALET_WITH_STATS
+    /* Initialize circular list - main tealet points to itself */
+    g->next_tealet = g;
+    g->prev_tealet = g;
     /* init these.  the main tealet counts as one */
     g_main->g_tealets = 1;
     assert(g_main->g_counter == 1); /* set in alloc_raw */
+    /* Initialize extended stats */
+    g_main->g_bytes_allocated = 0;
+    g_main->g_bytes_allocated_peak = 0;
+    g_main->g_total_allocations = 0;
+    g_main->g_total_frees = 0;
+    g_main->g_num_stacks_allocated = 0;
+    g_main->g_num_chunks_allocated = 0;
 #endif
     assert(TEALET_IS_MAIN_STACK(g_main));
     return (tealet_t *)g_main;
@@ -866,7 +957,7 @@ void tealet_delete(tealet_t *target)
     tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
     assert(!TEALET_IS_MAIN(target));
     tealet_stack_decref(g_main, g_target->stack);
-    tealet_int_free(g_main, g_target);
+    tealet_free_tealet(g_main, g_target);
 #if TEALET_WITH_STATS
     g_main->g_tealets--;
 #endif
@@ -903,11 +994,67 @@ int tealet_status(tealet_t *_tealet)
 void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
 {
 #if ! TEALET_WITH_STATS
+    (void)tealet; /* unused */
     memset(stats, 0, sizeof(*stats));
 #else
     tealet_main_t *tmain = TEALET_GET_MAIN(tealet);
     stats->n_active = tmain->g_tealets;
     stats->n_total = tmain->g_counter;
+    /* Extended memory statistics */
+    stats->bytes_allocated = tmain->g_bytes_allocated;
+    stats->bytes_allocated_peak = tmain->g_bytes_allocated_peak;
+    stats->total_allocations = tmain->g_total_allocations;
+    stats->total_frees = tmain->g_total_frees;
+    stats->num_stacks_allocated = tmain->g_num_stacks_allocated;
+    stats->num_chunks_allocated = tmain->g_num_chunks_allocated;
+    
+    /* Compute number of segments and current naive memory usage */
+    stats->num_segments = 0;
+    stats->bytes_naive = 0;
+    stats->bytes_allocated_computed = 0;
+    
+    /* Walk the circular list of all tealets (skip main tealet) */
+    tealet_sub_t *t = ((tealet_sub_t*)tmain)->next_tealet;
+    while (t != (tealet_sub_t*)tmain) {
+        /* Only count tealets with saved stacks (they have extent and segments) */
+        if (t->stack && t->stack != (tealet_stack_t*)-1) {
+            tealet_stack_t *stack = t->stack;
+            tealet_chunk_t *chunk = &stack->chunk;
+            
+            /* Compute the full extent of this tealet's stack */
+            size_t extent = (size_t)STACKMAN_SP_DIFF((ptrdiff_t)stack->stack_far,
+                                                      (ptrdiff_t)chunk->stack_near);
+            stats->bytes_naive += extent;
+            
+            /* Add the main stack structure (includes first chunk) */
+            stats->bytes_allocated_computed += offsetof(tealet_stack_t, chunk.data[0]) + stack->chunk.size;
+            stats->num_segments++;
+            
+            /* Count additional segments and sum their allocated sizes */
+            /* Note: For shared stacks (duplicated tealets), chunks are counted
+             * multiple times in both naive and allocated, which is correct - each
+             * tealet would need its own copy in a naive implementation. */
+            chunk = stack->chunk.next;
+            while (chunk) {
+                stats->num_segments++;
+                stats->bytes_allocated_computed += offsetof(tealet_chunk_t, data[0]) + chunk->size;
+                chunk = chunk->next;
+            }
+        }
+        t = t->next_tealet;
+    }
+#endif
+}
+
+void tealet_reset_peak_stats(tealet_t *tealet)
+{
+#if TEALET_WITH_STATS
+    tealet_main_t *tmain = TEALET_GET_MAIN(tealet);
+    tmain->g_bytes_allocated_peak = tmain->g_bytes_allocated;
+    /* Note: We don't track bytes_naive_peak as it would require walking
+     * all tealets on every allocation. bytes_naive is computed on demand. */
+#else
+    (void)tealet; /* unused */
 #endif
 }
 
