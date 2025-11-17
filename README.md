@@ -79,7 +79,7 @@ int main(void) {
 }
 ```
 
-Compile: `gcc -o example example.c -Isrc -Lbin -ltealet -lstackman`
+Compile: `gcc -o example example.c -Isrc -Lbin -ltealet`
 
 # Functionalty
 The library provides the basic mechanism to create coroutine and to switch between them.
