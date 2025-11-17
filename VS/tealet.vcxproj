@@ -130,6 +130,14 @@
     <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)..\stackman\lib\win_x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)..\stackman\lib\win_arm64;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <IncludePath>$(ProjectDir)..\src;$(ProjectDir)..\stackman\stackman;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)..\stackman\lib\win_arm64;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
