@@ -30,11 +30,14 @@ allobj = $(coreobj) src/tools.o
 src/tealet.o: src/tealet.c src/tealet.h
 src/tools.o: src/tools.c src/tools.h
 
-bin/libtealet.so: $(allobj)
-	$(CC) $(LDFLAGS) -shared -o $@ $^
+bin:
+	mkdir -p bin
 
-bin/libtealet.a: $(allobj)
-	$(AR) $(ARFLAGS) -s $@ $^
+bin/libtealet.so: bin $(allobj)
+	$(CC) $(LDFLAGS) -shared -o $@ $(allobj)
+
+bin/libtealet.a: bin $(allobj)
+	$(AR) $(ARFLAGS) -s $@ $(allobj)
 
 clean:
 	rm -f src/*.o tests/*.o *.out *.so
@@ -60,11 +63,11 @@ test: tests
 	@echo "*** All test suites passed ***"
 
 
-bin/test-setcontext: tests/setcontext.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -static -o $@ $< ${DEBUG} $(LDLIBS)
+bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -static -o $@ tests/setcontext.o ${DEBUG} $(LDLIBS)
 
-bin/test-static: tests/tests.o bin/libtealet.a
-	$(CC) $(LDFLAGS) -static -o $@ $< ${DEBUG} $(LDLIBS)
+bin/test-static: bin tests/tests.o bin/libtealet.a
+	$(CC) $(LDFLAGS) -static -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
 
-bin/test-dynamic: tests/tests.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -g -o $@ $< ${DEBUG} $(LDLIBS)
+bin/test-dynamic: bin tests/tests.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} $(LDLIBS)
