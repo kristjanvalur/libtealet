@@ -14,6 +14,126 @@ static tealet_t *g_main = NULL;
 static tealet_t *the_stub = NULL;
 static int newmode = 0;
 
+/* Runtime detection of stats support */
+static int g_stats_enabled = 0;
+static int stats_check_count = 0;
+static size_t stats_max_allocated = 0;
+static size_t stats_max_naive = 0;
+
+/* Check stats periodically during tests */
+static void check_stats(int verbose)
+{
+    tealet_stats_t stats;
+    
+    if (!g_stats_enabled)
+        return;
+    
+    stats_check_count++;
+    
+    tealet_get_stats(g_main, &stats);
+    
+    /* Track maximums */
+    if (stats.bytes_allocated > stats_max_allocated)
+        stats_max_allocated = stats.bytes_allocated;
+    if (stats.stack_bytes_naive > stats_max_naive)
+        stats_max_naive = stats.stack_bytes_naive;
+    
+    if (verbose) {
+        printf("Stats check #%d: %d active, %zu bytes allocated, %zu naive, %zu chunks\n",
+               stats_check_count, stats.n_active, stats.bytes_allocated, 
+               stats.stack_bytes_naive, stats.stack_chunk_count);
+    }
+    
+    /* Basic count invariants */
+    assert(stats.n_active >= 1); /* at least main */
+    assert(stats.n_total >= stats.n_active);
+    
+    /* Memory allocation invariants */
+    assert(stats.blocks_allocated_total >= stats.blocks_allocated);
+    assert(stats.bytes_allocated_peak >= stats.bytes_allocated);
+    assert(stats.blocks_allocated_peak >= stats.blocks_allocated);
+    
+    /* Stack storage invariants */
+    if (stats.stack_count > 0) {
+        /* Chunks must be at least as many as stacks (each stack has at least one chunk) */
+        assert(stats.stack_chunk_count >= stats.stack_count);
+        
+        /* Expanded size accounts for all chunks with overhead */
+        /* It should match the tracked bytes exactly */
+        assert(stats.stack_bytes_expanded == stats.stack_bytes);
+        
+        /* Relationship: actual <= expanded <= naive (approximately) */
+        /* - actual (stack_bytes): current usage with chunk sharing enabled */
+        /* - expanded (stack_bytes_expanded): usage if each tealet had its own chunks (no sharing) */
+        /* - naive (stack_bytes_naive): usage if we saved full stack extents */
+        /* Generally: actual <= expanded <= naive */
+        assert(stats.stack_bytes <= stats.stack_bytes_expanded);
+        
+        /* Expanded can be larger than naive due to chunk overhead */
+        /* Each stack has one initial chunk (embedded in tealet_stack_t structure) */
+        /* Additional chunks beyond the first add overhead for the chunk header */
+        /* Chunk header contains: next pointer, stack_near pointer, size field (~24 bytes) */
+        /* 
+         * Example: Stack with 2 chunks saving 288 bytes total
+         *   - naive = 64 (struct overhead) + 288 (extent) = 352 bytes
+         *   - expanded = 64 + 144 (chunk1) + 24 (chunk2 header) + 144 (chunk2 data) = 376 bytes
+         *   - difference = 24 bytes (one extra chunk header)
+         */
+        size_t extra_chunks = stats.stack_chunk_count - stats.stack_count;
+        size_t max_overhead = extra_chunks * 24;  /* approximate chunk header size */
+        if (stats.stack_bytes_expanded > stats.stack_bytes_naive + max_overhead) {
+            fprintf(stderr, "INVARIANT FAIL: expanded=%zu > naive=%zu + overhead=%zu (extra_chunks=%zu)\n",
+                    stats.stack_bytes_expanded, stats.stack_bytes_naive, max_overhead, extra_chunks);
+            fflush(stderr);
+        }
+        assert(stats.stack_bytes_expanded <= stats.stack_bytes_naive + max_overhead);
+        
+        /* If there's only one chunk per stack, expanded should equal naive (no overhead difference) */
+        if (stats.stack_chunk_count == stats.stack_count) {
+            assert(stats.stack_bytes_naive == stats.stack_bytes_expanded);
+        }
+    } else {
+        /* No stacks means all counters should be zero */
+        assert(stats.stack_bytes == 0);
+        assert(stats.stack_bytes_expanded == 0);
+        assert(stats.stack_bytes_naive == 0);
+        assert(stats.stack_chunk_count == 0);
+    }
+}
+
+static void print_final_stats(void)
+{
+    tealet_stats_t stats;
+    
+    if (!g_stats_enabled)
+        return;
+    
+    tealet_get_stats(g_main, &stats);
+    
+    printf("  Final: %d checks, peak %zu bytes, current %zu bytes allocated\n",
+           stats_check_count, stats_max_allocated, stats.bytes_allocated);
+    printf("    Naive: max %zu bytes, current %zu bytes\n",
+           stats_max_naive, stats.stack_bytes_naive);
+    
+    /* Show chunk sharing statistics */
+    if (stats.stack_chunk_count > 0 && stats.stack_count > 0) {
+        double sharing_ratio = (double)stats.stack_bytes_expanded / stats.stack_bytes;
+        printf("  Stack sharing: %zu stacks in %zu chunks (%.1fx expansion)\n",
+               stats.stack_count, stats.stack_chunk_count, sharing_ratio);
+    }
+    
+    if (stats.stack_bytes > 0 && stats.stack_bytes_naive > 0) {
+        double current_ratio = (double)stats.stack_bytes_naive / (double)stats.stack_bytes;
+        printf("    Current ratio: %.2fx (stack-slicing using %.1f%% of naive)\n", 
+               current_ratio, 100.0 / current_ratio);
+    }
+    
+    /* Reset for next test */
+    stats_check_count = 0;
+    stats_max_allocated = 0;
+    stats_max_naive = 0;
+}
+
 
 static tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
 static int talloc_fail = 0;
@@ -26,6 +146,7 @@ void *failmalloc(size_t size, void *context)
 
 
 void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
+    tealet_stats_t stats;
     assert(g_main == NULL);
     talloc.malloc_p = failmalloc;
     if (alloc == NULL)
@@ -36,6 +157,11 @@ void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
         assert(g_main->extra != NULL);
     else
         assert(g_main->extra == NULL);
+    
+    /* Detect if stats are enabled at runtime */
+    tealet_get_stats(g_main, &stats);
+    g_stats_enabled = (stats.blocks_allocated > 0);
+    
     status = 0;
 }
 
@@ -51,7 +177,9 @@ void fini_test() {
         tealet_delete(the_stub);
     the_stub = NULL;
     tealet_get_stats(g_main, &stats);
-    assert(stats.n_active == 1); /* main tealet  only */
+    if (g_stats_enabled) {
+        assert(stats.n_active == 1); /* main tealet  only */
+    }
     tealet_finalize(g_main);
     g_main = NULL;
 }
@@ -441,6 +569,11 @@ static void random_run(int index)
     {
       i = rand() % (ARRAYSIZE + 1);
       status += 1;
+      
+      /* Check stats periodically */
+      if (status % 100 == 0)
+          check_stats(0);
+      
       if (i == ARRAYSIZE)
         break;
       prevstatus = status;
@@ -501,6 +634,7 @@ void test_random(void)
     while (tealetarray[i] != NULL)
       random_run(0);
 
+  print_final_stats();
   fini_test();
 }
 
@@ -570,9 +704,14 @@ void random2_run(int index)
     int i;
     assert(tealetarray[index] == NULL || tealetarray[index] == tealet_current(g_main));
     tealetarray[index] = tealet_current(g_main);
-    for (i=0; i<N_RUNS; i++)
+    for (i=0; i<N_RUNS; i++) {
+        /* Check stats periodically */
+        if (status % 100 == 0)
+            check_stats(0);
+            
         if (random2_descend(index, rand() % (MAX_DESCEND+1)) == 0)
             break;
+    }
     tealetarray[index] = NULL;
 }
 
@@ -601,6 +740,7 @@ void test_random2(void)
             break;
     }
     tealetarray[0] = NULL;
+    print_final_stats();
     fini_test();
 }
 
@@ -653,6 +793,13 @@ void test_stats(void)
     tealet_stats_t stats;
     int a, b;
     init_test_extra(NULL, 0);
+    
+    /* Skip this test if stats are not enabled */
+    if (!g_stats_enabled) {
+        fini_test();
+        return;
+    }
+    
     tealet_get_stats(g_main, &stats);
     assert(stats.n_active == 1);
     assert(stats.n_total == 1);
