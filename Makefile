@@ -9,7 +9,7 @@
 VERSION = 0.2.0
 STACKMAN_VERSION = 1.2.0
 
-CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS)
+CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1
 CFLAGS += -fPIC -Wall $(PLATFORMFLAGS)
 LDFLAGS += -Lbin $(PLATFORMFLAGS)
 
@@ -77,7 +77,7 @@ endif
 .PHONY: test tests
 
 tests: bin/test-static bin/test-dynamic
-tests: bin/test-setcontext
+tests: bin/test-setcontext bin/test-chunks
 tests: export LD_RUN_PATH := bin
 
 test: tests
@@ -88,6 +88,12 @@ endif
 	$(EMULATOR) bin/test-setcontext > /dev/null
 	@echo "*** All test suites passed ***"
 
+# Multiple chunks and sharing test
+bin/test-chunks: bin tests/test_chunks.o bin/libtealet.a
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_chunks.o -ltealet
+
+tests/test_chunks.o: tests/test_chunks.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_chunks.c
 
 bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} -ltealet
