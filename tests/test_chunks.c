@@ -13,7 +13,6 @@
 #include "tealet.h"
 
 static tealet_t *g_main = NULL;
-static int switch_count = 0;
 
 /* Helper to recurse and consume stack space - NOT tail-recursive */
 static void consume_stack(int depth, char *buffer)

@@ -273,7 +273,6 @@ static tealet_t *worker_entry(tealet_t *current, void *arg)
 int main(int argc, char *argv[])
 {
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
-    void *arg = NULL;
     int i;
     
     /* Parse command line arguments */

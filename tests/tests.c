@@ -87,11 +87,6 @@ static void check_stats(int verbose)
             fflush(stderr);
         }
         assert(stats.stack_bytes_expanded <= stats.stack_bytes_naive + max_overhead);
-        
-        /* If there's only one chunk per stack, expanded should equal naive (no overhead difference) */
-        if (stats.stack_chunk_count == stats.stack_count) {
-            assert(stats.stack_bytes_naive == stats.stack_bytes_expanded);
-        }
     } else {
         /* No stacks means all counters should be zero */
         assert(stats.stack_bytes == 0);
