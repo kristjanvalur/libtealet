@@ -1138,7 +1138,7 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
      * Even the main tealet can fork if its far boundary has been set.
      */
     if (TEALET_IS_MAIN_STACK(g_current))
-        return -1;
+        return TEALET_ERR_UNFORKABLE;
     
     /* Current tealet must be active (we are currently executing it) */
     if (g_main->g_current != g_current)

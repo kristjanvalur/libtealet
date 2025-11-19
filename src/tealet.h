@@ -83,6 +83,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
  */
 #define TEALET_ERR_MEM -1       /* memory allocation failed */
 #define TEALET_ERR_DEFUNCT -2   /* the target tealet is corrupt */
+#define TEALET_ERR_UNFORKABLE -3 /* tealet cannot be forked (unbounded stack) */
 
 /* Initialize and return the main tealet.  The main tealet contains the whole
  * "normal" execution of the program; it starts when the program starts and
@@ -328,7 +329,10 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * Returns:
  *   Parent: 1
  *   Child: 0
- *   Error: -1 or other negative error code (TEALET_ERR_*)
+ *   Error: negative error code:
+ *     TEALET_ERR_UNFORKABLE if current tealet has unbounded stack
+ *     TEALET_ERR_MEM if memory allocation failed
+ *     TEALET_ERR_DEFUNCT if current tealet is not active
  */
 #define TEALET_FORK_DEFAULT 0
 #define TEALET_FORK_SWITCH  1
