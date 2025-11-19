@@ -1134,12 +1134,10 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     tealet_main_t *g_main = TEALET_GET_MAIN(g_current);
     tealet_sub_t *g_child;
     
-    /* Can't fork the main tealet */
-    if (TEALET_IS_MAIN(_current))
-        return -1;
-    
-    /* Main tealet must have a bounded stack (far boundary set) */
-    if (TEALET_IS_MAIN_STACK((tealet_sub_t*)g_main))
+    /* Current tealet must have a bounded stack (far boundary set).
+     * Even the main tealet can fork if its far boundary has been set.
+     */
+    if (TEALET_IS_MAIN_STACK(g_current))
         return -1;
     
     /* Current tealet must be active (we are currently executing it) */

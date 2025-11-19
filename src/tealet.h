@@ -297,8 +297,8 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * switching.
  * 
  * Prerequisites:
- * - Can only be called from a non-main tealet
- * - The main tealet must have had its far boundary set via tealet_set_far()
+ * - The current tealet must have a bounded stack (far boundary set via
+ *   tealet_set_far()). This applies to both main and non-main tealets.
  * - The current tealet must be active (not suspended)
  * 
  * Flags:
