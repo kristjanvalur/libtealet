@@ -1160,13 +1160,12 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
      * switching to avoid changing the current tealet.
      * 
      * The trick: temporarily set g_target to the child, trigger the save,
-     * then duplicate the saved stack for the child.
+     * then transfer the saved stack to the child.
      */
     {
         void *old_sp;
         tealet_sub_t *saved_target = g_main->g_target;
         tealet_sub_t *saved_previous = g_main->g_previous;
-        tealet_stack_t *saved_stack;
         
         /* Prepare for a "fake" switch to child to trigger stack save */
         g_main->g_target = g_child;
@@ -1185,14 +1184,7 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
         }
         
         /* Now g_current->stack contains the saved stack */
-        saved_stack = g_current->stack;
-        assert(saved_stack != NULL);
-        
-        /* Duplicate the stack for the child */
-        g_child->stack = tealet_stack_dup(saved_stack);
-        
-        /* Restore the saved stack pointer back to current (we're not really switching) */
-        g_current->stack = saved_stack;
+        assert(g_current->stack != NULL);
         
         /* Restore g_main state */
         g_main->g_target = saved_target;
@@ -1205,25 +1197,20 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     
     /* If TEALET_FORK_SWITCH flag is set, switch to the child immediately */
     if (flags & TEALET_FORK_SWITCH) {
-        void *dummy_arg = NULL;
-        int switch_result = tealet_switch((tealet_t *)g_child, &dummy_arg);
-        if (switch_result < 0) {
-            /* Switch failed - clean up and return error */
-            tealet_delete((tealet_t *)g_child);
-            return -1;
-        }
-        /* We've returned from the child - we are now in the parent */
-        /* The child will execute below and return 0 */
-    }
-    
-    /* At this point, we need to determine if we're the parent or child.
-     * After a switch (if TEALET_FORK_SWITCH was set), g_current would have
-     * changed. If current tealet is g_child, we're the child. Otherwise parent.
-     */
-    if (g_main->g_current == g_child) {
-        /* We are the child - return 0 */
+        /* Transfer ownership: child takes the stack, parent keeps it too (shared) */
+        g_child->stack = tealet_stack_dup(g_current->stack);
+        
+        /* Switch to child by just changing g_current - no actual stack restore needed */
+        g_main->g_previous = g_current;
+        g_main->g_current = g_child;
+        
+        /* We are now the child - return 0 */
         return 0;
     } else {
+        /* Not switching: transfer the stack from parent to child */
+        g_child->stack = g_current->stack;
+        g_current->stack = NULL;
+        
         /* We are the parent - store child pointer if requested and return 1 */
         if (pchild != NULL)
             *pchild = (tealet_t *)g_child;
