@@ -111,3 +111,40 @@ bin/test-static: bin tests/tests.o bin/libtealet.a
 
 bin/test-dynamic: bin tests/tests.o bin/libtealet.so
 	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} -ltealet
+
+# Sanitizer tests - run on single platform for sanity checking
+.PHONY: test-sanitizers test-ubsan test-valgrind
+
+# Note: AddressSanitizer is incompatible with stack-slicing.
+# ASan tracks stack boundaries and reports false positives when we
+# save/restore stack data to/from the heap. Use Valgrind instead for
+# memory leak detection.
+
+# UndefinedBehaviorSanitizer - detects undefined behavior
+test-ubsan: clean
+	@echo "=== Building with UndefinedBehaviorSanitizer ==="
+	$(MAKE) bin/test-static bin/test-setcontext bin/test-stochastic \
+		CFLAGS="-fPIC -Wall $(PLATFORMFLAGS) -g -fsanitize=undefined -fno-omit-frame-pointer" \
+		LDFLAGS="-Lbin -L$(LIB) $(PLATFORMFLAGS) -fsanitize=undefined" \
+		STATIC_FLAG=""
+	@echo "=== Running tests with UBSan ==="
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-static
+	LD_LIBRARY_PATH=bin UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-setcontext
+	LD_LIBRARY_PATH=bin UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-stochastic -n 100
+	@echo "*** UBSan tests passed ***"
+
+# Valgrind - comprehensive memory checking
+test-valgrind: tests
+	@echo "=== Running tests with Valgrind ==="
+	@which valgrind > /dev/null || (echo "ERROR: valgrind not installed" && exit 1)
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+		--errors-for-leak-kinds=all --undef-value-errors=no bin/test-static
+	LD_LIBRARY_PATH=bin valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+		--errors-for-leak-kinds=all --undef-value-errors=no bin/test-setcontext
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+		--errors-for-leak-kinds=all --undef-value-errors=no bin/test-stochastic -n 100
+	@echo "*** Valgrind tests passed ***"
+
+# Run all sanitizer tests
+test-sanitizers: test-ubsan test-valgrind
+	@echo "*** All sanitizer tests passed ***"
