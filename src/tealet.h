@@ -310,8 +310,9 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * This allows both parent and child to reference each other for switching.
  * 
  * Prerequisites:
- * - The current tealet must have a bounded stack (far boundary set via
- *   tealet_set_far()). This applies to both main and non-main tealets.
+ * - The current tealet must be either:
+ *   a) A regular (non-main) tealet, OR
+ *   b) The main tealet with a bounded stack (far boundary set via tealet_set_far())
  * - The current tealet must be active (not suspended)
  * 
  * Flags:
