@@ -1156,11 +1156,11 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     /* Copy the far boundary */
     g_child->stack_far = g_current->stack_far;
     
-    /* Save the current tealet's stack by doing a fake switch to main.
+    /* Save the current tealet's stack by setting up a fake switch to the child.
      * We use the same mechanism as tealet_switch, but we'll abort before
      * actually switching to avoid changing the current tealet.
      * 
-     * The trick: we'll temporarily set g_target to main, trigger the save,
+     * The trick: we'll temporarily set g_target to the child, trigger the save,
      * then duplicate the saved stack for the child.
      */
     {
@@ -1169,8 +1169,8 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
         tealet_sub_t *saved_previous = g_main->g_previous;
         tealet_stack_t *saved_stack;
         
-        /* Prepare for a "fake" switch to main to trigger stack save */
-        g_main->g_target = (tealet_sub_t *)g_main;
+        /* Prepare for a "fake" switch to child to trigger stack save */
+        g_main->g_target = g_child;
         g_main->g_previous = g_current;
         
         /* Get the current stack pointer (approximately) */
