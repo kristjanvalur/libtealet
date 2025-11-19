@@ -134,7 +134,7 @@ test-ubsan: clean
 	@echo "*** UBSan tests passed ***"
 
 # Valgrind - comprehensive memory checking
-test-valgrind: tests
+test-valgrind: clean tests
 	@echo "=== Running tests with Valgrind ==="
 	@which valgrind > /dev/null || (echo "ERROR: valgrind not installed" && exit 1)
 	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
