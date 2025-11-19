@@ -89,6 +89,19 @@ heap, and not via stack-local variables.
 
 No form of scheduler is implemented.
 
+## Advanced: Fork-like Semantics
+
+In addition to the traditional approach where each tealet exists within the execution scope of a function (created via `tealet_new()` or `tealet_create()`), libtealet now supports **Unix-like fork semantics** through `tealet_fork()`.
+
+This functionality was available in Stackless Python but has historically been omitted from this library to maintain the clean discipline of function-scoped coroutines. `tealet_fork()` breaks out of this restriction, enabling more dynamic coroutine creation patterns.
+
+**Important responsibilities when using fork:**
+- **Stack boundaries must be set**: Call `tealet_set_far()` to establish a stack boundary before forking, ensuring the forked execution doesn't exceed the promised scope
+- **Explicit exit required**: Forked tealets have no run function to return from, so they **must** explicitly exit using `tealet_exit()` (without the `TEALET_FLAG_DEFER` flag)
+- **Scope discipline**: All switching must occur within the bounded stack region defined by the `far` boundary
+
+This feature enables advanced use cases like coroutine cloning and continuation capture, but requires careful management of stack boundaries and explicit lifetime control.
+
 ## Documentation
 
 - **[Getting Started](docs/GETTING_STARTED.md)** - Installation, examples, common patterns
