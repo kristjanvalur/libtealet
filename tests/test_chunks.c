@@ -9,6 +9,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "tealet.h"
 
 static tealet_t *g_main = NULL;
