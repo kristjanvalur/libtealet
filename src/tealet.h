@@ -292,10 +292,10 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * - In the child tealet: returns 0
  * - On error: returns -1 (or other negative TEALET_ERR_* code)
  * 
- * If pchild is non-NULL, it will be filled with a pointer to the newly created
- * child tealet when called from the parent. In the child context, *pchild is
- * unchanged. This allows the parent to reference the child tealet for later
- * switching.
+ * If pchild is non-NULL, it will be filled with a pointer to the other tealet:
+ * - In the parent: points to the newly created child tealet
+ * - In the child: points to the parent tealet
+ * This allows both parent and child to reference each other for switching.
  * 
  * Prerequisites:
  * - The current tealet must have a bounded stack (far boundary set via
@@ -337,7 +337,7 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
 #define TEALET_FORK_DEFAULT 0
 #define TEALET_FORK_SWITCH  1
 TEALET_API
-int tealet_fork(tealet_t *current, tealet_t **pchild, int flags);
+int tealet_fork(tealet_t *current, tealet_t **pother, int flags);
 
 /* this is used to get the "far address _if_ a tealet were initialized here
  * The arguments must match the real tealet_new() but are dummies.

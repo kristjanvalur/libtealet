@@ -119,7 +119,11 @@ typedef struct tealet_main_t {
   double _extra[1];         /* start of any extra data */
 } tealet_main_t;
 
-#define TEALET_IS_MAIN_STACK(t)  (((tealet_sub_t *)(t))->stack_far == STACKMAN_SP_FURTHEST)
+/* Check if a tealet has an unbounded stack (FURTHEST sentinel).
+ * Only one tealet can have an unbounded stack at a time (the active one on the C stack).
+ * All other tealets must have bounded stacks (stack_far set to a specific boundary).
+ */
+#define TEALET_STACK_IS_UNBOUNDED(t)  (((tealet_sub_t *)(t))->stack_far == STACKMAN_SP_FURTHEST)
 #define TEALET_GET_MAIN(t)     ((tealet_main_t *)(((tealet_t *)(t))->main))
 
 /************************************************************
@@ -416,6 +420,11 @@ static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char*
 
     if (fail_ok)
         return fail; /* caller can deal with failures */
+    
+    /* Check if this is main's stack - we cannot mark main as defunct */
+    if (stack == ((tealet_sub_t*)main)->stack)
+        return fail; /* force the operation to fail, will redirect to main */
+    
     /* we cannot fail.  Mark this stack as defunct and continue */
     tealet_stack_defunct(main, stack);
     *full = 1;
@@ -491,21 +500,21 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer)
     fail_ok = !exiting;
 
     /* save and unlink older stacks on demand */
-    /* when coming from main, there should be no list of unsaved stacks */
-    if (TEALET_IS_MAIN_STACK(g_main->g_current)) {
+    /* when coming from unbounded stack, there should be no list of unsaved stacks */
+    if (TEALET_STACK_IS_UNBOUNDED(g_main->g_current)) {
         assert(!exiting);
         assert(g_main->g_prev == NULL);
     }
     fail = tealet_stack_grow_list(g_main, g_main->g_prev, target_stop, g_target->stack, fail_ok);
     if (fail)
         return -1;
-    /* when returning to main, there should now be no list of unsaved stacks */
-    if (TEALET_IS_MAIN_STACK(g_main->g_target))
+    /* when returning to unbounded stack, there should now be no list of unsaved stacks */
+    if (TEALET_STACK_IS_UNBOUNDED(g_main->g_target))
         assert(g_main->g_prev == NULL);
     
     if (exiting) {
         /* tealet is exiting. We don't save its stack. */
-        assert(!TEALET_IS_MAIN_STACK(g_current));
+        assert(!TEALET_IS_MAIN((tealet_t *)g_current));
         if (g_current->stack == NULL) {
             /* auto-delete the tealet */
 #if TEALET_WITH_STATS
@@ -525,13 +534,14 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer)
         if (!stack) {
             if (fail_ok)
                 return -1;
-            assert(!TEALET_IS_MAIN_STACK(g_current));
+            /* Main tealet's stack must always be saveable - can't mark it defunct */
+            assert(!TEALET_IS_MAIN((tealet_t *)g_current));
             g_current->stack = (tealet_stack_t *)-1; /* signal invalid stack */
         } else {
             g_current->stack = stack;
             /* if it is partially saved, link it in to previous stacks */
-            if (TEALET_IS_MAIN_STACK(g_current))
-                assert(!full); /* always link in the main tealet's stack */
+            if (TEALET_STACK_IS_UNBOUNDED(g_current))
+                assert(!full); /* unbounded stack is never fully saved */
             if (!full)
                 tealet_stack_link(stack, &g_main->g_prev);
         }
@@ -778,14 +788,14 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_stack_count = 0;
     g_main->g_stack_chunk_count = 0;
 #endif
-    assert(TEALET_IS_MAIN_STACK(g_main));
+    assert(TEALET_IS_MAIN((tealet_t *)g_main));
     return (tealet_t *)g_main;
 }
 
 void tealet_finalize(tealet_t *tealet)
 {
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-    assert(TEALET_IS_MAIN_STACK(g_main));
+    assert(TEALET_IS_MAIN(tealet));
     assert(g_main->g_current == (tealet_sub_t *)g_main);
     tealet_int_free(g_main, g_main);
 }
@@ -810,7 +820,6 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
     tealet_sub_t *result; /* store this until we return */
     int fail;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-    assert(TEALET_IS_MAIN_STACK(g_main));
     assert(!g_main->g_target);
     result = tealet_alloc(g_main);
     if (result == NULL)
@@ -839,7 +848,6 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
     int fail;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     tealet_sub_t *previous = g_main->g_previous;
-    assert(TEALET_IS_MAIN_STACK(g_main));
     assert(!g_main->g_target);
     result = tealet_alloc(g_main);
     if (result == NULL)
@@ -1128,19 +1136,18 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
     return 0;
 }
 
-int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
+int tealet_fork(tealet_t *_current, tealet_t **pother, int flags)
 {
     tealet_sub_t *g_current = (tealet_sub_t *)_current;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_current);
+    tealet_sub_t *previous;
     tealet_sub_t *g_child;
-    void *old_sp;
-    tealet_sub_t *saved_target;
-    tealet_sub_t *saved_previous;
+    int result;
     
     /* Current tealet must have a bounded stack (far boundary set).
      * Even the main tealet can fork if its far boundary has been set.
      */
-    if (TEALET_IS_MAIN_STACK(g_current))
+    if (TEALET_STACK_IS_UNBOUNDED(g_current))
         return TEALET_ERR_UNFORKABLE;
     
     /* Current tealet must be active (we are currently executing it) */
@@ -1154,98 +1161,79 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     g_child = tealet_alloc(g_main);
     if (g_child == NULL)
         return TEALET_ERR_MEM;
-    
-    /* Copy the far boundary */
-    g_child->stack_far = g_current->stack_far;
-    
-    /* Save the current tealet's stack by setting up a fake switch to the child.
-     * We just need to save, not switch. When we return from tealet_save_state(),
-     * check if g_target is still g_child:
-     * - If yes: we just saved (parent path)
-     * - If no: we've been switched to later (child path, g_target was cleared)
-     */
-    saved_target = g_main->g_target;
-    saved_previous = g_main->g_previous;
-    
-    /* Prepare for stack save */
-    g_main->g_target = g_child;
-    g_main->g_previous = g_current;
-    
-    /* Get the current stack pointer (approximately) */
-    old_sp = &old_sp;
-    
-    /* Save the current stack */
-    if (tealet_save_state(g_main, old_sp) < 0) {
-        /* Failed to save stack */
-        g_main->g_target = saved_target;
-        g_main->g_previous = saved_previous;
-        tealet_free_tealet(g_main, g_child);
-        return TEALET_ERR_MEM;
-    }
-    
-    /* Check if we're being resumed (child) or just saved (parent).
-     * When tealet_switch() switches to this child tealet later, it will
-     * call tealet_switchstack() which clears g_target to NULL after updating
-     * g_current. So if g_target is not g_child anymore, we've been switched to.
-     */
-    if (g_main->g_target != g_child) {
-        /* We are the child tealet being switched to.
-         * g_current has been updated to g_child by tealet_switchstack.
-         * Our stack was restored, so it should now be NULL (we're executing).
-         */
-        assert(g_main->g_current == g_child);
-        assert(g_child->stack == NULL);
-        
-        /* Return parent pointer if requested */
-        if (pchild != NULL)
-            *pchild = (tealet_t *)g_current;
-        return 0;
-    }
-    
-    /* We are the parent - just finished saving.
-     * Now g_current->stack contains the saved stack.
-     */
-    assert(g_current->stack != NULL);
-    
-    /* Restore g_main state */
-    g_main->g_target = saved_target;
-    g_main->g_previous = saved_previous;
-    
+
     /* Copy extra data if present */
     if (g_main->g_extrasize)
         memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
     
-    /* Transfer or share the stack based on flags */
+    /* Copy the far boundary */
+    g_child->stack_far = g_current->stack_far;
+    
+    /* Save the current execution state into the child tealet.
+     * Like tealet_create(), we temporarily set g_current = child, g_target = parent.
+     * switchstack will save the execution context into g_current->stack (child),
+     * then set g_current back to g_target (parent).
+     * We preserve g_previous since this isn't a "real" switch.
+     */
+    previous = g_main->g_previous;
+    g_main->g_target = g_current;    /* Parent becomes target */
+    g_main->g_current = g_child;     /* Child becomes current (temporarily) */
+    
+    /* Save the parent's execution state into child's stack */
+    result = tealet_switchstack(g_main);
+    
+    /* Restore g_previous - fork is not a real switch, just saving state */
+    g_main->g_previous = previous;
+    
+    if (result < 0) {
+        /* Failed to save stack */
+        tealet_free_tealet(g_main, g_child);
+        return TEALET_ERR_MEM;
+    }
+
+    /* At this point, switchstack has already set g_current back to parent via g_target.
+     * result == 1: We are in the save-only path (just saved the state)
+     * result == 0: We are being restored (someone switched to the child)
+     */
+    
     if (flags & TEALET_FORK_SWITCH) {
-        /* Switch to child: both parent and child share the stack */
-        g_child->stack = tealet_stack_dup(g_current->stack);
-        
-        /* Now switch to the child */
-        g_main->g_target = g_child;
-        {
-            int result = tealet_switchstack(g_main);
-            if (result < 0)
-                return result;
-        }
-        
-        /* We are now the child (g_current was updated by tealet_switchstack).
-         * Clear our stack (we're executing) and return parent pointer.
-         */
-        assert(g_main->g_current == g_child);
-        tealet_stack_decref(g_main, g_child->stack);
-        g_child->stack = NULL;
-        if (pchild != NULL)
-            *pchild = (tealet_t *)g_current;
-        return 0;
+        /* The caller wants to start running as the child immediately */
+        if (result == 1) {
+            /* We just saved the state. Now transfer control to the child.
+             * Transfer the stack from child to parent, so parent becomes suspended
+             * and child is active (running on the C stack).
+             */
+            g_current->stack = g_child->stack;  /* Parent gets the saved stack */
+            g_child->stack = NULL;              /* Child is now active on C stack */
+            
+            if (pother != NULL)
+                *pother = (tealet_t *)g_current; /* the parent in this case */
+            g_main->g_current = g_child;
+            return 0;  /* Caller is now the child */
+         }
+         /* We are being restored back as the parent (someone switched to it) */
+         assert(result == 0);
+         if (pother != NULL)
+             *pother = (tealet_t *)g_child;
+         return 1;  /* Caller is the parent being restored */
     } else {
-        /* Not switching: transfer the stack from parent to child */
-        g_child->stack = g_current->stack;
-        g_current->stack = NULL;
-        
-        /* We are the parent - store child pointer if requested and return 1 */
-        if (pchild != NULL)
-            *pchild = (tealet_t *)g_child;
-        return 1;
+        /* The caller wants to continue running as the parent (default) */
+        if (result == 1) {
+            /* We just saved the state into child. Continue as parent.
+             * Parent gets pointer to child.
+             */
+            assert(g_main->g_current == g_current);  /* Should be back to parent */
+            if (pother != NULL)
+                *pother = (tealet_t *)g_child;
+            return 1;  /* Caller is parent, child was created */
+        }
+        /* We are the child being restored (someone switched to it)
+         * Child gets pointer to parent.
+         */
+        assert(result == 0);
+        if (pother != NULL)
+            *pother = (tealet_t *)g_current;
+        return 0;  /* Caller is the child being restored */
     }
 }
 
