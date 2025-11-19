@@ -138,7 +138,7 @@ bin/test-dynamic: bin tests/tests.o bin/libtealet.so
 # UndefinedBehaviorSanitizer - detects undefined behavior
 test-ubsan: clean
 	@echo "=== Building with UndefinedBehaviorSanitizer ==="
-	$(MAKE) bin/test-static bin/test-setcontext bin/test-stochastic \
+	$(MAKE) bin/test-static bin/test-setcontext bin/test-stochastic bin/test-fork \
 		CFLAGS="-fPIC -Wall $(PLATFORMFLAGS) -g -fsanitize=undefined -fno-omit-frame-pointer" \
 		LDFLAGS="-Lbin -L$(LIB) $(PLATFORMFLAGS) -fsanitize=undefined" \
 		STATIC_FLAG=""
@@ -146,6 +146,7 @@ test-ubsan: clean
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-static
 	LD_LIBRARY_PATH=bin UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-setcontext
 	LD_LIBRARY_PATH=bin UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-stochastic -n 100
+	LD_LIBRARY_PATH=bin UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 bin/test-fork
 	@echo "*** UBSan tests passed ***"
 
 # Valgrind - comprehensive memory checking
@@ -158,6 +159,8 @@ test-valgrind: clean tests
 		--errors-for-leak-kinds=all --undef-value-errors=no bin/test-setcontext
 	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
 		--errors-for-leak-kinds=all --undef-value-errors=no bin/test-stochastic -n 100
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+		--errors-for-leak-kinds=all --undef-value-errors=no bin/test-fork
 	@echo "*** Valgrind tests passed ***"
 
 # Run all sanitizer tests
