@@ -1,7 +1,7 @@
 #include "tools.h"
 
 /* the stats allocator, used to collect memory usage statistics */
-void *
+static void *
 tealet_statsalloc_malloc(size_t size, void *context)
 {
     size_t nsize;
@@ -18,7 +18,7 @@ tealet_statsalloc_malloc(size_t size, void *context)
     return result;
 }
 
-void
+static void
 tealet_statsalloc_free(void *ptr, void *context)
 {
     size_t size;

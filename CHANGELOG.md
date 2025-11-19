@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Memory statistics API**: New `tealet_get_stats()` function for tracking memory usage
+  - Tracks allocated bytes and blocks (current and peak)
+  - Counts active tealets
+  - Stack memory metrics: bytes, stacks, chunks
+  - Memory efficiency tracking: actual vs naive allocation
+  - Expanded vs naive byte comparisons for multi-chunk analysis
+- **Statistics reset API**: `tealet_reset_peak_stats()` to reset peak counters
+- **Test suite enhancements**: New comprehensive tests
+  - `test_chunks.c`: Validates multiple chunks per stack and chunk tracking
+  - `test_stochastic.c`: Realistic usage simulation with stochastic behavior
+    - Dynamic tealet lifecycle (create/exit during execution)
+    - Recursive workers with random decisions (recurse/return/switch/spawn/exit)
+    - Two shutdown modes: clean (unwind stacks) and immediate (delete active)
+    - Command-line configurable (operations, depth, verbose mode)
+    - Demonstrates statistics API and voluntary exit patterns
+
+### Changed
+- **Statistics enabled by default**: `TEALET_WITH_STATS=1` now defined in Makefile
+- **Test suite integration**: Both new tests integrated into `make test` target
+
 ## [0.2.0] - 2025-11-17
 
 ### Summary

@@ -120,9 +120,11 @@ typedef struct tealet_sub_t {
 - `tealet_stack_t*`: Saved stack data
 
 **stack_far** indicates:
-- Valid pointer: Normal tealet
+- Valid pointer: Normal tealet (bounded stack extent)
 - `NULL`: Tealet is exiting
-- `STACKMAN_SP_FURTHEST`: Main tealet (extends to stack bottom)
+- `STACKMAN_SP_FURTHEST`: Unbounded stack (main tealet)
+
+The main tealet uses `STACKMAN_SP_FURTHEST` because it runs on the process's original C stack, which could theoretically extend all the way to the start of the process. This special value means "save as much as needed" without a predefined limit. When computing stack statistics, tealets with `STACKMAN_SP_FURTHEST` have their naive size calculated from actual saved chunks rather than the full theoretical extent (which would be the entire address space).
 
 ### tealet_main_t - Master Tealet
 
@@ -346,9 +348,11 @@ A tealet progresses through these states:
 - `(tealet_stack_t*)-1`: Defunct (corrupt)
 
 **stack_far pointer:**
-- Valid address: Normal state
+- Valid address: Normal bounded stack
 - `NULL`: Exiting (run function returning)
-- `STACKMAN_SP_FURTHEST`: Main tealet
+- `STACKMAN_SP_FURTHEST`: Unbounded stack (typically main tealet)
+
+The special value `STACKMAN_SP_FURTHEST` represents an unbounded stack extent, used by the main tealet since it runs on the original process stack with no predetermined limit.
 
 ### Defunct State
 
