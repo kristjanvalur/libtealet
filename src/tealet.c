@@ -1133,6 +1133,9 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     tealet_sub_t *g_current = (tealet_sub_t *)_current;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_current);
     tealet_sub_t *g_child;
+    void *old_sp;
+    tealet_sub_t *saved_target;
+    tealet_sub_t *saved_previous;
     
     /* Current tealet must have a bounded stack (far boundary set).
      * Even the main tealet can fork if its far boundary has been set.
@@ -1156,82 +1159,84 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     g_child->stack_far = g_current->stack_far;
     
     /* Save the current tealet's stack by setting up a fake switch to the child.
-     * We use the same mechanism as tealet_switch, but abort before actually
-     * switching to avoid changing the current tealet.
-     * 
-     * The trick: temporarily set g_target to the child, trigger the save,
-     * then transfer the saved stack to the child.
+     * We just need to save, not switch. When we return from tealet_save_state(),
+     * check if g_target is still g_child:
+     * - If yes: we just saved (parent path)
+     * - If no: we've been switched to later (child path, g_target was cleared)
      */
-    {
-        void *old_sp;
-        tealet_sub_t *saved_target = g_main->g_target;
-        tealet_sub_t *saved_previous = g_main->g_previous;
-        
-        /* Prepare for a "fake" switch to child to trigger stack save */
-        g_main->g_target = g_child;
-        g_main->g_previous = g_current;
-        
-        /* Get the current stack pointer (approximately) */
-        old_sp = &old_sp;
-        
-        /* Save the current stack */
-        if (tealet_save_state(g_main, old_sp) < 0) {
-            /* Failed to save stack */
-            g_main->g_target = saved_target;
-            g_main->g_previous = saved_previous;
-            tealet_free_tealet(g_main, g_child);
-            return TEALET_ERR_MEM;
-        }
-        
-        /* Now g_current->stack contains the saved stack */
-        assert(g_current->stack != NULL);
-        
-        /* Restore g_main state */
+    saved_target = g_main->g_target;
+    saved_previous = g_main->g_previous;
+    
+    /* Prepare for stack save */
+    g_main->g_target = g_child;
+    g_main->g_previous = g_current;
+    
+    /* Get the current stack pointer (approximately) */
+    old_sp = &old_sp;
+    
+    /* Save the current stack */
+    if (tealet_save_state(g_main, old_sp) < 0) {
+        /* Failed to save stack */
         g_main->g_target = saved_target;
         g_main->g_previous = saved_previous;
+        tealet_free_tealet(g_main, g_child);
+        return TEALET_ERR_MEM;
     }
+    
+    /* Check if we're being resumed (child) or just saved (parent).
+     * When tealet_switch() switches to this child tealet later, it will
+     * call tealet_switchstack() which clears g_target to NULL after updating
+     * g_current. So if g_target is not g_child anymore, we've been switched to.
+     */
+    if (g_main->g_target != g_child) {
+        /* We are the child tealet being switched to.
+         * g_current has been updated to g_child by tealet_switchstack.
+         * Our stack was restored, so it should now be NULL (we're executing).
+         */
+        assert(g_main->g_current == g_child);
+        assert(g_child->stack == NULL);
+        
+        /* Return parent pointer if requested */
+        if (pchild != NULL)
+            *pchild = (tealet_t *)g_current;
+        return 0;
+    }
+    
+    /* We are the parent - just finished saving.
+     * Now g_current->stack contains the saved stack.
+     */
+    assert(g_current->stack != NULL);
+    
+    /* Restore g_main state */
+    g_main->g_target = saved_target;
+    g_main->g_previous = saved_previous;
     
     /* Copy extra data if present */
     if (g_main->g_extrasize)
         memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
     
-    /* If TEALET_FORK_SWITCH flag is set, switch to the child immediately */
+    /* Transfer or share the stack based on flags */
     if (flags & TEALET_FORK_SWITCH) {
-        int result;
-        
-        /* Share the stack between parent and child */
+        /* Switch to child: both parent and child share the stack */
         g_child->stack = tealet_stack_dup(g_current->stack);
         
-        /* Clear parent's stack (it's currently executing) */
-        tealet_stack_decref(g_main, g_current->stack);
-        g_current->stack = NULL;
-        
-        /* Switch to the child using tealet_switchstack mechanism.
-         * This will return twice:
-         * - First in the parent (before switch): g_current is still parent
-         * - Second in the child (after switch): g_current has been updated to g_child
-         */
+        /* Now switch to the child */
         g_main->g_target = g_child;
-        result = tealet_switchstack(g_main);
-        if (result < 0)
-            return result;
-        
-        /* Now we check which tealet we are by comparing current with target */
-        if (g_main->g_current == g_child) {
-            /* We are the child - clear our saved stack and return child pointer */
-            assert(g_child->stack != NULL);
-            tealet_stack_decref(g_main, g_child->stack);
-            g_child->stack = NULL;
-            if (pchild != NULL)
-                *pchild = (tealet_t *)g_current;  /* Return parent pointer */
-            return 0;
-        } else {
-            /* We are the parent - return child pointer */
-            assert(g_main->g_current == g_current);
-            if (pchild != NULL)
-                *pchild = (tealet_t *)g_child;
-            return 1;
+        {
+            int result = tealet_switchstack(g_main);
+            if (result < 0)
+                return result;
         }
+        
+        /* We are now the child (g_current was updated by tealet_switchstack).
+         * Clear our stack (we're executing) and return parent pointer.
+         */
+        assert(g_main->g_current == g_child);
+        tealet_stack_decref(g_main, g_child->stack);
+        g_child->stack = NULL;
+        if (pchild != NULL)
+            *pchild = (tealet_t *)g_current;
+        return 0;
     } else {
         /* Not switching: transfer the stack from parent to child */
         g_child->stack = g_current->stack;
