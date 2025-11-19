@@ -28,12 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Statistics enabled by default**: `TEALET_WITH_STATS=1` now defined in Makefile
 - **Test suite integration**: Both new tests integrated into `make test` target
 
-### Fixed
-- **Compiler warnings**: Removed unused variables in test files
-- **Invalid assertion**: Removed incorrect assumption that single-chunk stacks have `naive == expanded`
-  - Chunks may be partially saved (not to full extent), causing `expanded < naive`
-- **Missing header**: Added `<stdint.h>` to `test_chunks.c` for `intptr_t` portability
-
 ## [0.2.0] - 2025-11-17
 
 ### Summary
