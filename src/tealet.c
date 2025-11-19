@@ -1197,15 +1197,41 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     
     /* If TEALET_FORK_SWITCH flag is set, switch to the child immediately */
     if (flags & TEALET_FORK_SWITCH) {
-        /* Transfer ownership: child takes the stack, parent keeps it too (shared) */
+        int result;
+        
+        /* Share the stack between parent and child */
         g_child->stack = tealet_stack_dup(g_current->stack);
         
-        /* Switch to child by just changing g_current - no actual stack restore needed */
-        g_main->g_previous = g_current;
-        g_main->g_current = g_child;
+        /* Clear parent's stack (it's currently executing) */
+        tealet_stack_decref(g_main, g_current->stack);
+        g_current->stack = NULL;
         
-        /* We are now the child - return 0 */
-        return 0;
+        /* Switch to the child using tealet_switchstack mechanism.
+         * This will return twice:
+         * - First in the parent (before switch): g_current is still parent
+         * - Second in the child (after switch): g_current has been updated to g_child
+         */
+        g_main->g_target = g_child;
+        result = tealet_switchstack(g_main);
+        if (result < 0)
+            return result;
+        
+        /* Now we check which tealet we are by comparing current with target */
+        if (g_main->g_current == g_child) {
+            /* We are the child - clear our saved stack and return child pointer */
+            assert(g_child->stack != NULL);
+            tealet_stack_decref(g_main, g_child->stack);
+            g_child->stack = NULL;
+            if (pchild != NULL)
+                *pchild = (tealet_t *)g_current;  /* Return parent pointer */
+            return 0;
+        } else {
+            /* We are the parent - return child pointer */
+            assert(g_main->g_current == g_current);
+            if (pchild != NULL)
+                *pchild = (tealet_t *)g_child;
+            return 1;
+        }
     } else {
         /* Not switching: transfer the stack from parent to child */
         g_child->stack = g_current->stack;
