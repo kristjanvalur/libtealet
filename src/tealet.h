@@ -163,14 +163,26 @@ int tealet_switch(tealet_t *target, void **parg);
  * Returning with 'p' from the tealet's run function is equivalent to calling
  * tealet_exit(p, NULL, TEALET_FLAG_DELETE), but the explicit way is
  * recommended.
- * If the TEALET_FLAG_DEFER flag is set, then this function merely sets the
+ * If the TEALET_EXIT_DEFER flag is set, then this function merely sets the
  * flag and arg values.  It returns 0, and the calling function can proceed to
  * return with 'p' from its run() function.  This is useful if a clean "return" is desired,
  * for example to call destructors.
+ * 
+ * Flags:
+ * - TEALET_EXIT_DEFAULT (0): Don't auto-delete, requires manual tealet_delete()
+ * - TEALET_EXIT_DELETE: Auto-delete the exiting tealet
+ * - TEALET_EXIT_DEFER: Defer exit until run function returns (for cleanup)
  */
-#define TEALET_FLAG_NONE 0
-#define TEALET_FLAG_DELETE 1
-#define TEALET_FLAG_DEFER 2
+/* Exit flags */
+#define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
+#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
+#define TEALET_EXIT_DEFER   2  /* Defer exit to return statement */
+
+/* Backwards compatibility - old flag names */
+#define TEALET_FLAG_NONE   TEALET_EXIT_DEFAULT
+#define TEALET_FLAG_DELETE TEALET_EXIT_DELETE
+#define TEALET_FLAG_DEFER  TEALET_EXIT_DEFER
+
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
 
@@ -315,7 +327,7 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * Important: Forked tealets do not have a run function like tealets created
  * with tealet_new() or tealet_create(). Therefore, a forked tealet MUST exit
  * using tealet_exit() with an explicit target, and must NOT use the 
- * TEALET_FLAG_DEFER flag. Simply returning from the forked context is not
+ * TEALET_EXIT_DEFER flag. Simply returning from the forked context is not
  * valid and will lead to undefined behavior.
  * 
  * Example:

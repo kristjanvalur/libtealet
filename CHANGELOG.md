@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Clarifies that it checks for unbounded stack boundary, not main tealet identity
   - Critical distinction after fork allows main to have bounded stack
   - Added comprehensive documentation explaining the constraint
+- **Renamed exit flag constants**: `TEALET_FLAG_*` → `TEALET_EXIT_*`
+  - New names: `TEALET_EXIT_DEFAULT`, `TEALET_EXIT_DELETE`, `TEALET_EXIT_DEFER`
+  - Old names (`TEALET_FLAG_*`) retained for backwards compatibility
+  - Clearer semantic meaning aligned with exit functionality
 - **Fixed assertions**: Corrected checks to distinguish between main tealet structure and unbounded stack behavior
   - `tealet_new()` and `tealet_create()`: Removed bogus unbounded stack checks
   - Exit handling: Check for main tealet structure, not unbounded stack

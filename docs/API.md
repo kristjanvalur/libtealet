@@ -297,7 +297,7 @@ int main(void) {
 
 1. **Set stack boundary first:** Must call `tealet_set_far()` before forking to avoid unbounded stacks
 2. **Forked tealets must use `tealet_exit()`:** Unlike tealets created with `tealet_new()`, forked tealets have no run function. Simply returning from the fork point is undefined behavior.
-3. **No DEFER flag:** Forked tealets must not use `TEALET_FLAG_DEFER` when exiting
+3. **No DEFER flag:** Forked tealets must not use `TEALET_EXIT_DEFER` when exiting
 4. **Stay within bounds:** All switching must occur within the stack region bounded by `far_boundary`
 
 **Philosophical note:**
@@ -385,9 +385,11 @@ Exit current tealet and transfer control to target.
 - `flags`: Control flags (see below)
 
 **Flags:**
-- `TEALET_FLAG_NONE` (0): Exit tealet, transfer control, delete current tealet
-- `TEALET_FLAG_DELETE`: Same as `TEALET_FLAG_NONE` (delete current tealet)
-- `TEALET_FLAG_DEFER`: Don't exit immediately, return to run function instead
+- `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual cleanup required
+- `TEALET_EXIT_DELETE`: Auto-delete tealet on exit (same as return behavior)
+- `TEALET_EXIT_DEFER`: Don't exit immediately, return to run function instead
+
+**Backwards compatibility:** Old `TEALET_FLAG_*` names are still available.
 
 **Usage:**
 ```c
@@ -395,17 +397,17 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     /* Do work */
     
     /* Exit and delete this tealet */
-    tealet_exit(current->main, &result, TEALET_FLAG_DELETE);
+    tealet_exit(current->main, &result, TEALET_EXIT_DELETE);
     
     /* Never reached */
 }
 ```
 
-**With TEALET_FLAG_DEFER:**
+**With TEALET_EXIT_DEFER:**
 ```c
 tealet_t *my_run(tealet_t *current, void *arg) {
     if (should_exit) {
-        tealet_exit(current->main, &result, TEALET_FLAG_DEFER);
+        tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here, can do cleanup */
         cleanup_resources();
     }
@@ -414,7 +416,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 }
 ```
 
-This function does not return unless `TEALET_FLAG_DEFER` is set.
+This function does not return unless `TEALET_EXIT_DEFER` is set.
 
 **Note:** Returning from the run function automatically deletes the tealet. Use `tealet_exit()` when you need explicit control over deletion or want to exit from nested calls within the run function.
 
@@ -559,12 +561,12 @@ tealet_delete(t);
 
 **When to Use:**
 - Deleting tealets that never ran (`TEALET_STATUS_INITIAL`)
-- Cleaning up tealets kept alive with `TEALET_FLAG_DEFER`
+- Cleaning up tealets kept alive with `TEALET_EXIT_DEFAULT`
 - Manual resource management
 
 **When Not Needed:**
 - Run function returns normally → automatic deletion
-- `tealet_exit()` with `TEALET_FLAG_DELETE` → automatic deletion
+- `tealet_exit()` with `TEALET_EXIT_DELETE` → automatic deletion
 
 ---
 
@@ -713,9 +715,15 @@ if (result == TEALET_ERR_DEFUNCT) {
 ### Flags
 
 ```c
-#define TEALET_FLAG_NONE    0      /* No flags */
-#define TEALET_FLAG_DELETE  (1<<0) /* Delete tealet on exit */
-#define TEALET_FLAG_DEFER   (1<<1) /* Defer exit, return to run function */
+/* Exit flags (new names) */
+#define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
+#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
+#define TEALET_EXIT_DEFER   2  /* Defer exit to return */
+
+/* Backwards compatibility (old names) */
+#define TEALET_FLAG_NONE   TEALET_EXIT_DEFAULT
+#define TEALET_FLAG_DELETE TEALET_EXIT_DELETE
+#define TEALET_FLAG_DEFER  TEALET_EXIT_DEFER
 ```
 
 Used with `tealet_exit()`.
@@ -753,19 +761,19 @@ tealet_t *t = tealet_new(main, my_func, &arg);
 
 ---
 
-### When to Use `tealet_exit()` vs Returning
+###When to Use `tealet_exit()` vs Returning
 
 **Return from run function:**
 - Normal completion
 - Simplest code path
 - Automatic cleanup
 
-**Use `tealet_exit()` with `TEALET_FLAG_DELETE`:**
+**Use `tealet_exit()` with `TEALET_EXIT_DELETE`:**
 - Need to exit from nested function calls
 - Want explicit exit point
 - Conditional exit logic
 
-**Use `tealet_exit()` with `TEALET_FLAG_DEFER`:**
+**Use `tealet_exit()` with `TEALET_EXIT_DEFER`:**
 - Need to do cleanup after signaling exit
 - Exception-like behavior
 - Complex teardown logic
@@ -787,7 +795,7 @@ tealet_t *nested_run(tealet_t *current, void *arg) {
 void helper(tealet_t *current) {
     if (error_condition) {
         void *error = make_error();
-        tealet_exit(current->main, &error, TEALET_FLAG_DELETE);
+        tealet_exit(current->main, &error, TEALET_EXIT_DELETE);
         /* Never returns */
     }
 }
@@ -797,7 +805,7 @@ tealet_t *cleanup_run(tealet_t *current, void *arg) {
     FILE *f = open_file();
     
     if (should_exit) {
-        tealet_exit(current->main, &result, TEALET_FLAG_DEFER);
+        tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here */
         fclose(f);  /* Cleanup still runs */
     }

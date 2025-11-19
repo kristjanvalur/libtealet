@@ -117,7 +117,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     printf("Doing work...\n");
     
     /* ✅ Recommended: Explicit exit */
-    tealet_exit(current->main, NULL, TEALET_FLAG_DELETE);
+    tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
     
     /* Should not reach here */
     return current->main;  /* Fallback only */
@@ -132,7 +132,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 
 ### ⚠️ Auto-Delete Danger
 
-When a run function returns (or calls `tealet_exit()` with `TEALET_FLAG_DELETE`), the tealet is **automatically deleted**. This can cause dangling pointer issues:
+When a run function returns (or calls `tealet_exit()` with `TEALET_EXIT_DELETE`), the tealet is **automatically deleted**. This can cause dangling pointer issues:
 
 ```c
 /* ❌ DANGER: Race condition */
@@ -164,7 +164,7 @@ int main(void) {
 tealet_t *worker_run(tealet_t *current, void *arg) {
     printf("Work done\n");
     /* Exit without auto-delete */
-    tealet_exit(current->main, NULL, 0);  /* or TEALET_FLAG_NONE */
+    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT);
     return current->main;
 }
 
@@ -188,9 +188,11 @@ int main(void) {
 
 ### Exit Flags
 
-- `TEALET_FLAG_DELETE` or `TEALET_FLAG_NONE` (0): Auto-delete on exit (default behavior when returning)
-- `0` (no flags): Don't auto-delete, manual `tealet_delete()` required
-- `TEALET_FLAG_DEFER`: For use with run function returns (advanced, see API docs)
+- `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual `tealet_delete()` required
+- `TEALET_EXIT_DELETE`: Auto-delete on exit (same as return behavior)
+- `TEALET_EXIT_DEFER`: For use with run function returns (advanced, see API docs)
+
+**Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 
 ### When to Use Each
 
@@ -210,7 +212,7 @@ tealet_t *controlled_worker(tealet_t *current, void *arg) {
         do_work();
         tealet_switch(current->main, NULL);  /* Yield back */
     }
-    tealet_exit(current->main, NULL, 0);  /* Don't auto-delete */
+    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT);  /* Don't auto-delete */
     return current->main;
 }
 
