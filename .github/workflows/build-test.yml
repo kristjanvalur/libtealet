@@ -65,6 +65,23 @@ jobs:
           bin/libtealet.a
           bin/libtealet.so
   
+  sanitizer-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Valgrind
+      run: sudo apt-get install --no-install-recommends -y valgrind
+    
+    - name: Build library
+      run: make all
+    
+    - name: Run UBSan tests
+      run: make test-ubsan
+    
+    - name: Run Valgrind tests
+      run: make test-valgrind
+  
   build-macos:
     runs-on: ${{ matrix.os }}
     strategy:
