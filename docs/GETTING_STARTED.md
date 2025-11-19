@@ -106,6 +106,128 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 
 **Rule of thumb:** If data needs to survive a `tealet_switch()`, allocate it on the heap.
 
+## Tealet Lifecycle and Exiting
+
+### Best Practice: Always Use `tealet_exit()`
+
+While a tealet run function can simply `return` to exit, **it's strongly recommended to use `tealet_exit()` explicitly**:
+
+```c
+tealet_t *my_run(tealet_t *current, void *arg) {
+    printf("Doing work...\n");
+    
+    /* ✅ Recommended: Explicit exit */
+    tealet_exit(current->main, NULL, TEALET_FLAG_DELETE);
+    
+    /* Should not reach here */
+    return current->main;  /* Fallback only */
+}
+```
+
+**Why use `tealet_exit()`?**
+- More explicit about where execution goes
+- Controls auto-deletion with flags
+- Required for forked tealets (see Advanced section)
+- Clearer intent in complex switching scenarios
+
+### ⚠️ Auto-Delete Danger
+
+When a run function returns (or calls `tealet_exit()` with `TEALET_FLAG_DELETE`), the tealet is **automatically deleted**. This can cause dangling pointer issues:
+
+```c
+/* ❌ DANGER: Race condition */
+tealet_t *worker_run(tealet_t *current, void *arg) {
+    printf("Quick work\n");
+    return current->main;  /* Auto-deletes this tealet */
+}
+
+int main(void) {
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    
+    void *arg = NULL;
+    tealet_t *worker = tealet_new(main, worker_run, &arg);
+    /* worker may already be deleted here! */
+    
+    int status = tealet_status(worker);  /* ❌ Dangling pointer! */
+    
+    tealet_finalize(main);
+    return 0;
+}
+```
+
+**What happened?** `tealet_new()` creates the worker and **immediately runs it**. The worker completes and deletes itself **before** `tealet_new()` returns. Now `worker` is a dangling pointer.
+
+### ✅ Safe Pattern: Prevent Auto-Delete
+
+```c
+tealet_t *worker_run(tealet_t *current, void *arg) {
+    printf("Work done\n");
+    /* Exit without auto-delete */
+    tealet_exit(current->main, NULL, 0);  /* or TEALET_FLAG_NONE */
+    return current->main;
+}
+
+int main(void) {
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    
+    void *arg = NULL;
+    tealet_t *worker = tealet_new(main, worker_run, &arg);
+    /* worker still exists and can be queried */
+    
+    int status = tealet_status(worker);  /* ✅ Safe */
+    printf("Worker status: %d\n", status);
+    
+    /* Manual cleanup */
+    tealet_delete(worker);
+    tealet_finalize(main);
+    return 0;
+}
+```
+
+### Exit Flags
+
+- `TEALET_FLAG_DELETE` or `TEALET_FLAG_NONE` (0): Auto-delete on exit (default behavior when returning)
+- `0` (no flags): Don't auto-delete, manual `tealet_delete()` required
+- `TEALET_FLAG_DEFER`: For use with run function returns (advanced, see API docs)
+
+### When to Use Each
+
+**Auto-delete (default):**
+```c
+tealet_t *fire_and_forget(tealet_t *current, void *arg) {
+    /* Do work that doesn't need caller intervention */
+    printf("Task complete\n");
+    return current->main;  /* Auto-deletes */
+}
+```
+
+**Manual delete:**
+```c
+tealet_t *controlled_worker(tealet_t *current, void *arg) {
+    while (should_continue()) {
+        do_work();
+        tealet_switch(current->main, NULL);  /* Yield back */
+    }
+    tealet_exit(current->main, NULL, 0);  /* Don't auto-delete */
+    return current->main;
+}
+
+int main(void) {
+    /* ... */
+    tealet_t *worker = tealet_new(main, controlled_worker, &arg);
+    
+    /* Can switch back to worker multiple times */
+    tealet_switch(worker, NULL);
+    tealet_switch(worker, NULL);
+    
+    /* Manual cleanup when done */
+    tealet_delete(worker);
+    /* ... */
+}
+```
+
 ## Common Patterns
 
 ### Ping-Pong: Two Coroutines Alternating

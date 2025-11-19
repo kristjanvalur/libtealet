@@ -6,6 +6,7 @@ Complete reference for the libtealet API. All functions are declared in `tealet.
 
 - [Lifecycle Management](#lifecycle-management)
 - [Coroutine Creation](#coroutine-creation)
+- [Advanced: Fork-like Semantics](#advanced-fork-like-semantics)
 - [Context Switching](#context-switching)
 - [Status and Inspection](#status-and-inspection)
 - [Memory Management](#memory-management)
@@ -177,6 +178,137 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```
 
 The run function executes until it returns or calls `tealet_exit()`. Upon return, the tealet is automatically deleted and execution transfers to the returned tealet.
+
+---
+
+## Advanced: Fork-like Semantics
+
+⚠️ **Advanced Feature:** Fork-like semantics break the traditional function-scope discipline. Use with caution.
+
+### `tealet_set_far()`
+
+```c
+int tealet_set_far(tealet_t *tealet, void *far_boundary);
+```
+
+Set a stack boundary on a tealet, limiting how far its stack can extend.
+
+**Parameters:**
+- `tealet`: The tealet to set boundary on (typically main)
+- `far_boundary`: Pointer to a stack variable establishing the far boundary
+
+**Returns:**
+- `0` on success
+- `-1` if called from non-main tealet or if tealet is not currently active
+
+**Usage:**
+```c
+int main(void) {
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    
+    int stack_marker;  /* Stack variable for boundary */
+    tealet_set_far(main, &stack_marker);
+    
+    /* Now main has a bounded stack */
+    /* Can fork or perform other operations requiring bounded stacks */
+    
+    tealet_finalize(main);
+    return 0;
+}
+```
+
+**Why set boundaries?**
+- **Required before forking:** Prevents creating two unbounded stacks
+- **Memory control:** Limits stack growth for specific tealets
+- **Scope discipline:** Ensures execution stays within promised bounds
+
+**Current limitation:** Can only be called on the main tealet.
+
+---
+
+### `tealet_fork()`
+
+```c
+int tealet_fork(tealet_t *current, tealet_t **pother, int flags);
+```
+
+Fork the current tealet, creating a child tealet that duplicates the execution state.
+
+**Parameters:**
+- `current`: The currently active tealet to fork
+- `pother`: Pointer to receive the "other" tealet pointer:
+  - In parent: receives pointer to child
+  - In child: receives pointer to parent
+- `flags`: Fork mode flags:
+  - `TEALET_FORK_DEFAULT` (0): Child created suspended, parent continues
+  - `TEALET_FORK_SWITCH` (1): Immediately switch to child after creation
+
+**Returns:**
+- Parent: `1` (FORK_DEFAULT) - you are the parent
+- Child: `0` - you are the child  
+- Error: negative error code
+  - `TEALET_ERR_UNFORKABLE`: Current tealet has unbounded stack (call `tealet_set_far()` first)
+  - `TEALET_ERR_MEM`: Memory allocation failed
+
+**Usage:**
+```c
+int main(void) {
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    
+    /* REQUIRED: Set stack boundary before forking */
+    int stack_marker;
+    tealet_set_far(main, &stack_marker);
+    
+    tealet_t *other = NULL;
+    int result = tealet_fork(main, &other, TEALET_FORK_DEFAULT);
+    
+    if (result == 0) {
+        /* This is the CHILD */
+        printf("Child: parent is %p\n", other);
+        
+        /* CRITICAL: Forked tealets MUST use tealet_exit() */
+        tealet_exit(other, NULL, 0);  /* Switch back to parent */
+        
+        /* Should not reach here */
+        abort();
+        
+    } else if (result > 0) {
+        /* This is the PARENT */
+        printf("Parent: child is %p\n", other);
+        
+        /* Switch to child when ready */
+        tealet_switch(other, NULL);
+        
+        /* Clean up */
+        tealet_delete(other);
+    } else {
+        /* Error occurred */
+        fprintf(stderr, "Fork failed: %d\n", result);
+    }
+    
+    tealet_finalize(main);
+    return 0;
+}
+```
+
+**Critical responsibilities:**
+
+1. **Set stack boundary first:** Must call `tealet_set_far()` before forking to avoid unbounded stacks
+2. **Forked tealets must use `tealet_exit()`:** Unlike tealets created with `tealet_new()`, forked tealets have no run function. Simply returning from the fork point is undefined behavior.
+3. **No DEFER flag:** Forked tealets must not use `TEALET_FLAG_DEFER` when exiting
+4. **Stay within bounds:** All switching must occur within the stack region bounded by `far_boundary`
+
+**Philosophical note:**
+
+Traditional tealet creation (`tealet_new()`, `tealet_create()`) maintains clean function-scope discipline - each tealet exists within a specific function's execution. `tealet_fork()` breaks this discipline, enabling dynamic coroutine cloning at any point. This power comes with responsibility: you must manually manage stack boundaries and explicit exit.
+
+This feature mirrors functionality from Stackless Python but was historically omitted from libtealet to keep the API simple and safe. Use it when you need advanced patterns like continuation capture or coroutine cloning.
+
+**Flags:**
+- `TEALET_FORK_DEFAULT`: Child suspended, parent continues (Unix fork-like)
+- `TEALET_FORK_SWITCH`: Immediately become the child, parent suspended
 
 ---
 
