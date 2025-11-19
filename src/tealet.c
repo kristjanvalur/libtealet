@@ -1142,11 +1142,10 @@ int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
     
     /* Current tealet must be active (we are currently executing it) */
     if (g_main->g_current != g_current)
-        return -1;
+        return TEALET_ERR_UNFORKABLE;
     
-    /* Current tealet must not be suspended (stack must be NULL when active) */
-    if (g_current->stack != NULL)
-        return -1;
+    /* Active tealets have NULL stack (implied by the check above) */
+    assert(g_current->stack == NULL);
     
     /* Allocate the child tealet */
     g_child = tealet_alloc(g_main);
