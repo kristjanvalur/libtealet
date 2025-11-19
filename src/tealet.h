@@ -247,6 +247,21 @@ ptrdiff_t tealet_stack_diff(void *a, void *b);
 TEALET_API
 void *tealet_get_far(tealet_t *tealet);
 
+/* Set the far boundary of the main tealet. This allows the main tealet
+ * to have a bounded stack, enabling it to be forked or duplicated.
+ * By default, the main tealet has an unbounded stack (STACKMAN_SP_FURTHEST).
+ * 
+ * This function must be called from the main tealet context.
+ * The caller promises not to require stack to be saved beyond the specified position.
+ * Typically, the far_boundary is obtained by taking the address of a local variable
+ * in the function that called tealet_initialize().
+ * 
+ * Returns 0 on success, negative error code on failure:
+ *   -1 if called from a non-main tealet
+ */
+TEALET_API
+int tealet_set_main_far(tealet_t *tealet, void *far_boundary);
+
 /* this is used to get the "far address _if_ a tealet were initialized here
  * The arguments must match the real tealet_new() but are dummies.
  */

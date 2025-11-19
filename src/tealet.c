@@ -1110,6 +1110,24 @@ void *tealet_get_far(tealet_t *_tealet)
     return tealet->stack_far;
 }
 
+int tealet_set_main_far(tealet_t *_tealet, void *far_boundary)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+    
+    /* Only the main tealet can have its far boundary set */
+    if (!TEALET_IS_MAIN(_tealet))
+        return -1;
+    
+    /* Verify we're being called from the main tealet (it must be current) */
+    if (g_main->g_current != tealet)
+        return -1;
+    
+    /* Set the far boundary */
+    tealet->stack_far = (char *)far_boundary;
+    return 0;
+}
+
 #if __GNUC__ > 4
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-local-addr"
