@@ -1128,28 +1128,27 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
     return 0;
 }
 
-int tealet_fork(tealet_t *_current, int flags)
+int tealet_fork(tealet_t *_current, tealet_t **pchild, int flags)
 {
     tealet_sub_t *g_current = (tealet_sub_t *)_current;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_current);
     tealet_sub_t *g_child;
-    int child_id;
     
     /* Can't fork the main tealet */
     if (TEALET_IS_MAIN(_current))
-        return TEALET_ERR_DEFUNCT;
+        return -1;
     
     /* Main tealet must have a bounded stack (far boundary set) */
     if (TEALET_IS_MAIN_STACK((tealet_sub_t*)g_main))
-        return TEALET_ERR_DEFUNCT;
+        return -1;
     
     /* Current tealet must be active (we are currently executing it) */
     if (g_main->g_current != g_current)
-        return TEALET_ERR_DEFUNCT;
+        return -1;
     
     /* Current tealet must not be suspended (stack must be NULL when active) */
     if (g_current->stack != NULL)
-        return TEALET_ERR_DEFUNCT;
+        return -1;
     
     /* Allocate the child tealet */
     g_child = tealet_alloc(g_main);
@@ -1207,15 +1206,6 @@ int tealet_fork(tealet_t *_current, int flags)
     if (g_main->g_extrasize)
         memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
     
-    /* Get child ID for return value (use the debug id if available, otherwise use pointer) */
-#ifndef NDEBUG
-    child_id = g_child->id;
-#else
-    child_id = (int)(ptrdiff_t)g_child; /* Use pointer as ID, ensure it's positive */
-    if (child_id <= 0)
-        child_id = 1; /* Ensure positive */
-#endif
-    
     /* If TEALET_FORK_SWITCH flag is set, switch to the child immediately */
     if (flags & TEALET_FORK_SWITCH) {
         void *dummy_arg = NULL;
@@ -1223,7 +1213,7 @@ int tealet_fork(tealet_t *_current, int flags)
         if (switch_result < 0) {
             /* Switch failed - clean up and return error */
             tealet_delete((tealet_t *)g_child);
-            return switch_result;
+            return -1;
         }
         /* We've returned from the child - we are now in the parent */
         /* The child will execute below and return 0 */
@@ -1237,8 +1227,10 @@ int tealet_fork(tealet_t *_current, int flags)
         /* We are the child - return 0 */
         return 0;
     } else {
-        /* We are the parent - return child ID */
-        return child_id;
+        /* We are the parent - store child pointer if requested and return 1 */
+        if (pchild != NULL)
+            *pchild = (tealet_t *)g_child;
+        return 1;
     }
 }
 

@@ -287,9 +287,14 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * the same point (immediately after tealet_fork returns).
  * 
  * The function returns different values to distinguish parent from child:
- * - In the parent tealet: returns a positive integer (the child's internal ID)
+ * - In the parent tealet: returns 1
  * - In the child tealet: returns 0
- * - On error: returns a negative error code
+ * - On error: returns -1 (or other negative TEALET_ERR_* code)
+ * 
+ * If pchild is non-NULL, it will be filled with a pointer to the newly created
+ * child tealet when called from the parent. In the child context, *pchild is
+ * unchanged. This allows the parent to reference the child tealet for later
+ * switching.
  * 
  * Prerequisites:
  * - Can only be called from a non-main tealet
@@ -307,27 +312,28 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * - Use tealet_current() to get the current tealet pointer after forking
  * 
  * Example:
- *   int child_id = tealet_fork(current, TEALET_FORK_DEFAULT);
- *   if (child_id == 0) {
+ *   tealet_t *child = NULL;
+ *   int result = tealet_fork(current, &child, TEALET_FORK_DEFAULT);
+ *   if (result == 0) {
  *       // This is the child tealet
  *       // ... child-specific code ...
- *   } else if (child_id > 0) {
+ *   } else if (result > 0) {
  *       // This is the parent tealet
  *       // ... parent-specific code ...
- *       // Switch to child later: tealet_switch(tealet_current(main)->..., &arg);
+ *       tealet_switch(child, &arg); // Switch to child when ready
  *   } else {
- *       // Error occurred (child_id < 0)
+ *       // Error occurred (result < 0)
  *   }
  * 
  * Returns:
- *   Parent: positive integer (child ID)
+ *   Parent: 1
  *   Child: 0
- *   Error: negative error code (TEALET_ERR_*)
+ *   Error: -1 or other negative error code (TEALET_ERR_*)
  */
 #define TEALET_FORK_DEFAULT 0
 #define TEALET_FORK_SWITCH  1
 TEALET_API
-int tealet_fork(tealet_t *current, int flags);
+int tealet_fork(tealet_t *current, tealet_t **pchild, int flags);
 
 /* this is used to get the "far address _if_ a tealet were initialized here
  * The arguments must match the real tealet_new() but are dummies.
