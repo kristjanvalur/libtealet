@@ -273,9 +273,9 @@ void *tealet_get_far(tealet_t *tealet);
  * calls tealet_initialize(), passing the address of a local variable:
  * 
  *   void my_main() {
- *       int stack_limit;
+ *       int stack_marker;
  *       tealet_t *main = tealet_initialize(&alloc, 0);
- *       tealet_set_far(main, &stack_limit);
+ *       tealet_set_far(main, &stack_marker);
  *       // ... now fork operations are possible ...
  *   }
  * 

@@ -188,9 +188,9 @@ int main(void) {
 
 ### Exit Flags
 
-- `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual `tealet_delete()` required
-- `TEALET_EXIT_DELETE`: Auto-delete on exit (same as return behavior)
-- `TEALET_EXIT_DEFER`: For use with run function returns (advanced, see API docs)
+- `TEALET_EXIT_DEFAULT` (0): **Prevent auto-delete**; tealet must be manually deleted with `tealet_delete()`
+- `TEALET_EXIT_DELETE`: **Auto-delete on exit**; same as returning from the run function (the default behavior)
+- `TEALET_EXIT_DEFER`: **Defer deletion to run function return** (advanced; see API docs)
 
 **Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 

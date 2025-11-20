@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Returns 0 in child, 1 in parent (similar to Unix fork)
   - Symmetric `pother` parameter allows both parent and child to reference each other
   - **Breaking the function-scope discipline**: Unlike `tealet_new()` which creates tealets within function scope, `tealet_fork()` enables dynamic coroutine cloning at any point
-  - **Important**: Forked tealets must use `tealet_exit()` explicitly (without `TEALET_FLAG_DEFER`) since they have no run function to return from
+  - **Important**: Forked tealets must use `tealet_exit()` explicitly (without `TEALET_EXIT_DEFER`) since they have no run function to return from
 - **Stack boundary API**: New `tealet_set_far()` function
-  - Sets a stack boundary on the main tealet (or any tealet)
+  - Sets a stack boundary on the main tealet
   - Required before calling `tealet_fork()` to prevent two unbounded stacks
   - Enables bounded stack execution for the main tealet
 - **Comprehensive fork test suite**: `tests/test_fork.c` with 4 tests

@@ -761,7 +761,7 @@ tealet_t *t = tealet_new(main, my_func, &arg);
 
 ---
 
-###When to Use `tealet_exit()` vs Returning
+### When to Use `tealet_exit()` vs Returning
 
 **Return from run function:**
 - Normal completion

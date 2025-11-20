@@ -97,7 +97,7 @@ This functionality was available in Stackless Python but has historically been o
 
 **Important responsibilities when using fork:**
 - **Stack boundaries must be set**: Call `tealet_set_far()` to establish a stack boundary before forking, ensuring the forked execution doesn't exceed the promised scope
-- **Explicit exit required**: Forked tealets have no run function to return from, so they **must** explicitly exit using `tealet_exit()` (without the `TEALET_FLAG_DEFER` flag)
+- **Explicit exit required**: Forked tealets have no run function to return from, so they **must** explicitly exit using `tealet_exit()` (without the `TEALET_EXIT_DEFER` flag)
 - **Scope discipline**: All switching must occur within the bounded stack region defined by the `far` boundary
 
 This feature enables advanced use cases like coroutine cloning and continuation capture, but requires careful management of stack boundaries and explicit lifetime control.

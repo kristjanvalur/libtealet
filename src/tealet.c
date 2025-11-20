@@ -1210,7 +1210,7 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, int flags)
                 *pother = (tealet_t *)g_current; /* the parent in this case */
             g_main->g_current = g_child;
             return 0;  /* Caller is now the child */
-         }
+        }
          /* We are being restored back as the parent (someone switched to it) */
          assert(result == 0);
          if (pother != NULL)
