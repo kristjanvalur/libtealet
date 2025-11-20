@@ -201,20 +201,42 @@ Set a stack boundary on a tealet, limiting how far its stack can extend.
 - `0` on success
 - `-1` if called from non-main tealet or if tealet is not currently active
 
-**Usage:**
+**Best Practice - Use Parent Function's Stack Variable:**
+
+The `far_boundary` should typically be a local variable from a **parent function** (caller) of the function that will perform fork operations. This ensures all local variables in the forking function are included in the saved stack.
+
+**Recommended pattern:**
 ```c
 int main(void) {
+    int far_marker;  /* Boundary marker in parent function */
+    run_program(&far_marker);
+    return 0;
+}
+
+void run_program(void *far_marker) {
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main = tealet_initialize(&alloc, 0);
+    tealet_set_far(main, far_marker);
     
-    int stack_marker;  /* Stack variable for boundary */
-    tealet_set_far(main, &stack_marker);
-    
-    /* Now main has a bounded stack */
-    /* Can fork or perform other operations requiring bounded stacks */
+    int local_data = 0;  /* This WILL be saved when forking */
+    tealet_fork(main, &child, 0);
+    /* local_data and other locals are safely in the saved stack */
     
     tealet_finalize(main);
-    return 0;
+}
+```
+
+**Alternative - Same function (requires care):**
+```c
+void my_main(void) {
+    int far_marker;  /* MUST be declared FIRST */
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    tealet_set_far(main, &far_marker);
+    
+    int local_data = 0;  /* Declared AFTER far_marker */
+    tealet_fork(main, &child, 0);
+    /* local_data is safely below far_marker on stack */
 }
 ```
 

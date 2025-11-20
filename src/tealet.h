@@ -269,14 +269,39 @@ void *tealet_get_far(tealet_t *tealet);
  * For the main tealet: The main tealet normally has an unbounded stack extent
  * (represented internally as STACKMAN_SP_FURTHEST). To enable operations like
  * tealet_fork() that need to duplicate the stack, you must first set a far
- * boundary. A typical usage pattern is to call it from the same function that
- * calls tealet_initialize(), passing the address of a local variable:
+ * boundary.
+ * 
+ * IMPORTANT: The far_boundary pointer should typically come from a PARENT function
+ * of the function that will perform fork operations. This ensures that all local
+ * variables in the forking function (and any functions it calls) are included in
+ * the saved stack slice. If you pass a local variable from the same function that
+ * calls fork, that variable and others declared after it may not be properly saved.
+ * 
+ * Recommended pattern (far_boundary from parent function):
+ * 
+ *   int main(void) {
+ *       int far_marker;
+ *       run_program(&far_marker);
+ *       return 0;
+ *   }
+ *   
+ *   void run_program(void *far_marker) {
+ *       tealet_t *main = tealet_initialize(&alloc, 0);
+ *       tealet_set_far(main, far_marker);
+ *       
+ *       int local_var = 0;
+ *       tealet_fork(main, &child, 0);
+ *   }
+ * 
+ * Alternative (far_boundary from same function, requires care):
  * 
  *   void my_main() {
- *       int stack_marker;
+ *       int far_marker;
  *       tealet_t *main = tealet_initialize(&alloc, 0);
- *       tealet_set_far(main, &stack_marker);
- *       // ... now fork operations are possible ...
+ *       tealet_set_far(main, &far_marker);
+ *       
+ *       int local_var = 0;
+ *       tealet_fork(main, &child, 0);
  *   }
  * 
  * By providing this address, you promise that no stack data beyond (further from)
