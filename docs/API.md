@@ -387,9 +387,8 @@ Exit current tealet and transfer control to target.
 **Flags:**
 - `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual cleanup required
 - `TEALET_EXIT_DELETE`: Auto-delete tealet on exit (same as return behavior)
-- `TEALET_EXIT_DEFER`: Don't exit immediately, return to run function instead
-
-**Backwards compatibility:** Old `TEALET_FLAG_*` names are still available.
+- `TEALET_EXIT_DEFER`:  Store flags and argument, return to caller.  Will be used when
+  tealet exits later.
 
 **Usage:**
 ```c
@@ -407,12 +406,17 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```c
 tealet_t *my_run(tealet_t *current, void *arg) {
     if (should_exit) {
+        /* store exit target and flags /*
         tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here, can do cleanup */
         cleanup_resources();
     }
     
-    return current->main;  /* Actual exit point */
+    /* return value ignored.
+     * exit value from earlier will be used.
+     * Tealet is not auto-deleted
+     */
+    return nullptr;
 }
 ```
 
@@ -719,11 +723,6 @@ if (result == TEALET_ERR_DEFUNCT) {
 #define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
 #define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
 #define TEALET_EXIT_DEFER   2  /* Defer exit to return */
-
-/* Backwards compatibility (old names) */
-#define TEALET_FLAG_NONE   TEALET_EXIT_DEFAULT
-#define TEALET_FLAG_DELETE TEALET_EXIT_DELETE
-#define TEALET_FLAG_DEFER  TEALET_EXIT_DEFER
 ```
 
 Used with `tealet_exit()`.
@@ -766,7 +765,8 @@ tealet_t *t = tealet_new(main, my_func, &arg);
 **Return from run function:**
 - Normal completion
 - Simplest code path
-- Automatic cleanup
+- Automatic cleanup (tealet is deleted)
+- Can only specify exit target tealet, no flags.
 
 **Use `tealet_exit()` with `TEALET_EXIT_DELETE`:**
 - Need to exit from nested function calls
@@ -774,9 +774,8 @@ tealet_t *t = tealet_new(main, my_func, &arg);
 - Conditional exit logic
 
 **Use `tealet_exit()` with `TEALET_EXIT_DEFER`:**
-- Need to do cleanup after signaling exit
-- Exception-like behavior
-- Complex teardown logic
+- Want to signal exit target and set exit flags.
+- Need to do additional cleanup afterwards, e.g. run destructors.
 
 **Examples:**
 ```c

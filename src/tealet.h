@@ -326,10 +326,11 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * - Use tealet_current() to get the current tealet pointer after forking
  * 
  * Important: Forked tealets do not have a run function like tealets created
- * with tealet_new() or tealet_create(). Therefore, a forked tealet MUST exit
- * using tealet_exit() with an explicit target, and must NOT use the 
+ * with tealet_new() or tealet_create(). They continue to exist until
+ * explicitly terminated. Therefore, a forked tealet wishing to exit cleanly
+ * MUST use tealet_exit() with an explicit target, and must NOT use the 
  * TEALET_EXIT_DEFER flag. Simply returning from the forked context is not
- * valid and will lead to undefined behavior.
+ * possible as with a normal tealet's top level function.
  * 
  * Example:
  *   tealet_t *child = NULL;
