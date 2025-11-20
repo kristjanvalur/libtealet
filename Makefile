@@ -6,7 +6,7 @@
 #
 
 # Version
-VERSION = 0.2.0
+VERSION = 0.3.0
 STACKMAN_VERSION = 1.2.0
 
 CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1

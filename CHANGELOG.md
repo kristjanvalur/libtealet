@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-11-20
+
+### Summary
+Major feature release adding Unix-like fork semantics for tealets, enabling dynamic
+coroutine cloning at any execution point. Includes comprehensive testing suite and
+statistics API for memory tracking.
+
 ### Added
 - **Fork-like semantics**: New `tealet_fork()` function for Unix-like fork behavior
   - Creates a child tealet by duplicating the current execution state
@@ -166,6 +173,7 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kristjanvalur/libtealet/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kristjanvalur/libtealet/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kristjanvalur/libtealet/releases/tag/v0.1.0
