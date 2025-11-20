@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fork-like semantics**: New `tealet_fork()` function for Unix-like fork behavior
+  - Creates a child tealet by duplicating the current execution state
+  - Two modes: `TEALET_FORK_DEFAULT` (child suspended) and `TEALET_FORK_SWITCH` (immediate switch to child)
+  - Returns 0 in child, 1 in parent (similar to Unix fork)
+  - Symmetric `pother` parameter allows both parent and child to reference each other
+  - **Breaking the function-scope discipline**: Unlike `tealet_new()` which creates tealets within function scope, `tealet_fork()` enables dynamic coroutine cloning at any point
+  - **Important**: Forked tealets must use `tealet_exit()` explicitly (without `TEALET_EXIT_DEFER`) since they have no run function to return from
+- **Stack boundary API**: New `tealet_set_far()` function
+  - Sets a stack boundary on the main tealet
+  - Required before calling `tealet_fork()` to prevent two unbounded stacks
+  - Enables bounded stack execution for the main tealet
+- **Comprehensive fork test suite**: `tests/test_fork.c` with 4 tests
+  - Basic fork and switch patterns
+  - Multiple fork scenarios
+  - Parent-child ping-pong switching
 - **Memory statistics API**: New `tealet_get_stats()` function for tracking memory usage
   - Tracks allocated bytes and blocks (current and peak)
   - Counts active tealets
@@ -25,8 +40,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Demonstrates statistics API and voluntary exit patterns
 
 ### Changed
+- **Renamed macro**: `TEALET_IS_MAIN_STACK` → `TEALET_STACK_IS_UNBOUNDED`
+  - Clarifies that it checks for unbounded stack boundary, not main tealet identity
+  - Critical distinction after fork allows main to have bounded stack
+  - Added comprehensive documentation explaining the constraint
+- **Renamed exit flag constants**: `TEALET_FLAG_*` → `TEALET_EXIT_*`
+  - New names: `TEALET_EXIT_DEFAULT`, `TEALET_EXIT_DELETE`, `TEALET_EXIT_DEFER`
+  - Old names (`TEALET_FLAG_*`) retained for backwards compatibility
+  - Clearer semantic meaning aligned with exit functionality
+- **Fixed assertions**: Corrected checks to distinguish between main tealet structure and unbounded stack behavior
+  - `tealet_new()` and `tealet_create()`: Removed bogus unbounded stack checks
+  - Exit handling: Check for main tealet structure, not unbounded stack
+  - Defunct marking: Protect main tealet from being marked invalid
+- **Protected main tealet**: Added safeguard in `tealet_stack_growto()`
+  - Prevents main's stack from being marked defunct during exit fallback
+  - Returns failure instead, triggering redirect-to-main logic in `tealet_exit()`
+  - Ensures main tealet integrity even in out-of-memory scenarios
 - **Statistics enabled by default**: `TEALET_WITH_STATS=1` now defined in Makefile
-- **Test suite integration**: Both new tests integrated into `make test` target
+- **Test suite integration**: All new tests integrated into `make test` target
+
+### Documentation
+- Added "Advanced: Fork-like Semantics" section to README.md
+- Documented fork responsibilities: stack boundaries, explicit exit, scope discipline
+- Updated API documentation for `tealet_fork()` with detailed usage notes
+- Clarified that forked tealets break the traditional function-scope discipline
 
 ## [0.2.0] - 2025-11-17
 

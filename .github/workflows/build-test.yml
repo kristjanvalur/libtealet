@@ -2,7 +2,7 @@ name: build and test
 
 on:
   push:
-    branches: [ master, dev, issue-* ]
+    branches: [ master, dev ]
     tags:
       - 'v*.*.*'
   pull_request:

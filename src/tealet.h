@@ -83,6 +83,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
  */
 #define TEALET_ERR_MEM -1       /* memory allocation failed */
 #define TEALET_ERR_DEFUNCT -2   /* the target tealet is corrupt */
+#define TEALET_ERR_UNFORKABLE -3 /* tealet cannot be forked (unbounded stack) */
 
 /* Initialize and return the main tealet.  The main tealet contains the whole
  * "normal" execution of the program; it starts when the program starts and
@@ -162,14 +163,26 @@ int tealet_switch(tealet_t *target, void **parg);
  * Returning with 'p' from the tealet's run function is equivalent to calling
  * tealet_exit(p, NULL, TEALET_FLAG_DELETE), but the explicit way is
  * recommended.
- * If the TEALET_FLAG_DEFER flag is set, then this function merely sets the
+ * If the TEALET_EXIT_DEFER flag is set, then this function merely sets the
  * flag and arg values.  It returns 0, and the calling function can proceed to
  * return with 'p' from its run() function.  This is useful if a clean "return" is desired,
  * for example to call destructors.
+ * 
+ * Flags:
+ * - TEALET_EXIT_DEFAULT (0): Don't auto-delete, requires manual tealet_delete()
+ * - TEALET_EXIT_DELETE: Auto-delete the exiting tealet
+ * - TEALET_EXIT_DEFER: Defer exit until run function returns (for cleanup)
  */
-#define TEALET_FLAG_NONE 0
-#define TEALET_FLAG_DELETE 1
-#define TEALET_FLAG_DEFER 2
+/* Exit flags */
+#define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
+#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
+#define TEALET_EXIT_DEFER   2  /* Defer exit to return statement */
+
+/* Backwards compatibility - old flag names */
+#define TEALET_FLAG_NONE   TEALET_EXIT_DEFAULT
+#define TEALET_FLAG_DELETE TEALET_EXIT_DELETE
+#define TEALET_FLAG_DEFER  TEALET_EXIT_DEFER
+
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
 
@@ -246,6 +259,130 @@ ptrdiff_t tealet_stack_diff(void *a, void *b);
  */
 TEALET_API
 void *tealet_get_far(tealet_t *tealet);
+
+/**
+ * Set the far boundary of a tealet's stack.
+ * 
+ * This function sets the far boundary of a tealet's stack, which defines where
+ * the stack ends for stack-slicing operations. 
+ * 
+ * For the main tealet: The main tealet normally has an unbounded stack extent
+ * (represented internally as STACKMAN_SP_FURTHEST). To enable operations like
+ * tealet_fork() that need to duplicate the stack, you must first set a far
+ * boundary.
+ * 
+ * IMPORTANT: The far_boundary pointer should typically come from a PARENT function
+ * of the function that will perform fork operations. This ensures that all local
+ * variables in the forking function (and any functions it calls) are included in
+ * the saved stack slice. If you pass a local variable from the same function that
+ * calls fork, that variable and others declared after it may not be properly saved.
+ * 
+ * Recommended pattern (far_boundary from parent function):
+ * 
+ *   int main(void) {
+ *       int far_marker;
+ *       run_program(&far_marker);
+ *       return 0;
+ *   }
+ *   
+ *   void run_program(void *far_marker) {
+ *       tealet_t *main = tealet_initialize(&alloc, 0);
+ *       tealet_set_far(main, far_marker);
+ *       
+ *       int local_var = 0;
+ *       tealet_fork(main, &child, 0);
+ *   }
+ * 
+ * Alternative (far_boundary from same function, requires care):
+ * 
+ *   void my_main() {
+ *       int far_marker;
+ *       tealet_t *main = tealet_initialize(&alloc, 0);
+ *       tealet_set_far(main, &far_marker);
+ *       
+ *       int local_var = 0;
+ *       tealet_fork(main, &child, 0);
+ *   }
+ * 
+ * By providing this address, you promise that no stack data beyond (further from)
+ * this point needs to be saved during fork/duplicate operations.
+ * 
+ * Note: Currently, this function can only be called on the main tealet. Calling
+ * it on a non-main tealet will return an error.
+ * 
+ * Returns:
+ *   0 on success
+ *   -1 if called from a non-main tealet
+ */
+TEALET_API
+int tealet_set_far(tealet_t *tealet, void *far_boundary);
+
+/**
+ * Fork the current active tealet, creating a copy that can run independently.
+ * 
+ * This function duplicates the currently executing tealet, including its entire
+ * execution stack. Both the parent and child tealets will resume execution from
+ * the same point (immediately after tealet_fork returns).
+ * 
+ * The function returns different values to distinguish parent from child:
+ * - In the parent tealet: returns 1
+ * - In the child tealet: returns 0
+ * - On error: returns -1 (or other negative TEALET_ERR_* code)
+ * 
+ * If pchild is non-NULL, it will be filled with a pointer to the other tealet:
+ * - In the parent: points to the newly created child tealet
+ * - In the child: points to the parent tealet
+ * This allows both parent and child to reference each other for switching.
+ * 
+ * Prerequisites:
+ * - The current tealet must be either:
+ *   a) A regular (non-main) tealet, OR
+ *   b) The main tealet with a bounded stack (far boundary set via tealet_set_far())
+ * - The current tealet must be active (not suspended)
+ * 
+ * Flags:
+ * - TEALET_FORK_DEFAULT (0): Child is created suspended; parent continues
+ * - TEALET_FORK_SWITCH (1): Immediately switch to child after creation
+ * 
+ * Memory considerations:
+ * - The child tealet has its own stack copy (heap-allocated)
+ * - Both parent and child share the same main tealet
+ * - Stack-allocated data is duplicated, heap data is shared
+ * - Use tealet_current() to get the current tealet pointer after forking
+ * 
+ * Important: Forked tealets do not have a run function like tealets created
+ * with tealet_new() or tealet_create(). They continue to exist until
+ * explicitly terminated. Therefore, a forked tealet wishing to exit cleanly
+ * MUST use tealet_exit() with an explicit target, and must NOT use the 
+ * TEALET_EXIT_DEFER flag. Simply returning from the forked context is not
+ * possible as with a normal tealet's top level function.
+ * 
+ * Example:
+ *   tealet_t *child = NULL;
+ *   int result = tealet_fork(current, &child, TEALET_FORK_DEFAULT);
+ *   if (result == 0) {
+ *       // This is the child tealet
+ *       // ... child-specific code ...
+ *   } else if (result > 0) {
+ *       // This is the parent tealet
+ *       // ... parent-specific code ...
+ *       tealet_switch(child, &arg); // Switch to child when ready
+ *   } else {
+ *       // Error occurred (result < 0)
+ *   }
+ * 
+ * Returns:
+ *   Parent: 1
+ *   Child: 0
+ *   Error: negative error code:
+ *     TEALET_ERR_UNFORKABLE if current tealet has unbounded stack
+ *     TEALET_ERR_MEM if memory allocation failed
+ *     TEALET_ERR_DEFUNCT if current tealet is not active
+ */
+#define TEALET_FORK_DEFAULT 0
+#define TEALET_FORK_SWITCH  1
+TEALET_API
+int tealet_fork(tealet_t *current, tealet_t **pother, int flags);
 
 /* this is used to get the "far address _if_ a tealet were initialized here
  * The arguments must match the real tealet_new() but are dummies.

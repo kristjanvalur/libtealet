@@ -218,7 +218,7 @@ static int worker_recursive(tealet_t *current, int depth)
     
     /* Prevent buffer optimization */
     if (buffer[0] == 0)
-        printf("");
+        (void)fputc('\0', stdout);
     
     return 0;
 }

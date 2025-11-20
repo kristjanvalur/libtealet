@@ -6,6 +6,7 @@ Complete reference for the libtealet API. All functions are declared in `tealet.
 
 - [Lifecycle Management](#lifecycle-management)
 - [Coroutine Creation](#coroutine-creation)
+- [Advanced: Fork-like Semantics](#advanced-fork-like-semantics)
 - [Context Switching](#context-switching)
 - [Status and Inspection](#status-and-inspection)
 - [Memory Management](#memory-management)
@@ -180,6 +181,159 @@ The run function executes until it returns or calls `tealet_exit()`. Upon return
 
 ---
 
+## Advanced: Fork-like Semantics
+
+⚠️ **Advanced Feature:** Fork-like semantics break the traditional function-scope discipline. Use with caution.
+
+### `tealet_set_far()`
+
+```c
+int tealet_set_far(tealet_t *tealet, void *far_boundary);
+```
+
+Set a stack boundary on a tealet, limiting how far its stack can extend.
+
+**Parameters:**
+- `tealet`: The tealet to set boundary on (typically main)
+- `far_boundary`: Pointer to a stack variable establishing the far boundary
+
+**Returns:**
+- `0` on success
+- `-1` if called from non-main tealet or if tealet is not currently active
+
+**Best Practice - Use Parent Function's Stack Variable:**
+
+The `far_boundary` should typically be a local variable from a **parent function** (caller) of the function that will perform fork operations. This ensures all local variables in the forking function are included in the saved stack.
+
+**Recommended pattern:**
+```c
+int main(void) {
+    int far_marker;  /* Boundary marker in parent function */
+    run_program(&far_marker);
+    return 0;
+}
+
+void run_program(void *far_marker) {
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    tealet_set_far(main, far_marker);
+    
+    int local_data = 0;  /* This WILL be saved when forking */
+    tealet_fork(main, &child, 0);
+    /* local_data and other locals are safely in the saved stack */
+    
+    tealet_finalize(main);
+}
+```
+
+**Alternative - Same function (requires care):**
+```c
+void my_main(void) {
+    int far_marker;  /* MUST be declared FIRST */
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    tealet_set_far(main, &far_marker);
+    
+    int local_data = 0;  /* Declared AFTER far_marker */
+    tealet_fork(main, &child, 0);
+    /* local_data is safely below far_marker on stack */
+}
+```
+
+**Why set boundaries?**
+- **Required before forking:** Prevents creating two unbounded stacks
+- **Memory control:** Limits stack growth for specific tealets
+- **Scope discipline:** Ensures execution stays within promised bounds
+
+**Current limitation:** Can only be called on the main tealet.
+
+---
+
+### `tealet_fork()`
+
+```c
+int tealet_fork(tealet_t *current, tealet_t **pother, int flags);
+```
+
+Fork the current tealet, creating a child tealet that duplicates the execution state.
+
+**Parameters:**
+- `current`: The currently active tealet to fork
+- `pother`: Pointer to receive the "other" tealet pointer:
+  - In parent: receives pointer to child
+  - In child: receives pointer to parent
+- `flags`: Fork mode flags:
+  - `TEALET_FORK_DEFAULT` (0): Child created suspended, parent continues
+  - `TEALET_FORK_SWITCH` (1): Immediately switch to child after creation
+
+**Returns:**
+- Parent: `1` (FORK_DEFAULT) - you are the parent
+- Child: `0` - you are the child  
+- Error: negative error code
+  - `TEALET_ERR_UNFORKABLE`: Current tealet has unbounded stack (call `tealet_set_far()` first)
+  - `TEALET_ERR_MEM`: Memory allocation failed
+
+**Usage:**
+```c
+int main(void) {
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main = tealet_initialize(&alloc, 0);
+    
+    /* REQUIRED: Set stack boundary before forking */
+    int stack_marker;
+    tealet_set_far(main, &stack_marker);
+    
+    tealet_t *other = NULL;
+    int result = tealet_fork(main, &other, TEALET_FORK_DEFAULT);
+    
+    if (result == 0) {
+        /* This is the CHILD */
+        printf("Child: parent is %p\n", other);
+        
+        /* CRITICAL: Forked tealets MUST use tealet_exit() */
+        tealet_exit(other, NULL, 0);  /* Switch back to parent */
+        
+        /* Should not reach here */
+        abort();
+        
+    } else if (result > 0) {
+        /* This is the PARENT */
+        printf("Parent: child is %p\n", other);
+        
+        /* Switch to child when ready */
+        tealet_switch(other, NULL);
+        
+        /* Clean up */
+        tealet_delete(other);
+    } else {
+        /* Error occurred */
+        fprintf(stderr, "Fork failed: %d\n", result);
+    }
+    
+    tealet_finalize(main);
+    return 0;
+}
+```
+
+**Critical responsibilities:**
+
+1. **Set stack boundary first:** Must call `tealet_set_far()` before forking to avoid unbounded stacks
+2. **Forked tealets must use `tealet_exit()`:** Unlike tealets created with `tealet_new()`, forked tealets have no run function. Simply returning from the fork point is undefined behavior.
+3. **No DEFER flag:** Forked tealets must not use `TEALET_EXIT_DEFER` when exiting
+4. **Stay within bounds:** All switching must occur within the stack region bounded by `far_boundary`
+
+**Philosophical note:**
+
+Traditional tealet creation (`tealet_new()`, `tealet_create()`) maintains clean function-scope discipline - each tealet exists within a specific function's execution. `tealet_fork()` breaks this discipline, enabling dynamic coroutine cloning at any point. This power comes with responsibility: you must manually manage stack boundaries and explicit exit.
+
+This feature mirrors functionality from Stackless Python but was historically omitted from libtealet to keep the API simple and safe. Use it when you need advanced patterns like continuation capture or coroutine cloning.
+
+**Flags:**
+- `TEALET_FORK_DEFAULT`: Child suspended, parent continues (Unix fork-like)
+- `TEALET_FORK_SWITCH`: Immediately become the child, parent suspended
+
+---
+
 ## Context Switching
 
 ### `tealet_switch()`
@@ -253,9 +407,10 @@ Exit current tealet and transfer control to target.
 - `flags`: Control flags (see below)
 
 **Flags:**
-- `TEALET_FLAG_NONE` (0): Exit tealet, transfer control, delete current tealet
-- `TEALET_FLAG_DELETE`: Same as `TEALET_FLAG_NONE` (delete current tealet)
-- `TEALET_FLAG_DEFER`: Don't exit immediately, return to run function instead
+- `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual cleanup required
+- `TEALET_EXIT_DELETE`: Auto-delete tealet on exit (same as return behavior)
+- `TEALET_EXIT_DEFER`:  Store flags and argument, return to caller.  Will be used when
+  tealet exits later.
 
 **Usage:**
 ```c
@@ -263,26 +418,31 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     /* Do work */
     
     /* Exit and delete this tealet */
-    tealet_exit(current->main, &result, TEALET_FLAG_DELETE);
+    tealet_exit(current->main, &result, TEALET_EXIT_DELETE);
     
     /* Never reached */
 }
 ```
 
-**With TEALET_FLAG_DEFER:**
+**With TEALET_EXIT_DEFER:**
 ```c
 tealet_t *my_run(tealet_t *current, void *arg) {
     if (should_exit) {
-        tealet_exit(current->main, &result, TEALET_FLAG_DEFER);
+        /* store exit target and flags /*
+        tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here, can do cleanup */
         cleanup_resources();
     }
     
-    return current->main;  /* Actual exit point */
+    /* return value ignored.
+     * exit value from earlier will be used.
+     * Tealet is not auto-deleted
+     */
+    return nullptr;
 }
 ```
 
-This function does not return unless `TEALET_FLAG_DEFER` is set.
+This function does not return unless `TEALET_EXIT_DEFER` is set.
 
 **Note:** Returning from the run function automatically deletes the tealet. Use `tealet_exit()` when you need explicit control over deletion or want to exit from nested calls within the run function.
 
@@ -427,12 +587,12 @@ tealet_delete(t);
 
 **When to Use:**
 - Deleting tealets that never ran (`TEALET_STATUS_INITIAL`)
-- Cleaning up tealets kept alive with `TEALET_FLAG_DEFER`
+- Cleaning up tealets kept alive with `TEALET_EXIT_DEFAULT`
 - Manual resource management
 
 **When Not Needed:**
 - Run function returns normally → automatic deletion
-- `tealet_exit()` with `TEALET_FLAG_DELETE` → automatic deletion
+- `tealet_exit()` with `TEALET_EXIT_DELETE` → automatic deletion
 
 ---
 
@@ -581,9 +741,10 @@ if (result == TEALET_ERR_DEFUNCT) {
 ### Flags
 
 ```c
-#define TEALET_FLAG_NONE    0      /* No flags */
-#define TEALET_FLAG_DELETE  (1<<0) /* Delete tealet on exit */
-#define TEALET_FLAG_DEFER   (1<<1) /* Defer exit, return to run function */
+/* Exit flags (new names) */
+#define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
+#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
+#define TEALET_EXIT_DEFER   2  /* Defer exit to return */
 ```
 
 Used with `tealet_exit()`.
@@ -626,17 +787,17 @@ tealet_t *t = tealet_new(main, my_func, &arg);
 **Return from run function:**
 - Normal completion
 - Simplest code path
-- Automatic cleanup
+- Automatic cleanup (tealet is deleted)
+- Can only specify exit target tealet, no flags.
 
-**Use `tealet_exit()` with `TEALET_FLAG_DELETE`:**
+**Use `tealet_exit()` with `TEALET_EXIT_DELETE`:**
 - Need to exit from nested function calls
 - Want explicit exit point
 - Conditional exit logic
 
-**Use `tealet_exit()` with `TEALET_FLAG_DEFER`:**
-- Need to do cleanup after signaling exit
-- Exception-like behavior
-- Complex teardown logic
+**Use `tealet_exit()` with `TEALET_EXIT_DEFER`:**
+- Want to signal exit target and set exit flags.
+- Need to do additional cleanup afterwards, e.g. run destructors.
 
 **Examples:**
 ```c
@@ -655,7 +816,7 @@ tealet_t *nested_run(tealet_t *current, void *arg) {
 void helper(tealet_t *current) {
     if (error_condition) {
         void *error = make_error();
-        tealet_exit(current->main, &error, TEALET_FLAG_DELETE);
+        tealet_exit(current->main, &error, TEALET_EXIT_DELETE);
         /* Never returns */
     }
 }
@@ -665,7 +826,7 @@ tealet_t *cleanup_run(tealet_t *current, void *arg) {
     FILE *f = open_file();
     
     if (should_exit) {
-        tealet_exit(current->main, &result, TEALET_FLAG_DEFER);
+        tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here */
         fclose(f);  /* Cleanup still runs */
     }
