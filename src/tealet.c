@@ -598,7 +598,12 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
     return NULL;
 }
 
-static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target)
+/* switch the stack and pass arguments.  we need a separate argument for
+ * in and out, because sometimes we need to pass a value in but cannot
+ * pass a value out, e.g. when a tealet exits, there is no valid stack
+ * location for that.
+ */
+static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void *in_arg, void **out_arg)
 {
     tealet_sub_t *old_previous = g_main->g_previous;
     assert(target);
@@ -617,6 +622,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target)
         return TEALET_ERR_DEFUNCT;
     g_main->g_previous = g_main->g_current;
     g_main->g_target = target;
+    g_main->g_arg = in_arg;
     
     /* stackman switch is an external function so an optizer
      * cannot assume that any pointers reachable by
@@ -628,9 +634,14 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target)
         g_main->g_current = g_main->g_target;
     } else {
         g_main->g_previous = old_previous;
+        g_main->g_target = NULL;
+        g_main->g_arg = NULL;
         return TEALET_ERR_MEM;
     }
     g_main->g_target = NULL;
+    if (out_arg)
+        *out_arg = g_main->g_arg;
+    g_main->g_arg = NULL;
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
 
@@ -641,17 +652,25 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target)
  * far enough that local variables in this function get saved.
  * A stack variable in the calling function is sufficient.
  */
-static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet_sub_t *g_target, tealet_run_t run, void *stack_far)
+static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet_sub_t *g_target, tealet_run_t run, void **parg, void *stack_far)
 {
     int result;
     tealet_sub_t *g_exit_target;
-    int run_on_create = g_new == g_target;  /* we are switching to the new tealet */
-
+    int run_on_create = g_new == g_target;  /* true for tealet_new(), we are switching to the new tealet */
+    void *run_arg, *switch_arg;
     assert(g_new->stack == NULL); /* it is fresh */
     assert(run);
 
+    if (run_on_create) {
+        /* tealet_new() case */
+        assert(parg != NULL);
+    } else {
+        /* tealet_create() case */
+        assert(parg == NULL);
+    }
+
     g_new->stack_far = (char *)stack_far;
-    result = tealet_switchstack(g_main, g_target);
+    result = tealet_switchstack(g_main, g_target, NULL, &switch_arg);
     if (result < 0) {
         /* couldn't allocate stack */
         return result;
@@ -665,7 +684,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
         /* need to run the actual code.  In the 'run_on_create' case this is
          * done on the initial save.  The current tealet is the new tealet,
          * the previous tealet's stack was saved, and we run as then new one.
-         * In the '!run_on_create' case, the initial save was the new teallet
+         * In the '!run_on_create' case, the initial save was the new tealet
          * and we just returned immediately to the calling one.  We are now
          * returning here on a switch, to run the teallet
          */
@@ -673,18 +692,25 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
         /* the following assertion may be invalid, if a tealet_create() tealet
          * was duplicated.  We may now be a copy
          */
-        if (run_on_create)
+        if (run_on_create) {
             assert(g_main->g_current == g_new);        /* only valid for tealet_new */
+            run_arg = *parg;  /* tealet_new(). use the arg from the caller */
+        } else {
+            run_arg = switch_arg;  /* tealet_create(). use the arg from the switch */
+        }
         assert(g_main->g_current->stack == NULL);     /* running */      
     
-        g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, g_main->g_arg));
+        g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, run_arg));
         tealet_exit((tealet_t*)g_exit_target, NULL, TEALET_FLAG_DELETE);
         assert(!"This point should not be reached");
     } else {
         /* Either just a create, with no run, or a switch back
          * into the tealet_new()
          */
-        ;
+        if (run_on_create) {
+            /* tealet_new() case, switch back - return the switch arg */
+            *parg = switch_arg;
+        }
     }
     return 0;
 }
@@ -818,21 +844,18 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
+    void *arg = NULL;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(!g_main->g_target);
     result = tealet_alloc(g_main);
     if (result == NULL)
         return NULL; /* Could not allocate */
-    g_main->g_target = result;
-    g_main->g_arg = parg ? *parg : NULL;
-    fail = tealet_initialstub(g_main, result, result, run, (void*)&result);
+    fail = tealet_initialstub(g_main, result, result, run, (parg!=NULL ? parg : &arg), (void*)&result);
     if (fail) {
         /* could not save stack */
         tealet_delete((tealet_t*)result);
         return NULL;
     }
-    if (parg)
-        *parg = g_main->g_arg;
     return (tealet_t*)result;
 }
 
@@ -855,7 +878,7 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
      * to save the new tealet's stack at this position
      */
     g_main->g_current = result;
-    fail = tealet_initialstub(g_main, result, current, run, (void*)&result);
+    fail = tealet_initialstub(g_main, result, current, run, NULL, (void*)&result);
     if (fail) {
         /* could not save stack */
         tealet_delete((tealet_t*)result);
@@ -875,16 +898,11 @@ int tealet_switch(tealet_t *stub, void **parg)
 {
     tealet_sub_t *g_target = (tealet_sub_t *)stub;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
-    int result;
     if (g_target == g_main->g_current) {
         g_main->g_previous = g_main->g_current;
         return 0; /* switch to self */
     }
-    g_main->g_arg = parg ? *parg : NULL;
-    result = tealet_switchstack(g_main, g_target);
-    if (parg)
-        *parg = g_main->g_arg;
-    return result;
+    return tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
 }
  
 static int tealet_exit_inner(tealet_t *target, void *arg, int flags)
@@ -902,8 +920,7 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags)
     assert (g_current->stack == NULL);
     if (!(flags & TEALET_FLAG_DELETE))
         g_current->stack = (tealet_stack_t*) -1; /* signal do-not-delete */
-    g_main->g_arg = arg;
-    result = tealet_switchstack(g_main, g_target);
+    result = tealet_switchstack(g_main, g_target, arg, NULL);
     assert(result < 0); /* only return here if there was failure */
     g_target->stack_far = stack_far;
     g_current->stack = NULL;
@@ -1174,7 +1191,7 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, int flags)
     g_main->g_current = g_child;     /* Child becomes current (temporarily) */
     
     /* Save the parent's execution state into child's stack */
-    result = tealet_switchstack(g_main, g_current);
+    result = tealet_switchstack(g_main, g_current, NULL, NULL);
     
     /* Restore g_previous - fork is not a real switch, just saving state */
     g_main->g_previous = previous;
