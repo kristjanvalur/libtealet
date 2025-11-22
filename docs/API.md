@@ -219,7 +219,7 @@ void run_program(void *far_marker) {
     tealet_set_far(main, far_marker);
     
     int local_data = 0;  /* This WILL be saved when forking */
-    tealet_fork(main, &child, 0);
+    tealet_fork(main, &child, NULL, 0);
     /* local_data and other locals are safely in the saved stack */
     
     tealet_finalize(main);
@@ -235,7 +235,7 @@ void my_main(void) {
     tealet_set_far(main, &far_marker);
     
     int local_data = 0;  /* Declared AFTER far_marker */
-    tealet_fork(main, &child, 0);
+    tealet_fork(main, &child, NULL, 0);
     /* local_data is safely below far_marker on stack */
 }
 ```
@@ -252,7 +252,7 @@ void my_main(void) {
 ### `tealet_fork()`
 
 ```c
-int tealet_fork(tealet_t *current, tealet_t **pother, int flags);
+int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags);
 ```
 
 Fork the current tealet, creating a child tealet that duplicates the execution state.
@@ -262,6 +262,10 @@ Fork the current tealet, creating a child tealet that duplicates the execution s
 - `pother`: Pointer to receive the "other" tealet pointer:
   - In parent: receives pointer to child
   - In child: receives pointer to parent
+- `parg`: Pointer to argument pointer for passing values to the suspended side. Can be NULL if no argument passing is desired (similar to `tealet_new()` and `tealet_switch()`)
+  - With `TEALET_FORK_DEFAULT`: Parent continues, child is suspended. When parent switches to child, child receives value via `*parg`
+  - With `TEALET_FORK_SWITCH`: Child continues, parent is suspended. When child switches back, parent receives value via `*parg`
+  - See `tealet_new()` for detailed argument passing semantics
 - `flags`: Fork mode flags:
   - `TEALET_FORK_DEFAULT` (0): Child created suspended, parent continues
   - `TEALET_FORK_SWITCH` (1): Immediately switch to child after creation
@@ -284,14 +288,16 @@ int main(void) {
     tealet_set_far(main, &stack_marker);
     
     tealet_t *other = NULL;
-    int result = tealet_fork(main, &other, TEALET_FORK_DEFAULT);
+    void *arg = NULL;
+    int result = tealet_fork(main, &other, &arg, TEALET_FORK_DEFAULT);
     
     if (result == 0) {
         /* This is the CHILD */
-        printf("Child: parent is %p\n", other);
+        printf("Child: parent is %p, received arg=%p\n", other, arg);
         
         /* CRITICAL: Forked tealets MUST use tealet_exit() */
-        tealet_exit(other, NULL, 0);  /* Switch back to parent */
+        void *return_value = (void*)0x1234;
+        tealet_exit(other, return_value, 0);  /* Switch back to parent */
         
         /* Should not reach here */
         abort();
@@ -300,8 +306,10 @@ int main(void) {
         /* This is the PARENT */
         printf("Parent: child is %p\n", other);
         
-        /* Switch to child when ready */
-        tealet_switch(other, NULL);
+        /* Switch to child with an argument */
+        arg = (void*)0x5678;
+        tealet_switch(other, &arg);
+        printf("Parent: child returned with arg=%p\n", arg);
         
         /* Clean up */
         tealet_delete(other);

@@ -334,6 +334,17 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * - In the child: points to the parent tealet
  * This allows both parent and child to reference each other for switching.
  * 
+ * The parg parameter allows passing a pointer value to whichever side of the
+ * fork initially gets suspended (similar to tealet_new()). Can be NULL if no
+ * argument passing is desired. If non-NULL:
+ * - With TEALET_FORK_DEFAULT: The parent continues, child is suspended.
+ *   When the parent later switches to the child, the child receives the
+ *   value via *parg.
+ * - With TEALET_FORK_SWITCH: The parent is suspended, child continues.
+ *   When the child later switches back, the parent receives the value
+ *   via *parg.
+ * See tealet_new() documentation for more details on argument passing semantics.
+ * 
  * Prerequisites:
  * - The current tealet must be either:
  *   a) A regular (non-main) tealet, OR
@@ -359,7 +370,7 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
  * 
  * Example:
  *   tealet_t *child = NULL;
- *   int result = tealet_fork(current, &child, TEALET_FORK_DEFAULT);
+ *   int result = tealet_fork(current, &child, NULL, TEALET_FORK_DEFAULT);
  *   if (result == 0) {
  *       // This is the child tealet
  *       // ... child-specific code ...
@@ -382,7 +393,7 @@ int tealet_set_far(tealet_t *tealet, void *far_boundary);
 #define TEALET_FORK_DEFAULT 0
 #define TEALET_FORK_SWITCH  1
 TEALET_API
-int tealet_fork(tealet_t *current, tealet_t **pother, int flags);
+int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags);
 
 /* this is used to get the "far address _if_ a tealet were initialized here
  * The arguments must match the real tealet_new() but are dummies.
