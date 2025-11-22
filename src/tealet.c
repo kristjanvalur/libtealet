@@ -1148,22 +1148,19 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
     return 0;
 }
 
-int tealet_fork(tealet_t *_current, tealet_t **pother, void **parg, int flags)
+int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
 {
-    tealet_sub_t *g_current = (tealet_sub_t *)_current;
-    tealet_main_t *g_main = TEALET_GET_MAIN(g_current);
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+    tealet_sub_t *g_current = g_main->g_current;
     tealet_sub_t *previous;
     tealet_sub_t *g_child;
-    int result;
+    int result, is_parent;
     
     /* Current tealet must have a bounded stack (far boundary set).
      * Even the main tealet can fork if its far boundary has been set.
      */
     if (TEALET_STACK_IS_UNBOUNDED(g_current))
-        return TEALET_ERR_UNFORKABLE;
-    
-    /* Current tealet must be active (we are currently executing it) */
-    if (g_main->g_current != g_current)
         return TEALET_ERR_UNFORKABLE;
     
     /* Active tealets have NULL stack (implied by the check above) */
@@ -1181,9 +1178,15 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, void **parg, int flags)
     /* Copy the far boundary */
     g_child->stack_far = g_current->stack_far;
     
+    /* result of tealet_switchstack is:
+     * 1 if this was just a save
+     * 0 if this was a restore (switch back)
+     * <0 on error
+     */
     if (flags & TEALET_FORK_SWITCH) {
         /* save parent, switch to child*/
         result = tealet_switchstack(g_main, g_child, NULL, parg);
+        is_parent = result == 0;
     } else {
         /* we are just saving the child's stack for later.
          *Save the stack in the child, don't modify 'previous'
@@ -1192,6 +1195,7 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, void **parg, int flags)
         g_main->g_current = g_child;     /* Child becomes current (temporarily) */
         result = tealet_switchstack(g_main, g_current, NULL, parg);
         g_main->g_previous = previous;
+        is_parent = result == 1;
     }
     
     if (result < 0) {
@@ -1200,52 +1204,9 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, void **parg, int flags)
         return TEALET_ERR_MEM;
     }
 
-    /* At this point, switchstack has already set g_current back to parent via g_target.
-     * result == 1: We are in the save-only path (just saved the state)
-     * result == 0: We are being restored (someone switched to the child)
-     */
-    
-    /* the following could be condensed into:
-    result = !!(flags & TEALET_FORK_SWITCH) == result);
     if (pother)
-        *pother = result?g_child:g_current;
-    return result;
-
-        */
-
-    if (flags & TEALET_FORK_SWITCH) {
-        /* The caller wants to start running as the child immediately */
-        if (result == 1) {
-            /* We saved the state and have become the child */
-            assert(g_main->g_current == g_child);
-            if (pother != NULL)
-                *pother = (tealet_t *)g_current; /* the parent in this case */
-            return 0;  /* Caller is now the child */
-        }
-        /* We are being restored back as the parent (someone switched to it) */
-        assert(result == 0);
-        if (pother != NULL)
-            *pother = (tealet_t *)g_child;
-        return 1;  /* Caller is the parent being restored */
-    } else {
-        /* The caller wants to continue running as the parent (default) */
-        if (result == 1) {
-            /* We just saved the state into child. Continue as parent.
-             * Parent gets pointer to child.
-             */
-            assert(g_main->g_current == g_current);
-            if (pother != NULL)
-                *pother = (tealet_t *)g_child;
-            return 1;  /* Caller is parent, child was created */
-        }
-        /* We are the child being restored (someone switched to it)
-         * Child gets pointer to parent.
-         */
-        assert(result == 0);
-        if (pother != NULL)
-            *pother = (tealet_t *)g_current;
-        return 0;  /* Caller is the child being restored */
-    }
+        *pother = (tealet_t*)(is_parent ? g_child : g_current);
+    return is_parent;
 }
 
 #if __GNUC__ > 4
