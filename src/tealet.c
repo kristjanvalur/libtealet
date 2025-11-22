@@ -678,15 +678,15 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
  
     assert(result == 0 || result == 1);
     /* 'result' is 1 if this was just the necessary stack 'save' to create
-     * a new tealetlet, with no restore of an existing stack
+     * a new tealet, with no restore of an existing stack
      */
     if (run_on_create == result) {
         /* need to run the actual code.  In the 'run_on_create' case this is
          * done on the initial save.  The current tealet is the new tealet,
-         * the previous tealet's stack was saved, and we run as then new one.
+         * the previous tealet's stack was saved, and we run as the new one.
          * In the '!run_on_create' case, the initial save was the new tealet
          * and we just returned immediately to the calling one.  We are now
-         * returning here on a switch, to run the teallet
+         * returning here on a switch, to run the tealet
          */
         
         /* the following assertion may be invalid, if a tealet_create() tealet
