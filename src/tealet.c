@@ -1148,7 +1148,7 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
     return 0;
 }
 
-int tealet_fork(tealet_t *_current, tealet_t **pother, int flags)
+int tealet_fork(tealet_t *_current, tealet_t **pother, void **parg, int flags)
 {
     tealet_sub_t *g_current = (tealet_sub_t *)_current;
     tealet_main_t *g_main = TEALET_GET_MAIN(g_current);
@@ -1181,20 +1181,18 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, int flags)
     /* Copy the far boundary */
     g_child->stack_far = g_current->stack_far;
     
-    /* Save the current execution state into the child tealet.
-     * Like tealet_create(), we temporarily set g_current = child, g_target = parent.
-     * switchstack will save the execution context into g_current->stack (child),
-     * then set g_current back to g_target (parent).
-     * We preserve g_previous since this isn't a "real" switch.
-     */
-    previous = g_main->g_previous;
-    g_main->g_current = g_child;     /* Child becomes current (temporarily) */
-    
-    /* Save the parent's execution state into child's stack */
-    result = tealet_switchstack(g_main, g_current, NULL, NULL);
-    
-    /* Restore g_previous - fork is not a real switch, just saving state */
-    g_main->g_previous = previous;
+    if (flags & TEALET_FORK_SWITCH) {
+        /* save parent, switch to child*/
+        result = tealet_switchstack(g_main, g_child, NULL, parg);
+    } else {
+        /* we are just saving the child's stack for later.
+         *Save the stack in the child, don't modify 'previous'
+        */
+        previous = g_main->g_previous;
+        g_main->g_current = g_child;     /* Child becomes current (temporarily) */
+        result = tealet_switchstack(g_main, g_current, NULL, parg);
+        g_main->g_previous = previous;
+    }
     
     if (result < 0) {
         /* Failed to save stack */
@@ -1207,33 +1205,35 @@ int tealet_fork(tealet_t *_current, tealet_t **pother, int flags)
      * result == 0: We are being restored (someone switched to the child)
      */
     
+    /* the following could be condensed into:
+    result = !!(flags & TEALET_FORK_SWITCH) == result);
+    if (pother)
+        *pother = result?g_child:g_current;
+    return result;
+
+        */
+
     if (flags & TEALET_FORK_SWITCH) {
         /* The caller wants to start running as the child immediately */
         if (result == 1) {
-            /* We just saved the state. Now transfer control to the child.
-             * Transfer the stack from child to parent, so parent becomes suspended
-             * and child is active (running on the C stack).
-             */
-            g_current->stack = g_child->stack;  /* Parent gets the saved stack */
-            g_child->stack = NULL;              /* Child is now active on C stack */
-            
+            /* We saved the state and have become the child */
+            assert(g_main->g_current == g_child);
             if (pother != NULL)
                 *pother = (tealet_t *)g_current; /* the parent in this case */
-            g_main->g_current = g_child;
             return 0;  /* Caller is now the child */
         }
-         /* We are being restored back as the parent (someone switched to it) */
-         assert(result == 0);
-         if (pother != NULL)
-             *pother = (tealet_t *)g_child;
-         return 1;  /* Caller is the parent being restored */
+        /* We are being restored back as the parent (someone switched to it) */
+        assert(result == 0);
+        if (pother != NULL)
+            *pother = (tealet_t *)g_child;
+        return 1;  /* Caller is the parent being restored */
     } else {
         /* The caller wants to continue running as the parent (default) */
         if (result == 1) {
             /* We just saved the state into child. Continue as parent.
              * Parent gets pointer to child.
              */
-            assert(g_main->g_current == g_current);  /* Should be back to parent */
+            assert(g_main->g_current == g_current);
             if (pother != NULL)
                 *pother = (tealet_t *)g_child;
             return 1;  /* Caller is parent, child was created */
