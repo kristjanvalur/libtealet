@@ -357,6 +357,29 @@ void test_simple_create_and_run(void)
   fini_test();
 }
 
+/* Test that tealet_previous() is correct inside run function for tealet_create */
+static tealet_t *test_create_previous_run(tealet_t *t1, void *arg)
+{
+  /* When first switched to via tealet_switch(), previous should be main */
+  assert(tealet_previous(t1) == t1->main);
+  status = 42;
+  return g_main;
+}
+
+void test_create_previous(void)
+{
+  tealet_t *t;
+  init_test();
+  /* Create tealet without running it */
+  t = tealet_create(g_main, test_create_previous_run);
+  assert(status == 0);
+  /* Now switch to it - it should see main as previous */
+  tealet_switch(t, NULL);
+  assert(status == 42);  /* Verify it ran */
+  assert(tealet_previous(g_main) == t);  /* Verify we see it as previous */
+  fini_test();
+}
+
 /*************************************************************/
 
 tealet_t *test_status_run(tealet_t *t1, void *arg)
@@ -842,6 +865,7 @@ static void (*test_list[])(void) = {
   test_main_current,
   test_simple,
   test_simple_create,
+  test_create_previous,
   test_status,
   test_exit,
   test_switch,

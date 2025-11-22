@@ -53,7 +53,13 @@ static void test_basic_fork(void* far_marker)
         assert(result == 0);
         assert(testvalue == 0);  /* Parent value should be preserved after child modifies it */
         
+        /* Verify tealet_previous() after switch back from child
+         * The child (stored in 'other') called tealet_exit() back to us */
+        tealet_t *prev = tealet_previous(main);
+        printf("  Parent: previous tealet is %p, child is %p\n", (void*)prev, (void*)other);
+        assert(prev == other);
         printf("  Parent: returned from child, stack preserved correctly\n");
+        printf("  Parent: tealet_previous() verified after child exit\n");
         
         /* Clean up */
         tealet_delete(other);
@@ -63,6 +69,13 @@ static void test_basic_fork(void* far_marker)
     } else if (result == 0) {
         /* We are the child, other = parent */
         assert(testvalue == 0);  /* Child should start with saved value */
+        
+        /* Verify tealet_previous() in child after switch from parent
+         * The parent (stored in 'other') called tealet_switch() to us */
+        tealet_t *prev = tealet_previous(main);
+        printf("  Child: previous tealet is %p, parent is %p\n", (void*)prev, (void*)other);
+        assert(prev == other);
+        printf("  Child: tealet_previous() verified after switch from parent\n");
         
         /* Modify stack variable to verify parent's stack is isolated */
         testvalue = 42;
@@ -112,6 +125,10 @@ static void test_fork_switch(void *far_marker)
         assert(testvalue == 0);  /* Child should start with saved value */
         assert(switch_count == 1);  /* Child should have incremented value */
         
+        /* Verify tealet_previous() in child - should be parent after fork with FORK_SWITCH */
+        assert(tealet_previous(main) == other);
+        printf("  Child: tealet_previous() verified after FORK_SWITCH\n");
+        
         /* Modify stack variables to verify parent's stack is isolated */
         testvalue = 42;
         printf("  Child: exiting via tealet_exit...\n");
@@ -124,6 +141,10 @@ static void test_fork_switch(void *far_marker)
         assert(result == 1);
         assert(testvalue == 0);  /* Parent should have saved value, not child's 42 */
         assert(switch_count == 1);  /* Parent should have saved value, not child's 2 */
+        
+        /* Verify tealet_previous() after child exits back to parent */
+        assert(tealet_previous(main) == other);
+        printf("  Parent: tealet_previous() verified after child exit\n");
         printf("  Parent: stack variables preserved correctly\n");
         printf("  Parent: back from child, cleaning up\n");
     }    /* Clean up - only parent gets here */
@@ -404,6 +425,46 @@ static void test_ping_pong(void *far_marker)
     }
 }
 
+/* Test tealet_previous() with tealet_new() */
+static tealet_t *test_new_previous_run(tealet_t *current, void *arg)
+{
+    tealet_t *main = current->main;
+    tealet_t *expected_caller = (tealet_t*)arg;
+    
+    /* Verify tealet_previous() returns the tealet that called tealet_new() */
+    assert(tealet_previous(main) == expected_caller);
+    printf("  Run function: tealet_previous() verified - caller is %s\n",
+           expected_caller == main ? "main" : "other tealet");
+    
+    return main;
+}
+
+static void test_new_previous(void *far_marker)
+{
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main;
+    void *arg;
+    
+    TEST("test_new_previous");
+    
+    /* Initialize main tealet */
+    main = tealet_initialize(&alloc, 0);
+    assert(main != NULL);
+    
+    /* Test tealet_new() from main */
+    arg = main;
+    tealet_new(main, test_new_previous_run, &arg);
+    
+    /* Verify tealet_previous() after return from tealet_new() */
+    /* Note: the tealet has already been freed at this point, so we just verify we're back in main */
+    assert(tealet_current(main) == main);
+    printf("  Main: returned from tealet_new(), tealet_previous() test passed\n");
+    
+    tealet_finalize(main);
+    
+    PASS();
+}
+
 int main(void)
 {
     /* Disable stdout buffering to see debug output before crashes */
@@ -428,6 +489,9 @@ int main(void)
     printf("\n");
     
     test_ping_pong(&far_marker );
+    printf("\n");
+    
+    test_new_previous(&far_marker);
     printf("\n");
     
     printf("=== Results: %d/%d tests passed ===\n", test_passed, test_count);

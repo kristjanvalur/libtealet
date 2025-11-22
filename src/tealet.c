@@ -1194,7 +1194,11 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
         previous = g_main->g_previous;
         g_main->g_current = g_child;     /* Child becomes current (temporarily) */
         result = tealet_switchstack(g_main, g_current, NULL, parg);
-        g_main->g_previous = previous;
+        /* only in the case of just saving do we restore previous. otherwise
+         * we respect the previous from the switch
+         */
+        if (result == 1)
+            g_main->g_previous = previous;
         is_parent = result == 1;
     }
 
