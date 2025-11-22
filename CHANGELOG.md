@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2025-11-22
+
+### Summary
+Refactoring release that centralizes internal state management and extends argument
+passing to `tealet_fork()`. While this includes an API change to the experimental
+`tealet_fork()` function, breaking changes are expected for this feature.
+
+### Changed
+- **Refactored internal state management**: Centralized stack switching logic
+  - `tealet_switchstack()` now takes explicit `target`, `in_arg`, and `out_arg` parameters
+  - State variables (`g_target`, `g_arg`) managed internally by `tealet_switchstack()`
+  - Simplified calling functions: `tealet_new()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`
+  - Enhanced `tealet_initialstub()` to properly handle run function argument passing
+  - Cleaner separation of concerns and more maintainable code structure
+- **`tealet_fork()` API change**: Added `parg` parameter for argument passing
+  - Signature: `int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags)`
+  - With `TEALET_FORK_DEFAULT`: Passes value to suspended child on first switch
+  - With `TEALET_FORK_SWITCH`: Passes value to suspended parent when child switches back
+  - Can be NULL if no argument passing is desired (similar to `tealet_new()` and `tealet_switch()`)
+  - Enables bidirectional value passing between parent and child, consistent with other tealet operations
+
+### Added
+- **Fork argument passing tests**: Two new comprehensive tests in `tests/test_fork.c`
+  - `test_fork_switch_arg()`: Verifies argument passing with `TEALET_FORK_SWITCH`
+  - `test_fork_default_arg()`: Verifies bidirectional argument passing with `TEALET_FORK_DEFAULT`
+  - Tests validate proper isolation of stack variables between parent and child
+
+### Documentation
+- Updated `tealet_fork()` documentation in `src/tealet.h` to explain `parg` parameter
+- Updated API.md with new signature and argument passing examples
+- Added note that `parg` can be NULL (consistent with `tealet_new()` and `tealet_switch()`)
+
 ## [0.3.0] - 2025-11-20
 
 ### Summary
@@ -173,7 +205,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/kristjanvalur/libtealet/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kristjanvalur/libtealet/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kristjanvalur/libtealet/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kristjanvalur/libtealet/releases/tag/v0.1.0
