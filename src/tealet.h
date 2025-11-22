@@ -52,7 +52,7 @@ typedef struct tealet_alloc_t {
     0 \
 }
 
-/* convenence macros to call an allocator */
+/* convenience macros to call an allocator */
 #define TEALET_ALLOC_MALLOC(alloc, size) (alloc)->malloc_p((size), (alloc)->context)
 #define TEALET_ALLOC_FREE(alloc, ptr) (alloc)->free_p((ptr), (alloc)->context)
 
@@ -123,7 +123,7 @@ void tealet_free(tealet_t *tealet, void *p);
  * execution, which must be a different one, like for example the main tealet.
  * When 'run(g)' returns, the tealet 'g' is freed.
  * The return value is the new tealet, or NULL if memory allocation failed.
- * Note that this tealet may have been alread freed should run(g) have
+ * Note that this tealet may have been already freed should run(g) have
  * returned by the time this function returns.
  * On return, *arg contains the arg value passed in to the switch
  * causing this return.
@@ -187,10 +187,10 @@ TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
 
 /* Allocate and switch to a new tealet.
- * This is semantically equvalent to
+ * This is semantically equivalent to
  * tealet_create() followed by tealet_switch(), but may be slightly faster.
  * The return value is the new tealet, or NULL if memory allocation failed.
- * Note that this tealet may have been alread freed should run(g) have
+ * Note that this tealet may have been already freed should run(g) have
  * returned by the time this function returns.
  */
 TEALET_API
@@ -233,7 +233,7 @@ tealet_t *tealet_current(tealet_t *tealet);
 TEALET_API
 tealet_t *tealet_previous(tealet_t *tealet);
 
-/* Get the address of a the tealet's main user pointer, a single
+/* Get the address of the tealet's main user pointer, a single
  * void pointer associated with the main tealet.  Use this to
  * associate a (void*)value with the main tealet.
  */
@@ -241,7 +241,7 @@ TEALET_API
 void **tealet_main_userpointer(tealet_t *tealet);
 
 /* functions for stack arithmetic.  Useful when deciding
- * if you want to start a newa tealet, or when doing stack
+ * if you want to start a new tealet, or when doing stack
  * spilling
  */
 
@@ -429,7 +429,7 @@ typedef struct tealet_stats_t
     /* stack memory storage statistics */
     size_t stack_bytes;           /* Bytes used for stack storage */
     size_t stack_bytes_expanded;  /* Bytes used for stack if there were no reuse */
-    size_t stack_bytes_naive;     /* Bytes used for stack if we stored stack naievely */
+    size_t stack_bytes_naive;     /* Bytes used for stack if we stored stack naively */
     size_t stack_count;           /* Number of currently stored unique stacks */
     size_t stack_chunk_count;     /* Number of currently stored unique stack chunks */
 } tealet_stats_t;
