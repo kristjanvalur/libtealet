@@ -46,14 +46,14 @@ typedef struct tealet_stack_t
 {
     int refcount;                   /* controls lifetime */
     struct tealet_stack_t **prev;   /* previous 'next' pointer */
-    struct tealet_stack_t *next;	/* next unsaved stack */
+    struct tealet_stack_t *next;    /* next unsaved stack */
     char *stack_far;                /* the far boundary of this stack (or STACKMAN_SP_FURTHEST for unbounded) */
     size_t saved;                   /* total amount of memory saved in all chunks */
     struct tealet_chunk_t chunk;    /* the initial chunk */
 } tealet_stack_t;
 
 
-/* the actual tealet structure as used internally 
+/* the actual tealet structure as used internally
  * The main tealet will have stack_far set to STACKMAN_SP_FURTHEST,
  * representing an unbounded stack extent (the entire process stack).
  * "stack" is zero for a running tealet, otherwise it points
@@ -62,7 +62,7 @@ typedef struct tealet_stack_t
  * that a tealet is exiting.
  */
 typedef struct tealet_sub_t {
-  tealet_t base;				   /* the public part of the tealet */
+  tealet_t base;                   /* the public part of the tealet */
   char *stack_far;                 /* the "far" end of the stack, NULL when exiting, or STACKMAN_SP_FURTHEST for unbounded */
   tealet_stack_t *stack;           /* saved stack or 0 if active or -1 if invalid*/
 #if TEALET_WITH_STATS
@@ -199,7 +199,7 @@ static tealet_stack_t *tealet_stack_new(tealet_main_t *main,
 {
     size_t tsize;
     tealet_stack_t *s;
-    
+
     tsize = offsetof(tealet_stack_t, chunk.data[0]) + size;
     s = (tealet_stack_t*)tealet_int_malloc(main, tsize);
     if (!s)
@@ -310,7 +310,7 @@ static void tealet_stack_decref(tealet_main_t *main, tealet_stack_t *stack)
         return;
     if (stack->prev)
         tealet_stack_unlink(stack);
- 
+
     chunk = stack->chunk.next;
     STATS_SUB_ALLOC(main, offsetof(tealet_stack_t, chunk.data[0]) + stack->chunk.size);
 #if TEALET_WITH_STATS
@@ -400,31 +400,31 @@ static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char*
     /* We shouldn't be completely saved already */
     if (stack->stack_far != STACKMAN_SP_FURTHEST)
         assert(STACKMAN_SP_DIFF(stack->stack_far, stack->chunk.stack_near) > saved);
- 
+
     /* truncate the "stop" */
     if (STACKMAN_SP_LE(stack->stack_far, saveto)) {
         saveto = stack->stack_far;
         *full = 1;
     } else
         *full = 0;
-    
+
     /* total saved size expected after this */
     assert(saveto != STACKMAN_SP_FURTHEST); /* can't save them all */
     size = STACKMAN_SP_DIFF(saveto, stack->chunk.stack_near);
     if (size <= saved)
         return 0; /* nothing to do */
-    
+
     fail = tealet_stack_grow(main, stack, size);
     if (fail == 0)
         return 0;
 
     if (fail_ok)
         return fail; /* caller can deal with failures */
-    
+
     /* Check if this is main's stack - we cannot mark main as defunct */
     if (stack == ((tealet_sub_t*)main)->stack)
         return fail; /* force the operation to fail, will redirect to main */
-    
+
     /* we cannot fail.  Mark this stack as defunct and continue */
     tealet_stack_defunct(main, stack);
     *full = 1;
@@ -434,14 +434,14 @@ static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char*
 /* Grow a list of stacks to a certain limit.  Unlink those that
  * become fully saved.
  */
-static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list, 
+static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list,
     char *saveto, tealet_stack_t *target, int fail_ok)
 {
     while (list) {
         int fail;
         int full;
         if (list == target) {
-            /* this is the stack we are switching to.  We should stop here 
+            /* this is the stack we are switching to.  We should stop here
              * since previous stacks are already fully saved wrt. this.
              * also, if this stack is not shared, it need not be saved
              */
@@ -461,7 +461,7 @@ static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list,
             tealet_stack_unlink(list);
             return 0;
         }
-                
+
         fail = tealet_stack_growto(main, list, saveto, &full, fail_ok);
         if (fail)
             return fail;
@@ -490,7 +490,7 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer)
     int exiting, fail, fail_ok;
     assert(target_stop != NULL); /* target is't exiting */
     assert(g_current != g_target);
-    
+
     exiting = g_current->stack_far == NULL;
     /* if task is exiting, failure cannot be signalled. the switch
      * must proceed. A stack failing to get saved (due to memory shortage)
@@ -511,7 +511,7 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer)
     /* when returning to unbounded stack, there should now be no list of unsaved stacks */
     if (TEALET_STACK_IS_UNBOUNDED(g_main->g_target))
         assert(g_main->g_prev == NULL);
-    
+
     if (exiting) {
         /* tealet is exiting. We don't save its stack. */
         assert(!TEALET_IS_MAIN((tealet_t *)g_current));
@@ -568,7 +568,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
 {
     tealet_main_t *g_main = (tealet_main_t *)context;
     tealet_sub_t *g_target = g_main->g_target;
-        
+
     if (opcode == STACKMAN_OP_SAVE) {
         int result = tealet_save_state(g_main, stack_pointer);
         if (result) {
@@ -592,7 +592,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
     } else if (g_main->g_sw == SW_ERR) {
         /* called second time, but error happened the first time */
         return (void*) -1;
-    } 
+    }
     /* called second time but no restore should happen */
     assert(g_main->g_sw == SW_NOP);
     return NULL;
@@ -623,13 +623,13 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
     g_main->g_previous = g_main->g_current;
     g_main->g_target = target;
     g_main->g_arg = in_arg;
-    
+
     /* stackman switch is an external function so an optizer
      * cannot assume that any pointers reachable by
      * g_main stay unchanged across the switch
      */
     stackman_switch(tealet_save_restore_cb, (void*)g_main);
-    
+
     if (g_main->g_sw != SW_ERR) {
         g_main->g_current = g_main->g_target;
     } else {
@@ -675,7 +675,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
         /* couldn't allocate stack */
         return result;
     }
- 
+
     assert(result == 0 || result == 1);
     /* 'result' is 1 if this was just the necessary stack 'save' to create
      * a new tealet, with no restore of an existing stack
@@ -688,7 +688,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
          * and we just returned immediately to the calling one.  We are now
          * returning here on a switch, to run the tealet
          */
-        
+
         /* the following assertion may be invalid, if a tealet_create() tealet
          * was duplicated.  We may now be a copy
          */
@@ -698,8 +698,8 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
         } else {
             run_arg = switch_arg;  /* tealet_create(). use the arg from the switch */
         }
-        assert(g_main->g_current->stack == NULL);     /* running */      
-    
+        assert(g_main->g_current->stack == NULL);     /* running */
+
         g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, run_arg));
         tealet_exit((tealet_t*)g_exit_target, NULL, TEALET_FLAG_DELETE);
         assert(!"This point should not be reached");
@@ -837,7 +837,7 @@ void tealet_free(tealet_t *tealet, void *p)
     tealet_int_free(g_main, p);
 }
 
-/* create a tealet by saving the current stack and starting 
+/* create a tealet by saving the current stack and starting
  * immediate execution of a new one
  */
 tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
@@ -904,7 +904,7 @@ int tealet_switch(tealet_t *stub, void **parg)
     }
     return tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
 }
- 
+
 static int tealet_exit_inner(tealet_t *target, void *arg, int flags)
 {
     tealet_sub_t *g_target = (tealet_sub_t *)target;
@@ -1023,27 +1023,27 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
     memset(stats, 0, sizeof(*stats));
 #else
     tealet_main_t *tmain = TEALET_GET_MAIN(tealet);
-    
+
     /* Basic tealet counts */
     stats->n_active = tmain->g_tealets;
     stats->n_total = tmain->g_counter;
-    
+
     /* Memory usage statistics */
     stats->bytes_allocated = tmain->g_bytes_allocated;
     stats->bytes_allocated_peak = tmain->g_bytes_allocated_peak;
     stats->blocks_allocated = tmain->g_blocks_allocated;
     stats->blocks_allocated_peak = tmain->g_blocks_allocated_peak;
     stats->blocks_allocated_total = tmain->g_blocks_allocated_total;
-    
+
     /* Stack memory storage statistics - from tracked values */
     stats->stack_bytes = tmain->g_stack_bytes;
     stats->stack_count = tmain->g_stack_count;
     stats->stack_chunk_count = tmain->g_stack_chunk_count;
-    
+
     /* Compute expanded and naive sizes by walking all tealets */
     stats->stack_bytes_expanded = 0;
     stats->stack_bytes_naive = 0;
-    
+
     /* Walk the circular list of all tealets */
     tealet_sub_t *start = (tealet_sub_t*)tmain;
     tealet_sub_t *t = start;
@@ -1058,12 +1058,12 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
             size_t this_naive = 0;
             size_t this_expanded = 0;
             void *effective_far;
-            
+
             /* Compute the effective "far" boundary for naive calculation */
             if (stack->stack_far == STACKMAN_SP_FURTHEST) {
                 /* For unbounded stacks, recompute the furthest point from actual chunks */
                 /* Compute far = near + size for the initial chunk */
-                effective_far = (void*)STACKMAN_SP_ADD((ptrdiff_t)stack->chunk.stack_near, 
+                effective_far = (void*)STACKMAN_SP_ADD((ptrdiff_t)stack->chunk.stack_near,
                                                        (ptrdiff_t)stack->chunk.size);
                 chunk = stack->chunk.next;
                 while (chunk) {
@@ -1078,17 +1078,17 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
                 /* For bounded stacks, use the recorded far boundary */
                 effective_far = stack->stack_far;
             }
-            
+
             /* Compute naive size: extent from effective_far to near, plus overhead */
             size_t extent = (size_t)STACKMAN_SP_DIFF((ptrdiff_t)effective_far,
                                                       (ptrdiff_t)stack->chunk.stack_near);
             this_naive = offsetof(tealet_stack_t, chunk.data[0]) + extent;
             stats->stack_bytes_naive += this_naive;
-            
+
             /* Add up all chunk allocations for this tealet (counts shared chunks multiple times) */
             /* Initial chunk is part of stack structure */
             this_expanded = offsetof(tealet_stack_t, chunk.data[0]) + stack->chunk.size;
-            
+
             /* Count additional chunks */
             chunk = stack->chunk.next;
             int chunk_count = 1;
@@ -1098,7 +1098,7 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats)
                 chunk = chunk->next;
             }
             stats->stack_bytes_expanded += this_expanded;
-            
+
             stack_num++;
         }
         t = t->next_tealet;
@@ -1134,15 +1134,15 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
 {
     tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-    
+
     /* Only the main tealet can have its far boundary set */
     if (!TEALET_IS_MAIN(_tealet))
         return -1;
-    
+
     /* Verify we're being called from the main tealet (it must be current) */
     if (g_main->g_current != tealet)
         return -1;
-    
+
     /* Set the far boundary */
     tealet->stack_far = (char *)far_boundary;
     return 0;
@@ -1156,16 +1156,16 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
     tealet_sub_t *previous;
     tealet_sub_t *g_child;
     int result, is_parent;
-    
+
     /* Current tealet must have a bounded stack (far boundary set).
      * Even the main tealet can fork if its far boundary has been set.
      */
     if (TEALET_STACK_IS_UNBOUNDED(g_current))
         return TEALET_ERR_UNFORKABLE;
-    
+
     /* Active tealets have NULL stack (implied by the check above) */
     assert(g_current->stack == NULL);
-    
+
     /* Allocate the child tealet */
     g_child = tealet_alloc(g_main);
     if (g_child == NULL)
@@ -1174,10 +1174,10 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
     /* Copy extra data if present */
     if (g_main->g_extrasize)
         memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
-    
+
     /* Copy the far boundary */
     g_child->stack_far = g_current->stack_far;
-    
+
     /* result of tealet_switchstack is:
      * 1 if this was just a save
      * 0 if this was a restore (switch back)
@@ -1197,7 +1197,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
         g_main->g_previous = previous;
         is_parent = result == 1;
     }
-    
+
     if (result < 0) {
         /* Failed to save stack */
         tealet_free_tealet(g_main, g_child);
