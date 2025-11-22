@@ -1,9 +1,9 @@
 [![build and test](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml/badge.svg)](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml)
 [![Powered by Stackman](https://img.shields.io/badge/powered_by-stackman_🦸-blue)](https://github.com/stackless-dev/stackman)
 
-# Libtealet
+# libtealet
 
-**Version 0.3.1**
+**Version 0.3.2**
 
 LibTealet is a lightweight co-routine library for C.  It is based on the
 technique of stack-slicing, where the execution stack is saved and restored

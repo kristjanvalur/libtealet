@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2025-11-22
+
+### Fixed
+- **`tealet_previous()` correctness for forked tealets**: Fixed bug where forked child tealets
+  would not correctly see their parent as the previous tealet when first switched to
+  - In `TEALET_FORK_DEFAULT` mode, `tealet_switchstack()` returns twice (parent and child contexts)
+  - Previously, `g_previous` was unconditionally restored after the switch, clearing it in the child
+  - Now only restores `g_previous` in parent context (when `result == 1`)
+  - Child correctly sees parent as previous tealet, parent maintains original previous value
+
+### Added
+- **Comprehensive `tealet_previous()` tests**: Added tests verifying correct previous tealet tracking
+  - `test_basic_fork()`: Enhanced to verify `tealet_previous()` after switch and exit
+  - `test_fork_switch()`: Enhanced to verify `tealet_previous()` with `TEALET_FORK_SWITCH`
+  - `test_new_previous()`: New test verifying `tealet_previous()` with `tealet_new()`
+  - `test_create_previous()`: New test verifying `tealet_previous()` with `tealet_create()`
+
 ## [0.3.1] - 2025-11-22
 
 ### Summary

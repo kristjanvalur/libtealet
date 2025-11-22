@@ -7,10 +7,10 @@
 /* Version information */
 #define TEALET_VERSION_MAJOR 0
 #define TEALET_VERSION_MINOR 3
-#define TEALET_VERSION_PATCH 1
+#define TEALET_VERSION_PATCH 2
 
 /* Version as a string */
-#define TEALET_VERSION "0.3.1"
+#define TEALET_VERSION "0.3.2"
 
 /* Version as a single number for comparisons (MMmmpp: Major, minor, patch) */
 #define TEALET_VERSION_NUMBER ((TEALET_VERSION_MAJOR * 10000) + \
