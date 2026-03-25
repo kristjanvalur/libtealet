@@ -129,9 +129,13 @@ void tealet_free(tealet_t *tealet, void *p);
  * causing this return.
  * 'arg' can be NULL, in which case NULL is passed to run and no result
  * argument is passed.
+ * If 'stack_far_hint' is non-NULL, it is used as the requested
+ * far boundary for the newly created tealet's initial stack snapshot.
+ * The hint is clamped so that it is never closer than the default
+ * boundary chosen internally.
  */
 TEALET_API
-tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run);
+tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far_hint);
 
 /* Switch to another tealet.  Execution continues there.  The tealet
  * passed in must not have been freed yet and must descend from
@@ -192,9 +196,13 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  * The return value is the new tealet, or NULL if memory allocation failed.
  * Note that this tealet may have been already freed should run(g) have
  * returned by the time this function returns.
+ * If 'stack_far_hint' is non-NULL, it is used as the requested
+ * far boundary for the newly created tealet's initial stack snapshot.
+ * The hint is clamped so that it is never closer than the default
+ * boundary chosen internally.
  */
 TEALET_API
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg);
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far_hint);
 
 /* Duplicate a tealet. The active tealet is duplicated
  * along with its stack contents.
@@ -399,7 +407,7 @@ int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags);
  * The arguments must match the real tealet_new() but are dummies.
  */
 TEALET_API
-void *tealet_new_far(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3);
+void *tealet_new_far(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4);
 
 /* get the size of the suspended tealet's saved stack */
 TEALET_API

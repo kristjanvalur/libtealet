@@ -75,7 +75,7 @@ _tealet_stub_main(tealet_t *current, void *arg)
 /* create a stub and return it */
 tealet_t *
 tealet_stub_new(tealet_t *t) {
-    return tealet_create(t, _tealet_stub_main);
+    return tealet_create(t, _tealet_stub_main, NULL);
 }
 
 /*

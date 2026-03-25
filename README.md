@@ -73,7 +73,7 @@ int main(void) {
     tealet_t *main = tealet_initialize(&alloc, 0);
     
     void *arg = NULL;
-    tealet_t *coro = tealet_new(main, worker, &arg);
+    tealet_t *coro = tealet_new(main, worker, &arg, NULL);
     
     tealet_finalize(main);
     return 0;

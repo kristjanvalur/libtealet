@@ -837,20 +837,36 @@ void tealet_free(tealet_t *tealet, void *p)
     tealet_int_free(g_main, p);
 }
 
+/* choose initial far boundary for tealet creation.
+ * 'hint' can only extend capture range (be farther), never shrink it.
+ */
+static void *tealet_pick_initial_far(void *default_far, void *hint)
+{
+    if (hint == NULL)
+        return default_far;
+    if (STACKMAN_SP_LE(default_far, hint))
+        return hint;
+    return default_far;
+}
+
 /* create a tealet by saving the current stack and starting
  * immediate execution of a new one
  */
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far_hint)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
     void *arg = NULL;
+    void *default_far;
+    void *stack_far;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(!g_main->g_target);
     result = tealet_alloc(g_main);
     if (result == NULL)
         return NULL; /* Could not allocate */
-    fail = tealet_initialstub(g_main, result, result, run, (parg!=NULL ? parg : &arg), (void*)&result);
+    default_far = (void*)&result;
+    stack_far = tealet_pick_initial_far(default_far, stack_far_hint);
+    fail = tealet_initialstub(g_main, result, result, run, (parg!=NULL ? parg : &arg), stack_far);
     if (fail) {
         /* could not save stack */
         tealet_delete((tealet_t*)result);
@@ -863,10 +879,12 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg)
  * back to the caller, allowing the caller to run the
  * tealet proper later, by switching to it.
  */
-tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
+tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far_hint)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
+    void *default_far;
+    void *stack_far;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     tealet_sub_t *previous = g_main->g_previous;
     tealet_sub_t *current = g_main->g_current;
@@ -878,7 +896,9 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run)
      * to save the new tealet's stack at this position
      */
     g_main->g_current = result;
-    fail = tealet_initialstub(g_main, result, current, run, NULL, (void*)&result);
+    default_far = (void*)&result;
+    stack_far = tealet_pick_initial_far(default_far, stack_far_hint);
+    fail = tealet_initialstub(g_main, result, current, run, NULL, stack_far);
     if (fail) {
         /* could not save stack */
         tealet_delete((tealet_t*)result);
@@ -1220,13 +1240,14 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
 #pragma warning(push)
 #pragma warning( disable : 4172 )
 #endif
-void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3)
+void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3, void *d4)
 {
     tealet_sub_t *result;
     void *r;
     (void)d1;
     (void)d2;
     (void)d3;
+    (void)d4;
     /* avoid compiler warnings about returning tmp addr */
     r = (void*)&result;
     return r;

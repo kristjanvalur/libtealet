@@ -48,7 +48,7 @@ int main(void) {
     
     /* Create and run a coroutine */
     void *arg = "Hello World";
-    tealet_t *coro = tealet_new(main, hello_run, &arg);
+    tealet_t *coro = tealet_new(main, hello_run, &arg, NULL);
     
     /* Clean up */
     tealet_finalize(main);
@@ -146,7 +146,7 @@ int main(void) {
     tealet_t *main = tealet_initialize(&alloc, 0);
     
     void *arg = NULL;
-    tealet_t *worker = tealet_new(main, worker_run, &arg);
+    tealet_t *worker = tealet_new(main, worker_run, &arg, NULL);
     /* worker may already be deleted here! */
     
     int status = tealet_status(worker);  /* ❌ Dangling pointer! */
@@ -173,7 +173,7 @@ int main(void) {
     tealet_t *main = tealet_initialize(&alloc, 0);
     
     void *arg = NULL;
-    tealet_t *worker = tealet_new(main, worker_run, &arg);
+    tealet_t *worker = tealet_new(main, worker_run, &arg, NULL);
     /* worker still exists and can be queried */
     
     int status = tealet_status(worker);  /* ✅ Safe */
@@ -218,7 +218,7 @@ tealet_t *controlled_worker(tealet_t *current, void *arg) {
 
 int main(void) {
     /* ... */
-    tealet_t *worker = tealet_new(main, controlled_worker, &arg);
+    tealet_t *worker = tealet_new(main, controlled_worker, &arg, NULL);
     
     /* Can switch back to worker multiple times */
     tealet_switch(worker, NULL);
@@ -265,8 +265,8 @@ int main(void) {
     tealet_t *main = tealet_initialize(&alloc, 0);
     
     /* Create both coroutines */
-    tealet_t *ping = tealet_create(main, ping_run);
-    tealet_t *pong = tealet_create(main, pong_run);
+    tealet_t *ping = tealet_create(main, ping_run, NULL);
+    tealet_t *pong = tealet_create(main, pong_run, NULL);
     
     /* Start ping, passing pong as argument */
     void *arg = pong;
@@ -318,7 +318,7 @@ int main(void) {
     /* Create generator for range(5) */
     int max = 5;
     void *arg = &max;
-    tealet_t *gen = tealet_new(main, range_run, &arg);
+    tealet_t *gen = tealet_new(main, range_run, &arg, NULL);
     
     /* Pull values from generator */
     while (tealet_status(gen) == TEALET_STATUS_ACTIVE) {
@@ -392,12 +392,12 @@ int main(void) {
     int *buffer = malloc(sizeof(int));
     
     /* Create consumer first */
-    tealet_t *consumer = tealet_create(main, consumer_run);
+    tealet_t *consumer = tealet_create(main, consumer_run, NULL);
     
     /* Create producer context */
     producer_ctx_t ctx = {consumer, buffer, 0};
     void *arg = &ctx;
-    tealet_t *producer = tealet_new(main, producer_run, &arg);
+    tealet_t *producer = tealet_new(main, producer_run, &arg, NULL);
     
     printf("Total consumed: %d items\n", ctx.count);
     
@@ -414,7 +414,7 @@ int main(void) {
 
 ```c
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_run, &arg);
+tealet_t *t = tealet_new(main, my_run, &arg, NULL);
 /* Returns when my_run switches back */
 /* arg now contains return value */
 ```
@@ -424,7 +424,7 @@ Use when you want to start execution immediately.
 ### `tealet_create()` + `tealet_switch()` - Deferred Start
 
 ```c
-tealet_t *t = tealet_create(main, my_run);
+tealet_t *t = tealet_create(main, my_run, NULL);
 /* Tealet created but not yet running */
 
 void *arg = my_data;
@@ -438,7 +438,7 @@ Use when you need to set up multiple coroutines before starting any.
 Functions return `NULL` or negative error codes on failure:
 
 ```c
-tealet_t *t = tealet_create(main, my_run);
+tealet_t *t = tealet_create(main, my_run, NULL);
 if (t == NULL) {
     fprintf(stderr, "Failed to create tealet (out of memory)\n");
     return TEALET_ERR_MEM;
@@ -474,11 +474,11 @@ if (tealet_status(t) == TEALET_STATUS_DEFUNCT) {
 ```c
 /* Thread 1 */
 tealet_t *main1 = tealet_initialize(&alloc, 0);
-tealet_t *t1 = tealet_create(main1, func1);
+tealet_t *t1 = tealet_create(main1, func1, NULL);
 
 /* Thread 2 */
 tealet_t *main2 = tealet_initialize(&alloc, 0);
-tealet_t *t2 = tealet_create(main2, func2);
+tealet_t *t2 = tealet_create(main2, func2, NULL);
 
 /* ❌ WRONG: Can't switch between t1 and t2 (different mains) */
 /* ✅ OK: Can switch within same thread between t1 and other tealets from main1 */

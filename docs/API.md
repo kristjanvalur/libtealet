@@ -72,7 +72,7 @@ Call when done with all tealets in the current thread. This frees all resources 
 ### `tealet_create()`
 
 ```c
-tealet_t *tealet_create(tealet_t *main, tealet_run_t run);
+tealet_t *tealet_create(tealet_t *main, tealet_run_t run, void *stack_far_hint);
 ```
 
 Create a new tealet without starting it.
@@ -80,12 +80,13 @@ Create a new tealet without starting it.
 **Parameters:**
 - `main`: The main tealet (from `tealet_initialize()`)
 - `run`: Function to execute in the tealet's context
+- `stack_far_hint`: Optional far-boundary hint for the initial stack snapshot (`NULL` uses default)
 
 **Returns:** New tealet in `TEALET_STATUS_INITIAL` state, or `NULL` on allocation failure.
 
 **Usage:**
 ```c
-tealet_t *t = tealet_create(main, my_run_function);
+tealet_t *t = tealet_create(main, my_run_function, NULL);
 if (t == NULL) {
     /* Out of memory */
 }
@@ -94,8 +95,8 @@ if (t == NULL) {
 The tealet is created but not yet running. Use `tealet_switch()` to start execution. This pattern is useful when setting up multiple coroutines before starting any:
 
 ```c
-tealet_t *t1 = tealet_create(main, func1);
-tealet_t *t2 = tealet_create(main, func2);
+tealet_t *t1 = tealet_create(main, func1, NULL);
+tealet_t *t2 = tealet_create(main, func2, NULL);
 /* Both created but not running yet */
 
 void *arg1 = data1;
@@ -109,7 +110,7 @@ tealet_switch(t1, &arg1);  /* Start t1 */
 ### `tealet_new()`
 
 ```c
-tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg);
+tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far_hint);
 ```
 
 Create a new tealet and immediately start executing it.
@@ -118,20 +119,21 @@ Create a new tealet and immediately start executing it.
 - `main`: The main tealet
 - `run`: Function to execute
 - `parg`: Pointer to argument pointer (passed to run function, updated with return value)
+- `stack_far_hint`: Optional far-boundary hint for the initial stack snapshot (`NULL` uses default)
 
 **Returns:** New tealet (may be `NULL` if run function deleted it), or `NULL` on allocation failure.
 
 **Usage:**
 ```c
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_run, &arg);
+tealet_t *t = tealet_new(main, my_run, &arg, NULL);
 /* Run function has executed until first switch back */
 /* arg now contains value from first switch */
 ```
 
 Equivalent to:
 ```c
-tealet_t *t = tealet_create(main, run);
+tealet_t *t = tealet_create(main, run, NULL);
 if (t != NULL) {
     tealet_switch(t, parg);
 }
@@ -582,7 +584,7 @@ Explicitly delete a tealet and free its resources.
 
 **Usage:**
 ```c
-tealet_t *t = tealet_create(main, my_run);
+tealet_t *t = tealet_create(main, my_run, NULL);
 /* Use t... */
 tealet_delete(t);
 ```
@@ -695,7 +697,7 @@ Memory allocation failed.
 
 **Example:**
 ```c
-tealet_t *t = tealet_create(main, my_run);
+tealet_t *t = tealet_create(main, my_run, NULL);
 if (t == NULL) {
     fprintf(stderr, "Out of memory\n");
     return TEALET_ERR_MEM;
@@ -776,15 +778,15 @@ Used with `tealet_exit()`.
 **Example Comparison:**
 ```c
 /* Pattern 1: Create then switch (more control) */
-tealet_t *t1 = tealet_create(main, func1);
-tealet_t *t2 = tealet_create(main, func2);
+tealet_t *t1 = tealet_create(main, func1, NULL);
+tealet_t *t2 = tealet_create(main, func2, NULL);
 setup_relationship(t1, t2);  /* Both exist but not started */
 void *arg = t2;
 tealet_switch(t1, &arg);  /* Now start t1 */
 
 /* Pattern 2: Create and start (more concise) */
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_func, &arg);
+tealet_t *t = tealet_new(main, my_func, &arg, NULL);
 /* Already started, arg contains first return value */
 ```
 
@@ -856,7 +858,7 @@ tealet_t *stub_run(tealet_t *current, void *arg) {
     return current->main;
 }
 
-tealet_t *stub = tealet_create(main, stub_run);
+tealet_t *stub = tealet_create(main, stub_run, NULL);
 /* Use stub as a target for tealet_switch() from other tealets */
 ```
 
@@ -900,7 +902,7 @@ int main(void) {
     }
     
     /* Create counter tealet */
-    tealet_t *counter = tealet_create(main, counter_run);
+    tealet_t *counter = tealet_create(main, counter_run, NULL);
     if (counter == NULL) {
         fprintf(stderr, "Failed to create counter\n");
         tealet_finalize(main);
