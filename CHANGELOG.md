@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking API change for tealet creation**: `tealet_new()` and `tealet_create()` now require an additional `stack_far` parameter.
+  - New signatures:
+    - `tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far)`
+    - `tealet_create(tealet_t *main, tealet_run_t run, void *stack_far)`
+  - Migration: pass `NULL` as `stack_far` to preserve previous behavior.
+- **Renamed probe helper**: `tealet_new_far()` is replaced by `tealet_new_probe()`.
+
 ## [0.3.2] - 2025-11-22
 
 ### Fixed

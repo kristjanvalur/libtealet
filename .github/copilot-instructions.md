@@ -51,12 +51,12 @@ tealet_finalize(main);
 ### Creating and Switching
 ```c
 // Pattern 1: Create then switch
-tealet_t *g = tealet_create(main, run_func);
+tealet_t *g = tealet_create(main, run_func, NULL);
 void *arg = my_data;
 tealet_switch(g, &arg);
 
 // Pattern 2: Create and switch atomically
-tealet_t *g = tealet_new(main, run_func, &arg);
+tealet_t *g = tealet_new(main, run_func, &arg, NULL);
 ```
 
 ### Run Function Pattern
@@ -242,7 +242,7 @@ Use this when you need to [specific use case].
 
 \`\`\`c
 // Practical example
-tealet_t *t = tealet_new(main, my_func, &arg);
+tealet_t *t = tealet_new(main, my_func, &arg, NULL);
 \`\`\`
 
 **Note:** Platform-specific behavior or limitations.

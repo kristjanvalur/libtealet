@@ -191,10 +191,10 @@ static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg)
   tealet_t *r;
   
   counter += 1;
-  if (counter % 1)
-    return tealet_new(m, run, parg);
+  if (counter % 2)
+    return tealet_new(m, run, parg, NULL);
 
-  r = tealet_create(m, run);
+  r = tealet_create(m, run, NULL);
   if (!r)
     return r;
   i = tealet_switch(r, parg);
@@ -224,15 +224,17 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
  * methods for creating tealets in different ways
  */
 
-static tealet_t * tealet_new_rnd(tealet_t* t, tealet_run_t run, void **parg)
+static tealet_t * tealet_new_rnd(tealet_t* t, tealet_run_t run, void **parg, void *stack_far)
 {
+  (void)stack_far;
        return tealet_new_descend(t, rand() % 20, run, parg);
 }
 
-static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg)
+static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_t *stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     int res;
+    (void)stack_far;
     if (stub == NULL)
         return NULL;
     if (run)
@@ -247,10 +249,11 @@ static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg)
     return stub;
 }
 
-static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg)
+static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_t *dup, *stub;
     int res;
+  (void)stack_far;
     stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     if (stub == NULL)
         return NULL;
@@ -272,10 +275,11 @@ static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg)
     return dup;
 }
 
-static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg)
+static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_t *dup;
     int res;
+  (void)stack_far;
     if ((rand()%10) == 0)
         if (the_stub != NULL) {
             tealet_delete(the_stub);
@@ -300,7 +304,7 @@ static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg)
 }
     
 
-typedef tealet_t* (*t_new)(tealet_t *, tealet_run_t, void**);
+typedef tealet_t* (*t_new)(tealet_t *, tealet_run_t, void**, void*);
 static t_new newarray[] = {tealet_new_rnd, stub_new, stub_new2, stub_new3};
 
 static t_new get_new(){
@@ -318,6 +322,40 @@ void test_main_current(void)
   fini_test();
 }
 
+static void test_stack_further_inner(void *outer_addr)
+{
+  int inner_local;
+  void *further = tealet_stack_further(outer_addr, &inner_local);
+  assert(further == outer_addr);
+}
+
+void test_stack_further(void)
+{
+  int a_local;
+  int b_local;
+  int outer_local;
+  void *a;
+  void *b;
+  void *further_ab;
+  void *further_ba;
+  init_test();
+  a = &a_local;
+  b = &b_local;
+  further_ab = tealet_stack_further(a, b);
+  further_ba = tealet_stack_further(b, a);
+  assert(further_ab == a || further_ab == b);
+  assert(further_ba == a || further_ba == b);
+  assert(further_ab == further_ba);
+  assert(tealet_stack_further(a, a) == a);
+  assert(tealet_stack_further(b, b) == b);
+  assert(tealet_stack_further(further_ab, a) == further_ab);
+  assert(tealet_stack_further(further_ab, b) == further_ab);
+
+  /* Cross-frame check: caller frame local should be farther than callee local */
+  test_stack_further_inner(&outer_local);
+  fini_test();
+}
+
 /************************************************************/
 
 tealet_t *test_simple_run(tealet_t *t1, void *arg)
@@ -331,7 +369,7 @@ tealet_t *test_simple_run(tealet_t *t1, void *arg)
 void test_simple(void)
 {
   init_test();
-  tealet_new(g_main, test_simple_run, NULL);
+  tealet_new(g_main, test_simple_run, NULL, NULL);
   assert(status == 1);
   fini_test();
 }
@@ -340,7 +378,7 @@ void test_simple_create(void)
 {
   tealet_t *t;
   init_test();
-  t = tealet_create(g_main, test_simple_run);
+  t = tealet_create(g_main, test_simple_run, NULL);
   assert(status == 0);
   tealet_delete(t);
   fini_test();
@@ -350,7 +388,7 @@ void test_simple_create_and_run(void)
 {
   tealet_t *t;
   init_test();
-  t = tealet_create(g_main, test_simple_run);
+  t = tealet_create(g_main, test_simple_run, NULL);
   tealet_switch(t, NULL);
   assert(status == 1);
   assert(tealet_previous(g_main) == t);
@@ -371,7 +409,7 @@ void test_create_previous(void)
   tealet_t *t;
   init_test();
   /* Create tealet without running it */
-  t = tealet_create(g_main, test_create_previous_run);
+  t = tealet_create(g_main, test_create_previous_run, NULL);
   assert(status == 0);
   /* Now switch to it - it should see main as previous */
   tealet_switch(t, NULL);
@@ -398,7 +436,7 @@ void test_status(void)
   assert(tealet_status(g_main) == TEALET_STATUS_ACTIVE);
   assert(TEALET_IS_MAIN(g_main));
 
-  stub1 = tealet_new(g_main, NULL, NULL);
+  stub1 = tealet_new(g_main, NULL, NULL, NULL);
   assert(tealet_status(stub1) == TEALET_STATUS_ACTIVE);
   assert(!TEALET_IS_MAIN(stub1));
   tealet_stub_run(stub1, test_status_run, NULL);
@@ -425,7 +463,7 @@ void test_exit(void)
   int result;
   void *arg;
   init_test();
-  stub1 = tealet_new(g_main, NULL, NULL);
+  stub1 = tealet_new(g_main, NULL, NULL, NULL);
   stub2 = tealet_duplicate(stub1);
   arg = (void*)TEALET_FLAG_NONE;
   result = tealet_stub_run(stub1, test_exit_run, &arg);
@@ -476,7 +514,7 @@ tealet_t *test_switch_1(tealet_t *t1, void *arg)
   assert(status == 0);
   status = 1;
   assert(tealet_current(g_main) == t1);
-  tealet_new(g_main, test_switch_2, NULL);
+  tealet_new(g_main, test_switch_2, NULL, NULL);
   assert(status == 2);
   status = 3;
   assert(tealet_current(g_main) == t1);
@@ -490,7 +528,7 @@ tealet_t *test_switch_1(tealet_t *t1, void *arg)
 void test_switch(void)
 {
   init_test();
-  tealet_new(g_main, test_switch_1, NULL);
+  tealet_new(g_main, test_switch_1, NULL, NULL);
   assert(status == 7);
   fini_test();
 }
@@ -528,7 +566,7 @@ void test_switch_new(void)
   void *arg;
   init_test();
   arg = (void *)tealet_current(g_main);
-  tealet1 = tealet_new(g_main, test_switch_new_1, &arg);
+  tealet1 = tealet_new(g_main, test_switch_new_1, &arg, NULL);
   /* the tealet is now running */
   arg = (void*)tealet1;
   tealet2 = tealet_new_descend(g_main, 4, test_switch_new_2, &arg);
@@ -559,7 +597,7 @@ void test_arg(void)
   tealet_t *t1;
   init_test();
   myarg = (void*)g_main;
-  t1 = tealet_new(g_main, test_arg_1, &myarg);
+  t1 = tealet_new(g_main, test_arg_1, &myarg, NULL);
   assert(myarg == (void*)1);
   myarg = (void*)2;
   tealet_switch(t1, &myarg);
@@ -601,7 +639,7 @@ static void random_run(int index)
           if (status >= MAX_STATUS)
             break;
           arg = (void*)(intptr_t)i;
-          tealet_new(g_main, random_new_tealet, &arg);
+          tealet_new(g_main, random_new_tealet, &arg, NULL);
         }
       else
         {
@@ -682,7 +720,7 @@ tealet_t *random2_tealet(tealet_t* cur, void *arg)
 }
 void random2_new(int index) {
     void *arg = (void*)(intptr_t)index;
-    tealet_new(g_main, random2_tealet, &arg);
+  tealet_new(g_main, random2_tealet, &arg, NULL);
 }
 
 int random2_descend(int index, int level) {
@@ -785,7 +823,7 @@ void test_extra(void)
     init_test_extra(NULL, sizeof(extradata));
     *TEALET_EXTRA(g_main, extradata) = ed;
 
-    t1 = tealet_new(g_main, NULL, NULL);
+    t1 = tealet_new(g_main, NULL, NULL, NULL);
     *TEALET_EXTRA(t1, extradata) = ed;
     t2 = tealet_duplicate(t1);
     tealet_stub_run(t1, extra_tealet, NULL);
@@ -821,7 +859,7 @@ void test_stats(void)
     tealet_get_stats(g_main, &stats);
     assert(stats.n_active == 1);
     assert(stats.n_total == 1);
-    t1 = tealet_new(g_main, NULL, NULL);
+    t1 = tealet_new(g_main, NULL, NULL, NULL);
     tealet_get_stats(g_main, &stats);
     /* can be more than 2 because of stub tealet */
     a = stats.n_active;
@@ -854,7 +892,7 @@ void test_mem_error(void)
   tealet_t *t1;
   init_test_extra(NULL, 0);
   myarg = (void*)g_main;
-  t1 = tealet_new(g_main, mem_error_tealet, &myarg);
+  t1 = tealet_new(g_main, mem_error_tealet, &myarg, NULL);
   assert(t1);
   talloc_fail = 0;
   fini_test();
@@ -863,6 +901,7 @@ void test_mem_error(void)
 
 static void (*test_list[])(void) = {
   test_main_current,
+  test_stack_further,
   test_simple,
   test_simple_create,
   test_create_previous,

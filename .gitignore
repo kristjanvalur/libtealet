@@ -44,4 +44,5 @@ core
 bin/test*
 bin/setcontext
 .vscodetmp/
+.vscode/
 **/tmp/
