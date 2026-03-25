@@ -46,7 +46,7 @@ and a new co-routine is running.  This support is provided by the _Stackman_ lib
 ## Similar work
 Stackless Python and Gevent use a similar mechanism, and this code is based on that work.
 
-For C, there also exist some other approache. For an overview, see [Coroutines for C][coroc]
+For C, there also exist some other approaches. For an overview, see [Coroutines for C][coroc]
 
 ## Stack-chaining Optimization
 
@@ -82,7 +82,7 @@ int main(void) {
 
 Compile: `gcc -o example example.c -Isrc -Lbin -ltealet`
 
-# Functionalty
+# Functionality
 The library provides the basic mechanism to create coroutine and to switch between them.
 It takes care of allocating and saving the stack for dormant coroutines.  A way to pass simple values
 between coroutines is provided but the user must be careful to pass any more complicated data on the
