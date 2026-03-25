@@ -658,6 +658,7 @@ A function to test what stack boundary would be used for a new tealet without cr
 
 **Usage:**
 ```c
+void *arg = NULL;
 void *probe = tealet_new_probe(main, my_run, &arg, NULL);
 printf("new tealet boundary probe: %p\n", probe);
 ```

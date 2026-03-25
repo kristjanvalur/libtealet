@@ -191,7 +191,7 @@ static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg)
   tealet_t *r;
   
   counter += 1;
-  if (counter % 1)
+  if (counter % 2)
     return tealet_new(m, run, parg, NULL);
 
   r = tealet_create(m, run, NULL);
