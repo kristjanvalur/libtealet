@@ -8,7 +8,7 @@ Simple low-level stack manipulation API and implementation for common platforms
 
 ## Purpose
 
-This library aims to provide a basic API to perfom stack manipulation
+This library aims to provide a basic API to perform stack manipulation
 on various platforms.  Stack manipulation involves changing the machine stack
 pointer while optionally saving and restoring the stack contents.
 
@@ -119,7 +119,7 @@ This is the main _stack manipulation_ API.  When called, it will call `callback`
 1. First it calls it with the current opcode `STACKMAN_OP_SAVE`, passing the current `stack_pointer` to
 the callback.  This gives the callback the opportunity to _save_ the stack data somewhere.  The callback
 can then return a **different** stack pointer.
-2. It takes the returned value from the calback and replaces the CPU _stack pointer_ with it.
+2. It takes the returned value from the callback and replaces the CPU _stack pointer_ with it.
 3. It calls the callback a second time, with the opcode `STACKMAN_OP_RESTORE` and the new stack pointer.
 This gives the callback the opportunity to replace the data on the stack with previously saved data.
 4. It returns the return value from the second call to the callback function.
@@ -150,7 +150,7 @@ a proper function call with stack, for example, when setting up a new stack entr
 
 ## Usage
 
- - Include `stackman.h` for a decleration of the `stackman_switch()` function
+ - Include `stackman.h` for a declaration of the `stackman_switch()` function
    and the definition of various platform specific macros.  See the documentation
    in the header file for the various macros.
  - Implement switching semantics via the callback and call `stackman_switch()` from your
