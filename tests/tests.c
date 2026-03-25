@@ -224,17 +224,17 @@ static tealet_t * tealet_new_descend(tealet_t *t, int level, tealet_run_t run, v
  * methods for creating tealets in different ways
  */
 
-static tealet_t * tealet_new_rnd(tealet_t* t, tealet_run_t run, void **parg, void *stack_far_hint)
+static tealet_t * tealet_new_rnd(tealet_t* t, tealet_run_t run, void **parg, void *stack_far)
 {
-     (void)stack_far_hint;
+  (void)stack_far;
        return tealet_new_descend(t, rand() % 20, run, parg);
 }
 
-static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg, void *stack_far_hint)
+static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_t *stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     int res;
-  (void)stack_far_hint;
+    (void)stack_far;
     if (stub == NULL)
         return NULL;
     if (run)
@@ -249,11 +249,11 @@ static tealet_t * stub_new(tealet_t *t, tealet_run_t run, void **parg, void *sta
     return stub;
 }
 
-static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg, void *stack_far_hint)
+static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_t *dup, *stub;
     int res;
-  (void)stack_far_hint;
+  (void)stack_far;
     stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
     if (stub == NULL)
         return NULL;
@@ -275,11 +275,11 @@ static tealet_t * stub_new2(tealet_t *t, tealet_run_t run, void **parg, void *st
     return dup;
 }
 
-static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *stack_far_hint)
+static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_t *dup;
     int res;
-  (void)stack_far_hint;
+  (void)stack_far;
     if ((rand()%10) == 0)
         if (the_stub != NULL) {
             tealet_delete(the_stub);
@@ -319,6 +319,29 @@ static t_new get_new(){
 void test_main_current(void)
 {
   init_test();
+  fini_test();
+}
+
+void test_stack_further(void)
+{
+  int a_local;
+  int b_local;
+  void *a;
+  void *b;
+  void *further_ab;
+  void *further_ba;
+  init_test();
+  a = &a_local;
+  b = &b_local;
+  further_ab = tealet_stack_further(a, b);
+  further_ba = tealet_stack_further(b, a);
+  assert(further_ab == a || further_ab == b);
+  assert(further_ba == a || further_ba == b);
+  assert(further_ab == further_ba);
+  assert(tealet_stack_further(a, a) == a);
+  assert(tealet_stack_further(b, b) == b);
+  assert(tealet_stack_further(further_ab, a) == further_ab);
+  assert(tealet_stack_further(further_ab, b) == further_ab);
   fini_test();
 }
 
@@ -867,6 +890,7 @@ void test_mem_error(void)
 
 static void (*test_list[])(void) = {
   test_main_current,
+  test_stack_further,
   test_simple,
   test_simple_create,
   test_create_previous,

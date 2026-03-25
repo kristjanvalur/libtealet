@@ -367,6 +367,10 @@ static tealet_stack_t *tealet_stack_saveto(tealet_main_t *main,
     char *stack_near, char *stack_far, char *saveto, int *full)
 {
     ptrdiff_t size;
+    /* boundary convention for saveto in copied range:
+     *  - descending stacks: [stack_near, saveto)  (saveto is exclusive)
+     *  - ascending stacks:  [saveto, stack_near)  (saveto is inclusive)
+     */
     if (STACKMAN_SP_LE(stack_far, saveto)) {
         saveto = stack_far;
         *full = 1;
@@ -776,6 +780,9 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main)
     return result;
 }
 
+/* public helper defined later in this file */
+void *tealet_stack_further(void *a, void *b);
+
 
 /************************************************************/
 
@@ -844,29 +851,27 @@ static void *tealet_pick_initial_far(void *default_far, void *hint)
 {
     if (hint == NULL)
         return default_far;
-    if (STACKMAN_SP_LE(default_far, hint))
-        return hint;
-    return default_far;
+    return tealet_stack_further(default_far, hint);
 }
 
 /* create a tealet by saving the current stack and starting
  * immediate execution of a new one
  */
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far_hint)
+tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
     void *arg = NULL;
     void *default_far;
-    void *stack_far;
+    void *stack_far_used;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(!g_main->g_target);
     result = tealet_alloc(g_main);
     if (result == NULL)
         return NULL; /* Could not allocate */
     default_far = (void*)&result;
-    stack_far = tealet_pick_initial_far(default_far, stack_far_hint);
-    fail = tealet_initialstub(g_main, result, result, run, (parg!=NULL ? parg : &arg), stack_far);
+    stack_far_used = tealet_pick_initial_far(default_far, stack_far);
+    fail = tealet_initialstub(g_main, result, result, run, (parg!=NULL ? parg : &arg), stack_far_used);
     if (fail) {
         /* could not save stack */
         tealet_delete((tealet_t*)result);
@@ -879,12 +884,12 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stac
  * back to the caller, allowing the caller to run the
  * tealet proper later, by switching to it.
  */
-tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far_hint)
+tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far)
 {
     tealet_sub_t *result; /* store this until we return */
     int fail;
     void *default_far;
-    void *stack_far;
+    void *stack_far_used;
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     tealet_sub_t *previous = g_main->g_previous;
     tealet_sub_t *current = g_main->g_current;
@@ -897,8 +902,8 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far_hint
      */
     g_main->g_current = result;
     default_far = (void*)&result;
-    stack_far = tealet_pick_initial_far(default_far, stack_far_hint);
-    fail = tealet_initialstub(g_main, result, current, run, NULL, stack_far);
+    stack_far_used = tealet_pick_initial_far(default_far, stack_far);
+    fail = tealet_initialstub(g_main, result, current, run, NULL, stack_far_used);
     if (fail) {
         /* could not save stack */
         tealet_delete((tealet_t*)result);
@@ -1144,6 +1149,13 @@ ptrdiff_t tealet_stack_diff(void *a, void *b)
     return STACKMAN_SP_DIFF((ptrdiff_t)a, (ptrdiff_t)(b));
 }
 
+void *tealet_stack_further(void *a, void *b)
+{
+    if (STACKMAN_SP_LE(a, b))
+        return b;
+    return a;
+}
+
 void *tealet_get_far(tealet_t *_tealet)
 {
     tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
@@ -1240,16 +1252,16 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
 #pragma warning(push)
 #pragma warning( disable : 4172 )
 #endif
-void *tealet_new_far(tealet_t *d1, tealet_run_t d2, void **d3, void *d4)
+void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *d4)
 {
     tealet_sub_t *result;
+    void *default_far;
     void *r;
     (void)d1;
     (void)d2;
     (void)d3;
-    (void)d4;
-    /* avoid compiler warnings about returning tmp addr */
-    r = (void*)&result;
+    default_far = (void*)&result;
+    r = tealet_pick_initial_far(default_far, d4);
     return r;
 }
 #if __GNUC__ > 4

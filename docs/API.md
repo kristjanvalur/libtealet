@@ -9,6 +9,7 @@ Complete reference for the libtealet API. All functions are declared in `tealet.
 - [Advanced: Fork-like Semantics](#advanced-fork-like-semantics)
 - [Context Switching](#context-switching)
 - [Status and Inspection](#status-and-inspection)
+- [Stack Utilities](#stack-utilities)
 - [Memory Management](#memory-management)
 - [Custom Allocators](#custom-allocators)
 - [Error Codes](#error-codes)
@@ -72,7 +73,7 @@ Call when done with all tealets in the current thread. This frees all resources 
 ### `tealet_create()`
 
 ```c
-tealet_t *tealet_create(tealet_t *main, tealet_run_t run, void *stack_far_hint);
+tealet_t *tealet_create(tealet_t *main, tealet_run_t run, void *stack_far);
 ```
 
 Create a new tealet without starting it.
@@ -80,7 +81,7 @@ Create a new tealet without starting it.
 **Parameters:**
 - `main`: The main tealet (from `tealet_initialize()`)
 - `run`: Function to execute in the tealet's context
-- `stack_far_hint`: Optional far-boundary hint for the initial stack snapshot (`NULL` uses default)
+- `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
 **Returns:** New tealet in `TEALET_STATUS_INITIAL` state, or `NULL` on allocation failure.
 
@@ -110,7 +111,7 @@ tealet_switch(t1, &arg1);  /* Start t1 */
 ### `tealet_new()`
 
 ```c
-tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far_hint);
+tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far);
 ```
 
 Create a new tealet and immediately start executing it.
@@ -119,7 +120,7 @@ Create a new tealet and immediately start executing it.
 - `main`: The main tealet
 - `run`: Function to execute
 - `parg`: Pointer to argument pointer (passed to run function, updated with return value)
-- `stack_far_hint`: Optional far-boundary hint for the initial stack snapshot (`NULL` uses default)
+- `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
 **Returns:** New tealet (may be `NULL` if run function deleted it), or `NULL` on allocation failure.
 
@@ -140,6 +141,44 @@ if (t != NULL) {
 ```
 
 Use when you want to start execution immediately without separate `tealet_switch()` call.
+
+### Example: include additional caller stack data
+
+Use a boundary requirement from a higher frame when you need the new tealet's initial snapshot to include locals from the creator function.
+
+```c
+typedef struct {
+    int a;
+    int b;
+} local_state_t;
+
+tealet_t *my_run(tealet_t *current, void *arg) {
+    local_state_t *state = (local_state_t *)arg;
+    /* state->a and state->b are available in the tealet context */
+    return current->main;
+}
+
+void bar(tealet_t *main) {
+    local_state_t local_state;
+    void *arg;
+    void *stack_far;
+    tealet_t *worker;
+
+    local_state.a = 1;
+    local_state.b = 2;
+    arg = &local_state;
+    stack_far = tealet_stack_further(&local_state, &local_state + 1);
+
+    worker = tealet_new(main, my_run, &arg, stack_far);
+    (void)worker;
+}
+```
+
+Using `tealet_stack_further(&local_state, &local_state + 1)` sets a direction-aware struct-granularity boundary so the full `local_state` object is within the new tealet's initial snapshot.
+
+Boundary semantics are direction-dependent:
+- descending stacks: boundary is exclusive for saved bytes
+- ascending stacks: boundary is inclusive for saved bytes
 
 ---
 
@@ -246,6 +285,8 @@ void my_main(void) {
 - **Required before forking:** Prevents creating two unbounded stacks
 - **Memory control:** Limits stack growth for specific tealets
 - **Scope discipline:** Ensures execution stays within promised bounds
+
+You can also obtain a call-site boundary marker with `tealet_new_probe()` when you need to inspect boundary requirements at a specific stack depth.
 
 **Current limitation:** Can only be called on the main tealet.
 
@@ -566,6 +607,60 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```
 
 The extra data is allocated with the tealet and freed when the tealet is deleted. Useful for per-tealet state without separate allocations.
+
+---
+
+## Stack Utilities
+
+### `tealet_stack_diff()`
+
+```c
+ptrdiff_t tealet_stack_diff(void *a, void *b);
+```
+
+Compute stack-relative distance between two addresses in a direction-aware way.
+
+**Returns:** Positive when `b` is deeper on stack than `a`, zero if equal, negative otherwise.
+
+---
+
+### `tealet_stack_further()`
+
+```c
+void *tealet_stack_further(void *a, void *b);
+```
+
+Return whichever stack position is farther from the active stack top.
+
+This is direction-aware:
+- descending stacks: returns the greater address
+- ascending stacks: returns the smaller address
+
+Use this to combine boundary requirements from different stack references.
+
+---
+
+### `tealet_new_probe()`
+
+```c
+void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4);
+```
+
+A function to test what stack boundary would be used for a new tealet without creating one. This is mostly informative.
+
+**Parameters:**
+- `dummy1`, `dummy2`, `dummy3`: Unused placeholders to match the `tealet_new()` call shape
+- `dummy4`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
+
+**Returns:** The probed stack-boundary marker.
+
+**Usage:**
+```c
+void *probe = tealet_new_probe(main, my_run, &arg, NULL);
+printf("new tealet boundary probe: %p\n", probe);
+```
+
+Use this when you want to inspect the effective boundary at a specific stack depth without creating a tealet. You do not need to pass this value to `tealet_new()`, which computes its own boundary using the same logic.
 
 ---
 
