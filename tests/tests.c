@@ -322,10 +322,18 @@ void test_main_current(void)
   fini_test();
 }
 
+static void test_stack_further_inner(void *outer_addr)
+{
+  int inner_local;
+  void *further = tealet_stack_further(outer_addr, &inner_local);
+  assert(further == outer_addr);
+}
+
 void test_stack_further(void)
 {
   int a_local;
   int b_local;
+  int outer_local;
   void *a;
   void *b;
   void *further_ab;
@@ -342,6 +350,9 @@ void test_stack_further(void)
   assert(tealet_stack_further(b, b) == b);
   assert(tealet_stack_further(further_ab, a) == further_ab);
   assert(tealet_stack_further(further_ab, b) == further_ab);
+
+  /* Cross-frame check: caller frame local should be farther than callee local */
+  test_stack_further_inner(&outer_local);
   fini_test();
 }
 

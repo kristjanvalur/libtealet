@@ -780,10 +780,6 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main)
     return result;
 }
 
-/* public helper defined later in this file */
-void *tealet_stack_further(void *a, void *b);
-
-
 /************************************************************/
 
 tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)

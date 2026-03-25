@@ -144,7 +144,7 @@ Use when you want to start execution immediately without separate `tealet_switch
 
 ### Example: include additional caller stack data
 
-Use a boundary requirement from a higher frame when you need the new tealet's initial snapshot to include locals from the creator function.
+This capability exists primarily to make libtealet work with existing code where a new tealet needs to access stack-based structures from the creator path. Use a boundary requirement from a higher frame when you need the new tealet's initial snapshot to include locals from the creator function.
 
 ```c
 typedef struct {
@@ -441,6 +441,8 @@ tealet_t *pong(tealet_t *current, void *arg) {
 ```
 
 ⚠️ **Stack Safety:** Never pass pointers to stack-allocated data in `parg`. The stack becomes invalid when switching. Allocate shared data on the heap.
+
+**Exception:** If you intentionally expand the new tealet's initial saved stack via `stack_far` (as shown in the `tealet_new()` example above), stack-based structures in that expanded region can be valid for that tealet's execution.
 
 ---
 

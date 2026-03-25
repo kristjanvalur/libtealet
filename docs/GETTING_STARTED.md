@@ -105,6 +105,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```
 
 **Rule of thumb:** If data needs to survive a `tealet_switch()`, allocate it on the heap.
+**Exception:** You can intentionally include additional creator-frame stack data in a new tealet's initial snapshot by passing `stack_far` to `tealet_new()` or `tealet_create()`. This exists to make integration practical for existing code paths that already rely on stack-based structures.
 
 ## Tealet Lifecycle and Exiting
 
