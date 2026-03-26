@@ -216,8 +216,14 @@ static void tealet_int_free(tealet_main_t *main, void *ptr)
     main->g_alloc.free_p(ptr, main->g_alloc.context);
 }
 
-static size_t tealet_min_size(size_t a, size_t b);
+static size_t tealet_min_size(size_t a, size_t b)
+{
+    return a < b ? a : b;
+}
 
+/************************************************************
+ * Stack integrity helpers (snapshot + guard planning).
+ */
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
 static void tealet_integrity_range_clear(tealet_integrity_range_t *range)
 {
@@ -238,12 +244,29 @@ static size_t tealet_guard_pagesize(void)
 }
 #endif
 
+/* Build the integrity plan for the currently running tealet.
+ *
+ * The monitored interval is always a linear byte range [begin, end).
+ * Snapshot and page-guard split the same interval:
+ *
+ * - snapshot protects the sub-page bytes that cannot be represented by mprotect()
+ *   under the chosen alignment strategy;
+ * - mprotect() guards whole pages.
+ *
+ * For descending stacks, snapshot keeps the low-address prefix before the first
+ * guarded page. For ascending stacks, snapshot keeps the high-address suffix
+ * after the last guarded page.
+ */
 static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
     tealet_integrity_range_t *plan)
 {
     tealet_sub_t *current;
     unsigned int flags;
     size_t integrity_bytes;
+#if TEALET_GUARD_MPROTECT
+    uintptr_t begin;
+    uintptr_t end;
+#endif
 #if TEALET_WITH_STACK_SNAPSHOT
     size_t snapshot_bytes;
 #endif
@@ -270,6 +293,11 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
     plan->stack_base = current->stack_far - integrity_bytes;
 #endif
 
+#if TEALET_GUARD_MPROTECT
+    begin = (uintptr_t)plan->stack_base;
+    end = begin + integrity_bytes;  /* half-open interval [begin, end) */
+#endif
+
 #if TEALET_WITH_STACK_SNAPSHOT
     snapshot_bytes = 0;
     if ((flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0)
@@ -281,23 +309,52 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
         size_t page_size = tealet_guard_pagesize();
 
         if (page_size != 0) {
-            uintptr_t begin = (uintptr_t)plan->stack_base;
-            uintptr_t end = begin + integrity_bytes;
-
             if (end > begin) {
                 uintptr_t page_mask = (uintptr_t)(page_size - 1);
-                uintptr_t aligned_begin = (begin + page_mask) & ~page_mask;
-                uintptr_t aligned_end = (end + page_mask) & ~page_mask;
+                uintptr_t aligned_begin;
+                uintptr_t aligned_end;
+
+#if STACK_DIRECTION == 0
+                /* Descending stack:
+                 *  - guard starts at the first page boundary at/above begin;
+                 *  - guard end rounds up so we can cover the full interval with pages.
+                 */
+                aligned_begin = (begin + page_mask) & ~page_mask;
+                aligned_end = (end + page_mask) & ~page_mask;
 
                 if (aligned_begin >= end)
                     aligned_end = aligned_begin;
 
 #if TEALET_WITH_STACK_SNAPSHOT
                 if (snapshot_bytes != 0) {
+                    /* Snapshot the unguardable prefix [begin, aligned_begin). */
                     size_t prefix_bytes = (size_t)(aligned_begin - begin);
 
                     snapshot_bytes = tealet_min_size(snapshot_bytes, prefix_bytes);
                 }
+#endif
+
+#else
+                /* Ascending stack:
+                 *  - guard start rounds down so guarded bytes are page-granular;
+                 *  - guard end rounds down to the last full page below end.
+                 */
+                aligned_begin = begin & ~page_mask;
+                aligned_end = end & ~page_mask;
+
+                if (aligned_end <= aligned_begin)
+                    aligned_begin = aligned_end;
+
+#if TEALET_WITH_STACK_SNAPSHOT
+                if (snapshot_bytes != 0) {
+                    /* Snapshot the unguardable suffix [aligned_end, end). */
+                    size_t suffix_bytes = (size_t)(end - aligned_end);
+
+                    snapshot_bytes = tealet_min_size(snapshot_bytes, suffix_bytes);
+                    if (snapshot_bytes != 0)
+                        plan->stack_base = (char *)(end - snapshot_bytes);
+                }
+#endif
 #endif
 
                 if (aligned_end > aligned_begin) {
@@ -319,6 +376,9 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
 }
 #endif
 
+/************************************************************
+ * Stack guard helpers.
+ */
 #if TEALET_WITH_STACK_GUARD
 static void tealet_guard_clear(tealet_main_t *g_main)
 {
@@ -392,6 +452,9 @@ static int tealet_guard_protect_current(tealet_main_t *g_main)
 }
 #endif
 
+/************************************************************
+ * Stack snapshot helpers.
+ */
 #if TEALET_WITH_STACK_SNAPSHOT
 static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
 {
@@ -522,11 +585,9 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main)
 }
 #endif
 
-static size_t tealet_min_size(size_t a, size_t b)
-{
-    return a < b ? a : b;
-}
-
+/************************************************************
+ * Config helpers.
+ */
 static unsigned int tealet_config_supported_flags(void)
 {
     unsigned int supported = 0;
