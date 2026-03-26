@@ -38,6 +38,10 @@
 #define TEALET_WITH_STACK_SNAPSHOT 0
 #endif
 
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
 /************************************************************/
 
 /************************************************************
@@ -216,11 +220,6 @@ static void tealet_int_free(tealet_main_t *main, void *ptr)
     main->g_alloc.free_p(ptr, main->g_alloc.context);
 }
 
-static size_t tealet_min_size(size_t a, size_t b)
-{
-    return a < b ? a : b;
-}
-
 /************************************************************
  * Stack integrity helpers (snapshot + guard planning).
  */
@@ -330,7 +329,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
                     /* Snapshot the unguardable prefix [begin, aligned_begin). */
                     size_t prefix_bytes = (size_t)(aligned_begin - begin);
 
-                    snapshot_bytes = tealet_min_size(snapshot_bytes, prefix_bytes);
+                    snapshot_bytes = MIN(snapshot_bytes, prefix_bytes);
                 }
 #endif
 
@@ -350,7 +349,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
                     /* Snapshot the unguardable suffix [aligned_end, end). */
                     size_t suffix_bytes = (size_t)(end - aligned_end);
 
-                    snapshot_bytes = tealet_min_size(snapshot_bytes, suffix_bytes);
+                    snapshot_bytes = MIN(snapshot_bytes, suffix_bytes);
                     if (snapshot_bytes != 0)
                         plan->stack_base = (char *)(end - snapshot_bytes);
                 }
@@ -470,7 +469,7 @@ static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
         if (page_size > 1) {
             size_t prefix_limit = page_size - 1;
 
-            required = tealet_min_size(required, prefix_limit);
+            required = MIN(required, prefix_limit);
         }
     }
 #endif
@@ -1732,7 +1731,7 @@ int tealet_configure_get(tealet_t *_tealet, tealet_config_t *config)
     effective.size = config->size;
     tealet_config_fill_from_main(g_main, &effective);
 
-    copy_size = tealet_min_size(config->size, sizeof(tealet_config_t));
+    copy_size = MIN(config->size, sizeof(tealet_config_t));
     memcpy(config, &effective, copy_size);
     return 0;
 }
@@ -1759,7 +1758,7 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
     requested.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
     requested.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
     requested.size = config->size;
-    copy_size = tealet_min_size(config->size, sizeof(tealet_config_t));
+    copy_size = MIN(config->size, sizeof(tealet_config_t));
     memcpy(&requested, config, copy_size);
     requested.version = TEALET_CONFIG_VERSION_1;
     tealet_config_canonicalize(&requested);
