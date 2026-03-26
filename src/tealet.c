@@ -16,6 +16,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+#if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+#include <sys/mman.h>
+#include <unistd.h>
+#define TEALET_GUARD_MPROTECT 1
+#else
+#define TEALET_GUARD_MPROTECT 0
+#endif
+
 
 /* enable collection of tealet stats - default enabled, define TEALET_WITH_STATS=0 to disable */
 #ifndef TEALET_WITH_STATS
@@ -88,6 +96,15 @@ typedef struct tealet_nonmain_t {
   double _extra[1];                /* start of any extra data */
 } tealet_nonmain_t;
 
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+typedef struct tealet_integrity_range_t {
+        char *stack_base;
+        size_t snapshot_bytes;
+        char *guard_base;
+        size_t guard_bytes;
+} tealet_integrity_range_t;
+#endif
+
 /* an enum to maintain state for the save/restore callback
  * which is called twice (with old and new stack pointer)
  */
@@ -114,12 +131,14 @@ typedef struct tealet_main_t {
     size_t        g_cfg_stack_integrity_bytes;
     int           g_cfg_stack_guard_mode;
     int           g_cfg_stack_integrity_fail_policy;
+#if TEALET_WITH_STACK_GUARD
+#endif
 #if TEALET_WITH_STACK_SNAPSHOT
     char         *g_snapshot_block; /* fixed snapshot workspace */
     size_t        g_snapshot_capacity;
-    char         *g_snapshot_base;
-    size_t        g_snapshot_size;
-    char          g_snapshot_valid;
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+    tealet_integrity_range_t g_integrity_range;
 #endif
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
@@ -199,6 +218,180 @@ static void tealet_int_free(tealet_main_t *main, void *ptr)
 
 static size_t tealet_min_size(size_t a, size_t b);
 
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+static void tealet_integrity_range_clear(tealet_integrity_range_t *range)
+{
+    range->stack_base = NULL;
+    range->snapshot_bytes = 0;
+    range->guard_base = NULL;
+    range->guard_bytes = 0;
+}
+
+#if TEALET_GUARD_MPROTECT
+static size_t tealet_guard_pagesize(void)
+{
+    long page_size = sysconf(_SC_PAGESIZE);
+
+    if (page_size <= 0)
+        return 0;
+    return (size_t)page_size;
+}
+#endif
+
+static void tealet_integrity_plan_for_current(tealet_main_t *g_main,
+    tealet_integrity_range_t *plan)
+{
+    tealet_sub_t *current;
+    unsigned int flags;
+    size_t integrity_bytes;
+#if TEALET_WITH_STACK_SNAPSHOT
+    size_t snapshot_bytes;
+#endif
+
+    tealet_integrity_range_clear(plan);
+
+    current = g_main->g_current;
+    assert(current != NULL);
+
+    if (current->stack_far == NULL || current->stack_far == STACKMAN_SP_FURTHEST)
+        return;
+
+    flags = g_main->g_cfg_flags;
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
+        return;
+
+    integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
+    if (integrity_bytes == 0)
+        return;
+
+#if STACK_DIRECTION == 0
+    plan->stack_base = current->stack_far;
+#else
+    plan->stack_base = current->stack_far - integrity_bytes;
+#endif
+
+#if TEALET_WITH_STACK_SNAPSHOT
+    snapshot_bytes = 0;
+    if ((flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0)
+        snapshot_bytes = integrity_bytes;
+#endif
+
+#if TEALET_GUARD_MPROTECT
+    if ((flags & TEALET_CONFIGF_STACK_GUARD) != 0) {
+        size_t page_size = tealet_guard_pagesize();
+
+        if (page_size != 0) {
+            uintptr_t begin = (uintptr_t)plan->stack_base;
+            uintptr_t end = begin + integrity_bytes;
+
+            if (end > begin) {
+                uintptr_t page_mask = (uintptr_t)(page_size - 1);
+                uintptr_t aligned_begin = (begin + page_mask) & ~page_mask;
+                uintptr_t aligned_end = (end + page_mask) & ~page_mask;
+
+                if (aligned_begin >= end)
+                    aligned_end = aligned_begin;
+
+#if TEALET_WITH_STACK_SNAPSHOT
+                if (snapshot_bytes != 0) {
+                    size_t prefix_bytes = (size_t)(aligned_begin - begin);
+
+                    snapshot_bytes = tealet_min_size(snapshot_bytes, prefix_bytes);
+                }
+#endif
+
+                if (aligned_end > aligned_begin) {
+                    plan->guard_base = (char *)aligned_begin;
+                    plan->guard_bytes = (size_t)(aligned_end - aligned_begin);
+                }
+            }
+        }
+    }
+#endif
+
+#if TEALET_WITH_STACK_SNAPSHOT
+    if (snapshot_bytes != 0) {
+        assert(g_main->g_snapshot_capacity >= snapshot_bytes);
+        if (g_main->g_snapshot_capacity >= snapshot_bytes)
+            plan->snapshot_bytes = snapshot_bytes;
+    }
+#endif
+}
+#endif
+
+#if TEALET_WITH_STACK_GUARD
+static void tealet_guard_clear(tealet_main_t *g_main)
+{
+    g_main->g_integrity_range.guard_base = NULL;
+    g_main->g_integrity_range.guard_bytes = 0;
+}
+
+#if TEALET_GUARD_MPROTECT
+static int tealet_guard_unprotect_current(tealet_main_t *g_main)
+{
+    if (g_main->g_integrity_range.guard_bytes == 0 || g_main->g_integrity_range.guard_base == NULL)
+        return 0;
+
+    if (mprotect(g_main->g_integrity_range.guard_base, g_main->g_integrity_range.guard_bytes,
+                 PROT_READ | PROT_WRITE) != 0)
+        return TEALET_ERR_MEM;
+
+    tealet_guard_clear(g_main);
+    return 0;
+}
+
+static int tealet_guard_protect_current(tealet_main_t *g_main)
+{
+    tealet_integrity_range_t plan;
+    int guard_mode;
+    int prot;
+
+    if (g_main->g_integrity_range.guard_bytes != 0)
+        return 0;
+
+    tealet_integrity_plan_for_current(g_main, &plan);
+    if (plan.guard_bytes == 0)
+        return 0;
+
+    guard_mode = g_main->g_cfg_stack_guard_mode;
+    if (guard_mode == TEALET_STACK_GUARD_MODE_READONLY)
+        prot = PROT_READ;
+    else
+        prot = PROT_NONE;
+
+    if (mprotect(plan.guard_base, plan.guard_bytes, prot) != 0)
+        return TEALET_ERR_MEM;
+
+    g_main->g_integrity_range = plan;
+    return 0;
+}
+#else
+static int tealet_guard_unprotect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+    return 0;
+}
+
+static int tealet_guard_protect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+    return 0;
+}
+#endif
+#else
+static int tealet_guard_unprotect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+    return 0;
+}
+
+static int tealet_guard_protect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+    return 0;
+}
+#endif
+
 #if TEALET_WITH_STACK_SNAPSHOT
 static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
 {
@@ -206,6 +399,18 @@ static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
 
     if (config->flags & TEALET_CONFIGF_STACK_SNAPSHOT)
         required = config->stack_integrity_bytes;
+#if TEALET_GUARD_MPROTECT
+    if ((config->flags & (TEALET_CONFIGF_STACK_SNAPSHOT | TEALET_CONFIGF_STACK_GUARD)) ==
+        (TEALET_CONFIGF_STACK_SNAPSHOT | TEALET_CONFIGF_STACK_GUARD)) {
+        size_t page_size = tealet_guard_pagesize();
+
+        if (page_size > 1) {
+            size_t prefix_limit = page_size - 1;
+
+            required = tealet_min_size(required, prefix_limit);
+        }
+    }
+#endif
     return required;
 }
 
@@ -227,62 +432,39 @@ static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t require
     }
     g_main->g_snapshot_block = new_block;
     g_main->g_snapshot_capacity = required;
-    g_main->g_snapshot_base = NULL;
-    g_main->g_snapshot_size = 0;
-    g_main->g_snapshot_valid = 0;
+    g_main->g_integrity_range.stack_base = NULL;
+    g_main->g_integrity_range.snapshot_bytes = 0;
     return 0;
 }
 
 static void tealet_snapshot_clear(tealet_main_t *g_main)
 {
-    g_main->g_snapshot_valid = 0;
-    g_main->g_snapshot_base = NULL;
-    g_main->g_snapshot_size = 0;
-}
-
-static size_t tealet_snapshot_active_bytes(tealet_main_t *g_main)
-{
-    if ((g_main->g_cfg_flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
-        return 0;
-    if ((g_main->g_cfg_flags & TEALET_CONFIGF_STACK_SNAPSHOT) == 0)
-        return 0;
-    if (g_main->g_cfg_stack_integrity_bytes == 0)
-        return 0;
-    if (g_main->g_snapshot_capacity == 0)
-        return 0;
-    return tealet_min_size(g_main->g_cfg_stack_integrity_bytes, g_main->g_snapshot_capacity);
-}
-
-static char *tealet_snapshot_base_for(tealet_sub_t *tealet, size_t size)
-{
-#if STACK_DIRECTION == 0
-    (void)size;
-    return tealet->stack_far;
-#else
-    return tealet->stack_far - size;
-#endif
+    g_main->g_integrity_range.stack_base = NULL;
+    g_main->g_integrity_range.snapshot_bytes = 0;
 }
 
 static void tealet_snapshot_capture_current(tealet_main_t *g_main)
 {
     tealet_sub_t *current = g_main->g_current;
-    size_t size = tealet_snapshot_active_bytes(g_main);
-    char *base;
+    size_t size;
+    tealet_integrity_range_t plan;
 
     assert(current != NULL);
 
     tealet_snapshot_clear(g_main);
 
+    tealet_integrity_plan_for_current(g_main, &plan);
+    size = plan.snapshot_bytes;
     if (size == 0)
         return;
+    assert(size <= g_main->g_snapshot_capacity);
     if (current->stack_far == NULL || current->stack_far == STACKMAN_SP_FURTHEST)
         return;
+    if (plan.stack_base == NULL)
+        return;
 
-    base = tealet_snapshot_base_for(current, size);
-    memcpy(g_main->g_snapshot_block, base, size);
-    g_main->g_snapshot_base = base;
-    g_main->g_snapshot_size = size;
-    g_main->g_snapshot_valid = 1;
+    memcpy(g_main->g_snapshot_block, plan.stack_base, plan.snapshot_bytes);
+    g_main->g_integrity_range = plan;
 }
 
 static int tealet_snapshot_verify_current(tealet_main_t *g_main)
@@ -290,14 +472,14 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main)
     int cmp;
     assert(g_main->g_current != NULL);
 
-    if (!g_main->g_snapshot_valid)
-        return 0;
-    if (g_main->g_snapshot_size == 0 || g_main->g_snapshot_base == NULL) {
+    if (g_main->g_integrity_range.snapshot_bytes == 0 ||
+        g_main->g_integrity_range.stack_base == NULL) {
         tealet_snapshot_clear(g_main);
         return 0;
     }
 
-    cmp = memcmp(g_main->g_snapshot_block, g_main->g_snapshot_base, g_main->g_snapshot_size);
+    cmp = memcmp(g_main->g_snapshot_block, g_main->g_integrity_range.stack_base,
+                 g_main->g_integrity_range.snapshot_bytes);
     if (cmp != 0) {
         int policy = g_main->g_cfg_stack_integrity_fail_policy;
 
@@ -348,7 +530,7 @@ static size_t tealet_min_size(size_t a, size_t b)
 static unsigned int tealet_config_supported_flags(void)
 {
     unsigned int supported = 0;
-#if TEALET_WITH_STACK_GUARD
+#if TEALET_GUARD_MPROTECT
     supported |= TEALET_CONFIGF_STACK_GUARD;
 #endif
 #if TEALET_WITH_STACK_SNAPSHOT
@@ -854,6 +1036,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
 static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void *in_arg, void **out_arg)
 {
     tealet_sub_t *old_previous = g_main->g_previous;
+    int guard_result;
     int integrity_result;
     assert(target);
     assert(target != g_main->g_current);
@@ -869,6 +1052,10 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
     */
     if (target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
+
+    guard_result = tealet_guard_unprotect_current(g_main);
+    if (guard_result)
+        return guard_result;
 
     integrity_result = tealet_snapshot_verify_current(g_main);
     if (integrity_result)
@@ -890,6 +1077,8 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
         g_main->g_previous = old_previous;
         g_main->g_target = NULL;
         g_main->g_arg = NULL;
+        tealet_snapshot_capture_current(g_main);
+        (void)tealet_guard_protect_current(g_main);
         return TEALET_ERR_MEM;
     }
     g_main->g_target = NULL;
@@ -898,6 +1087,10 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
     g_main->g_arg = NULL;
 
     tealet_snapshot_capture_current(g_main);
+
+    guard_result = tealet_guard_protect_current(g_main);
+    if (guard_result)
+        return guard_result;
 
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
@@ -1059,12 +1252,15 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_cfg_stack_integrity_bytes = 0;
     g_main->g_cfg_stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
     g_main->g_cfg_stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+#if TEALET_WITH_STACK_GUARD
+    tealet_guard_clear(g_main);
+#endif
 #if TEALET_WITH_STACK_SNAPSHOT
     g_main->g_snapshot_block = NULL;
     g_main->g_snapshot_capacity = 0;
-    g_main->g_snapshot_base = NULL;
-    g_main->g_snapshot_size = 0;
-    g_main->g_snapshot_valid = 0;
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+    tealet_integrity_range_clear(&g_main->g_integrity_range);
 #endif
 #if TEALET_WITH_STATS
     /* Initialize circular list - main tealet points to itself */
@@ -1087,8 +1283,16 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
 void tealet_finalize(tealet_t *tealet)
 {
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+    int guard_result;
     assert(TEALET_IS_MAIN(tealet));
     assert(g_main->g_current == (tealet_sub_t *)g_main);
+#if TEALET_WITH_STACK_GUARD
+    guard_result = tealet_guard_unprotect_current(g_main);
+    assert(guard_result == 0);
+#else
+    guard_result = 0;
+    (void)guard_result;
+#endif
 #if TEALET_WITH_STACK_SNAPSHOT
     if (g_main->g_snapshot_block) {
         memset(g_main->g_snapshot_block, 0, g_main->g_snapshot_capacity);

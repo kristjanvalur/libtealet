@@ -128,8 +128,6 @@ static int run_integrity_switch_case(int fail_policy, int write_inside,
     arg = &command;
     result = tealet_switch(writer, &arg);
     assert(result == 0);
-
-    tealet_delete(writer);
     tealet_finalize(main_tealet);
 
     if (first_result)
@@ -185,7 +183,7 @@ static void test_set_canonicalizes_unsupported(void)
     assert(result == 0);
 
     expected_flags = 0u;
-#if TEALET_WITH_STACK_GUARD
+#if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
     expected_flags |= TEALET_CONFIGF_STACK_GUARD;
 #endif
 #if TEALET_WITH_STACK_SNAPSHOT
@@ -200,7 +198,7 @@ static void test_set_canonicalizes_unsupported(void)
     else
         assert(set_cfg.stack_integrity_bytes == 4096);
 
-#if TEALET_WITH_STACK_GUARD
+#if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
     assert(set_cfg.stack_guard_mode == TEALET_STACK_GUARD_MODE_NOACCESS);
 #else
     assert(set_cfg.stack_guard_mode == TEALET_STACK_GUARD_MODE_NONE);
