@@ -30,7 +30,6 @@
 #define TEALET_WITH_STACK_SNAPSHOT 0
 #endif
 
-
 /************************************************************/
 
 /************************************************************
@@ -198,6 +197,8 @@ static void tealet_int_free(tealet_main_t *main, void *ptr)
     main->g_alloc.free_p(ptr, main->g_alloc.context);
 }
 
+static size_t tealet_min_size(size_t a, size_t b);
+
 #if TEALET_WITH_STACK_SNAPSHOT
 static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
 {
@@ -232,6 +233,13 @@ static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t require
     return 0;
 }
 
+static void tealet_snapshot_clear(tealet_main_t *g_main)
+{
+    g_main->g_snapshot_valid = 0;
+    g_main->g_snapshot_base = NULL;
+    g_main->g_snapshot_size = 0;
+}
+
 static size_t tealet_snapshot_active_bytes(tealet_main_t *g_main)
 {
     if ((g_main->g_cfg_flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
@@ -263,6 +271,8 @@ static void tealet_snapshot_capture_current(tealet_main_t *g_main)
 
     assert(current != NULL);
 
+    tealet_snapshot_clear(g_main);
+
     if (size == 0)
         return;
     if (current->stack_far == NULL || current->stack_far == STACKMAN_SP_FURTHEST)
@@ -277,23 +287,21 @@ static void tealet_snapshot_capture_current(tealet_main_t *g_main)
 
 static int tealet_snapshot_verify_current(tealet_main_t *g_main)
 {
+    int cmp;
     assert(g_main->g_current != NULL);
 
     if (!g_main->g_snapshot_valid)
         return 0;
     if (g_main->g_snapshot_size == 0 || g_main->g_snapshot_base == NULL) {
-        g_main->g_snapshot_valid = 0;
-        g_main->g_snapshot_base = NULL;
-        g_main->g_snapshot_size = 0;
+        tealet_snapshot_clear(g_main);
         return 0;
     }
 
-    if (memcmp(g_main->g_snapshot_block, g_main->g_snapshot_base, g_main->g_snapshot_size) != 0) {
+    cmp = memcmp(g_main->g_snapshot_block, g_main->g_snapshot_base, g_main->g_snapshot_size);
+    if (cmp != 0) {
         int policy = g_main->g_cfg_stack_integrity_fail_policy;
 
-        g_main->g_snapshot_valid = 0;
-        g_main->g_snapshot_base = NULL;
-        g_main->g_snapshot_size = 0;
+        tealet_snapshot_clear(g_main);
 
         if (policy == TEALET_STACK_INTEGRITY_FAIL_ABORT)
             abort();
@@ -303,9 +311,7 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main)
         return TEALET_ERR_INTEGRITY;
     }
 
-    g_main->g_snapshot_valid = 0;
-    g_main->g_snapshot_base = NULL;
-    g_main->g_snapshot_size = 0;
+    tealet_snapshot_clear(g_main);
     return 0;
 }
 #else
@@ -863,10 +869,14 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
     */
     if (target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
+
+    integrity_result = tealet_snapshot_verify_current(g_main);
+    if (integrity_result)
+        return integrity_result;
+
     g_main->g_previous = g_main->g_current;
     g_main->g_target = target;
     g_main->g_arg = in_arg;
-    tealet_snapshot_capture_current(g_main);
 
     /* stackman switch is an external function so an optizer
      * cannot assume that any pointers reachable by
@@ -887,9 +897,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
         *out_arg = g_main->g_arg;
     g_main->g_arg = NULL;
 
-    integrity_result = tealet_snapshot_verify_current(g_main);
-    if (integrity_result)
-        return integrity_result;
+    tealet_snapshot_capture_current(g_main);
 
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
