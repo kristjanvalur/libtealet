@@ -21,6 +21,14 @@
 #define TEALET_WITH_STATS 1
 #endif
 
+#ifndef TEALET_WITH_STACK_GUARD
+#define TEALET_WITH_STACK_GUARD 0
+#endif
+
+#ifndef TEALET_WITH_STACK_SNAPSHOT
+#define TEALET_WITH_STACK_SNAPSHOT 0
+#endif
+
 
 /************************************************************/
 
@@ -101,7 +109,11 @@ typedef struct tealet_main_t {
   tealet_alloc_t g_alloc;   /* the allocation context used */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e   g_sw;       /* save/restore state */
-  int           g_flags;     /* default flags when tealet exits */
+    int           g_flags;     /* default flags when tealet exits */
+    unsigned int  g_cfg_flags; /* canonicalized runtime config flags */
+    size_t        g_cfg_stack_integrity_bytes;
+    int           g_cfg_stack_guard_mode;
+    int           g_cfg_stack_integrity_fail_policy;
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
 #if TEALET_WITH_STATS
@@ -176,6 +188,88 @@ static void *tealet_int_malloc(tealet_main_t *main, size_t size)
 static void tealet_int_free(tealet_main_t *main, void *ptr)
 {
     main->g_alloc.free_p(ptr, main->g_alloc.context);
+}
+
+static size_t tealet_min_size(size_t a, size_t b)
+{
+    return a < b ? a : b;
+}
+
+static unsigned int tealet_config_supported_flags(void)
+{
+    unsigned int supported = 0;
+#if TEALET_WITH_STACK_GUARD
+    supported |= TEALET_CONFIGF_STACK_GUARD;
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT
+    supported |= TEALET_CONFIGF_STACK_SNAPSHOT;
+#endif
+    if (supported != 0)
+        supported |= TEALET_CONFIGF_STACK_INTEGRITY;
+    return supported;
+}
+
+static int tealet_config_has_header(const tealet_config_t *config)
+{
+    size_t min_header = offsetof(tealet_config_t, version) + sizeof(config->version);
+    return config != NULL && config->size >= min_header;
+}
+
+static void tealet_config_canonicalize(tealet_config_t *config)
+{
+    unsigned int flags;
+    unsigned int supported;
+
+    flags = config->flags;
+    flags &= (TEALET_CONFIGF_STACK_INTEGRITY |
+              TEALET_CONFIGF_STACK_GUARD |
+              TEALET_CONFIGF_STACK_SNAPSHOT);
+
+    supported = tealet_config_supported_flags();
+    flags &= supported;
+
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0) {
+        flags &= ~(TEALET_CONFIGF_STACK_GUARD | TEALET_CONFIGF_STACK_SNAPSHOT);
+    }
+
+    if ((flags & (TEALET_CONFIGF_STACK_GUARD | TEALET_CONFIGF_STACK_SNAPSHOT)) == 0) {
+        flags &= ~TEALET_CONFIGF_STACK_INTEGRITY;
+    }
+
+    if (config->stack_integrity_bytes == 0) {
+        flags &= ~(TEALET_CONFIGF_STACK_INTEGRITY |
+                   TEALET_CONFIGF_STACK_GUARD |
+                   TEALET_CONFIGF_STACK_SNAPSHOT);
+    }
+
+    if ((flags & TEALET_CONFIGF_STACK_GUARD) == 0) {
+        config->stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    } else {
+        if (config->stack_guard_mode != TEALET_STACK_GUARD_MODE_READONLY &&
+            config->stack_guard_mode != TEALET_STACK_GUARD_MODE_NOACCESS) {
+            config->stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
+        }
+    }
+
+    if (config->stack_integrity_fail_policy != TEALET_STACK_INTEGRITY_FAIL_ASSERT &&
+        config->stack_integrity_fail_policy != TEALET_STACK_INTEGRITY_FAIL_ERROR &&
+        config->stack_integrity_fail_policy != TEALET_STACK_INTEGRITY_FAIL_ABORT) {
+        config->stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    }
+
+    config->flags = flags;
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
+        config->stack_integrity_bytes = 0;
+}
+
+static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t *config)
+{
+    config->version = TEALET_CONFIG_CURRENT_VERSION;
+    config->flags = g_main->g_cfg_flags;
+    config->stack_integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
+    config->stack_guard_mode = g_main->g_cfg_stack_guard_mode;
+    config->stack_integrity_fail_policy = g_main->g_cfg_stack_integrity_fail_policy;
+    tealet_config_canonicalize(config);
 }
 
 /* Free a tealet, unlinking it from the circular list first */
@@ -802,6 +896,10 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_extrasize = extrasize;
     g_main->g_sw = SW_NOP;
     g_main->g_flags = 0;
+    g_main->g_cfg_flags = 0;
+    g_main->g_cfg_stack_integrity_bytes = 0;
+    g_main->g_cfg_stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    g_main->g_cfg_stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
 #if TEALET_WITH_STATS
     /* Initialize circular list - main tealet points to itself */
     g->next_tealet = g;
@@ -1173,6 +1271,65 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
 
     /* Set the far boundary */
     tealet->stack_far = (char *)far_boundary;
+    return 0;
+}
+
+int tealet_configure_get(tealet_t *_tealet, tealet_config_t *config)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    tealet_main_t *g_main;
+    tealet_config_t effective;
+    size_t copy_size;
+
+    if (!tealet_config_has_header(config))
+        return TEALET_ERR_INVAL;
+
+    g_main = TEALET_GET_MAIN(tealet);
+
+    memset(&effective, 0, sizeof(effective));
+    effective.size = sizeof(tealet_config_t);
+    effective.version = TEALET_CONFIG_CURRENT_VERSION;
+    effective.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    effective.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    effective.size = config->size;
+    tealet_config_fill_from_main(g_main, &effective);
+
+    copy_size = tealet_min_size(config->size, sizeof(tealet_config_t));
+    memcpy(config, &effective, copy_size);
+    return 0;
+}
+
+int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    tealet_main_t *g_main;
+    tealet_config_t requested;
+    size_t copy_size;
+
+    if (!tealet_config_has_header(config))
+        return TEALET_ERR_INVAL;
+    if (config->version != TEALET_CONFIG_VERSION_1)
+        return TEALET_ERR_INVAL;
+
+    g_main = TEALET_GET_MAIN(tealet);
+
+    memset(&requested, 0, sizeof(requested));
+    requested.size = sizeof(tealet_config_t);
+    requested.version = TEALET_CONFIG_CURRENT_VERSION;
+    requested.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    requested.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    requested.size = config->size;
+    copy_size = tealet_min_size(config->size, sizeof(tealet_config_t));
+    memcpy(&requested, config, copy_size);
+    requested.version = TEALET_CONFIG_VERSION_1;
+    tealet_config_canonicalize(&requested);
+
+    g_main->g_cfg_flags = requested.flags;
+    g_main->g_cfg_stack_integrity_bytes = requested.stack_integrity_bytes;
+    g_main->g_cfg_stack_guard_mode = requested.stack_guard_mode;
+    g_main->g_cfg_stack_integrity_fail_policy = requested.stack_integrity_fail_policy;
+
+    memcpy(config, &requested, copy_size);
     return 0;
 }
 
