@@ -77,7 +77,7 @@ endif
 .PHONY: test tests
 
 tests: bin/test-static bin/test-dynamic
-tests: bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork
+tests: bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork bin/test-config
 tests: export LD_RUN_PATH := bin
 
 test: tests
@@ -88,6 +88,7 @@ endif
 	$(EMULATOR) bin/test-setcontext > /dev/null
 	$(EMULATOR) bin/test-stochastic -n 100 > /dev/null
 	$(EMULATOR) bin/test-fork
+	$(EMULATOR) bin/test-config
 	@echo "*** All test suites passed ***"
 
 # Multiple chunks and sharing test
@@ -110,6 +111,13 @@ bin/test-fork: bin tests/test_fork.o bin/libtealet.a
 
 tests/test_fork.o: tests/test_fork.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_fork.c
+
+# Configure API test
+bin/test-config: bin tests/test_config.o bin/libtealet.a
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_config.o -ltealet
+
+tests/test_config.o: tests/test_config.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_config.c
 
 # Current tealet test
 bin/test-current: bin tests/test_current.o bin/libtealet.a
