@@ -87,6 +87,31 @@ static void test_set_canonicalizes_unsupported(void)
     PASS();
 }
 
+static void test_set_snapshot_supported_build(void)
+{
+#if TEALET_WITH_STACK_SNAPSHOT
+    tealet_t *main_tealet;
+    tealet_config_t cfg = TEALET_CONFIG_INIT;
+    int result;
+
+    TEST("test_set_snapshot_supported_build");
+
+    main_tealet = new_main();
+
+    cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
+    cfg.stack_integrity_bytes = 2048;
+    cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    result = tealet_configure_set(main_tealet, &cfg);
+    assert(result == 0);
+    assert((cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
+    assert((cfg.flags & TEALET_CONFIGF_STACK_INTEGRITY) != 0);
+    assert(cfg.stack_integrity_bytes == 2048);
+
+    tealet_finalize(main_tealet);
+    PASS();
+#endif
+}
+
 static void test_set_invalid_version(void)
 {
     tealet_t *main_tealet;
@@ -137,6 +162,10 @@ int main(void)
 
     test_set_canonicalizes_unsupported();
     printf("\n");
+
+    test_set_snapshot_supported_build();
+    if (test_count > test_passed)
+        printf("\n");
 
     test_set_invalid_version();
     printf("\n");

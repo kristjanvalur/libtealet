@@ -85,6 +85,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
 #define TEALET_ERR_DEFUNCT -2   /* the target tealet is corrupt */
 #define TEALET_ERR_UNFORKABLE -3 /* tealet cannot be forked (unbounded stack) */
 #define TEALET_ERR_INVAL -4     /* invalid argument */
+#define TEALET_ERR_INTEGRITY -5 /* current tealet violated stack-integrity boundary */
 
 /* configuration API structure versioning */
 #define TEALET_CONFIG_VERSION_1 1
