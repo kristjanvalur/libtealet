@@ -50,6 +50,14 @@ typedef struct write_command_t {
     int *recovery_switch_result;
 } write_command_t;
 
+typedef struct mprotect_write_command_t {
+    tealet_t *return_to;
+    size_t integrity_bytes;
+    int write_guard_page;
+    int *first_switch_result;
+    int *recovery_switch_result;
+} mprotect_write_command_t;
+
 static tealet_t *run_write_to_target(tealet_t *current, void *arg)
 {
     write_command_t *command = (write_command_t *)arg;
@@ -87,6 +95,97 @@ static tealet_t *run_write_to_target(tealet_t *current, void *arg)
 
     return current->main;
 }
+
+#if TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg)
+{
+    mprotect_write_command_t *command = (mprotect_write_command_t *)arg;
+    uintptr_t begin;
+    uintptr_t end;
+    uintptr_t aligned_begin;
+    uintptr_t aligned_end;
+    uintptr_t page_mask;
+    uintptr_t snapshot_begin;
+    uintptr_t snapshot_end;
+    uintptr_t guard_begin;
+    uintptr_t guard_end;
+    unsigned char *target;
+    unsigned char original;
+    size_t page_size;
+    void *far;
+    int switch_result;
+
+    page_size = (size_t)sysconf(_SC_PAGESIZE);
+    assert(page_size > 0);
+    page_mask = (uintptr_t)(page_size - 1);
+
+    far = tealet_get_far(current);
+    assert(far != NULL);
+
+#if STACK_DIRECTION == 0
+    begin = (uintptr_t)far;
+#else
+    begin = (uintptr_t)far - command->integrity_bytes;
+#endif
+    end = begin + command->integrity_bytes;
+    assert(end > begin);
+
+#if STACK_DIRECTION == 0
+    aligned_begin = (begin + page_mask) & ~page_mask;
+    aligned_end = (end + page_mask) & ~page_mask;
+    if (aligned_begin >= end)
+        aligned_end = aligned_begin;
+
+    snapshot_begin = begin;
+    snapshot_end = aligned_begin;
+    guard_begin = aligned_begin;
+    guard_end = aligned_end;
+#else
+    aligned_begin = begin & ~page_mask;
+    aligned_end = end & ~page_mask;
+    if (aligned_end <= aligned_begin)
+        aligned_begin = aligned_end;
+
+    snapshot_begin = aligned_end;
+    snapshot_end = end;
+    guard_begin = aligned_begin;
+    guard_end = aligned_end;
+#endif
+
+    if (command->write_guard_page) {
+        assert(guard_end > guard_begin);
+#if STACK_DIRECTION == 0
+        target = (unsigned char *)guard_begin;
+#else
+        target = (unsigned char *)(guard_end - 1);
+#endif
+    } else {
+        assert(snapshot_end > snapshot_begin);
+#if STACK_DIRECTION == 0
+        target = (unsigned char *)snapshot_begin;
+#else
+        target = (unsigned char *)(snapshot_end - 1);
+#endif
+    }
+
+    original = *target;
+    *target ^= 0x5Au;
+
+    switch_result = tealet_switch(command->return_to, NULL);
+    if (command->first_switch_result)
+        *command->first_switch_result = switch_result;
+
+    if (switch_result == TEALET_ERR_INTEGRITY) {
+        *target = original;
+        switch_result = tealet_switch(command->return_to, NULL);
+    }
+
+    if (command->recovery_switch_result)
+        *command->recovery_switch_result = switch_result;
+
+    return current->main;
+}
+#endif
 
 #if TEALET_WITH_STACK_SNAPSHOT
 static int run_integrity_switch_case(int fail_policy, int write_inside,
@@ -127,6 +226,70 @@ static int run_integrity_switch_case(int fail_policy, int write_inside,
 
     arg = &command;
     result = tealet_switch(writer, &arg);
+    assert(result == 0);
+    tealet_finalize(main_tealet);
+
+    if (first_result)
+        *first_result = first_switch_result;
+    if (recovery_result)
+        *recovery_result = second_switch_result;
+    return 0;
+}
+#endif
+
+#if TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+static int run_mprotect_split_case(int write_guard_page,
+    int *first_result, int *recovery_result)
+{
+    tealet_t *main_tealet;
+    tealet_t *writer;
+    tealet_config_t cfg = TEALET_CONFIG_INIT;
+    mprotect_write_command_t command;
+    void *arg;
+    int result;
+    int first_switch_result;
+    int second_switch_result;
+    size_t page_size;
+
+    page_size = (size_t)sysconf(_SC_PAGESIZE);
+    assert(page_size > 0);
+
+    main_tealet = new_main();
+
+    cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
+                TEALET_CONFIGF_STACK_SNAPSHOT |
+                TEALET_CONFIGF_STACK_GUARD;
+    cfg.stack_integrity_bytes = page_size * 3;
+    cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
+    cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
+    result = tealet_configure_set(main_tealet, &cfg);
+    assert(result == 0);
+    assert((cfg.flags & TEALET_CONFIGF_STACK_INTEGRITY) != 0);
+    assert((cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
+    assert((cfg.flags & TEALET_CONFIGF_STACK_GUARD) != 0);
+
+    writer = tealet_create(main_tealet, run_write_with_mprotect_split, NULL);
+    assert(writer != NULL);
+
+    first_switch_result = 0;
+    second_switch_result = 0;
+    command.return_to = main_tealet;
+    command.integrity_bytes = cfg.stack_integrity_bytes;
+    command.write_guard_page = write_guard_page;
+    command.first_switch_result = &first_switch_result;
+    command.recovery_switch_result = &second_switch_result;
+
+    arg = &command;
+    result = tealet_switch(writer, &arg);
+    if (write_guard_page) {
+        if (first_result)
+            *first_result = first_switch_result;
+        if (recovery_result)
+            *recovery_result = second_switch_result;
+        tealet_finalize(main_tealet);
+        return result;
+    }
+
     assert(result == 0);
     tealet_finalize(main_tealet);
 
@@ -306,6 +469,51 @@ static void test_snapshot_abort_policy_subprocess(void)
 #endif
 }
 
+static void test_mprotect_snapshot_prefix_soft_error(void)
+{
+#if TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+    int first_result;
+    int recovery_result;
+
+    TEST("test_mprotect_snapshot_prefix_soft_error");
+
+    first_result = 0;
+    recovery_result = TEALET_ERR_INTEGRITY;
+    assert(run_mprotect_split_case(0, &first_result, &recovery_result) == 0);
+    assert(first_result == TEALET_ERR_INTEGRITY);
+    assert(recovery_result == 0);
+
+    PASS();
+#endif
+}
+
+static void test_mprotect_guard_page_segv_subprocess(void)
+{
+#if TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32) && (defined(__unix__) || defined(__APPLE__))
+    pid_t pid;
+    int wait_status;
+
+    TEST("test_mprotect_guard_page_segv_subprocess");
+
+    pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        run_mprotect_split_case(1, NULL, NULL);
+        _exit(112);
+    }
+
+    assert(waitpid(pid, &wait_status, 0) == pid);
+    assert(WIFSIGNALED(wait_status));
+    assert(WTERMSIG(wait_status) == SIGSEGV);
+
+    PASS();
+#elif TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+    TEST("test_mprotect_guard_page_segv_subprocess");
+    printf("  SKIPPED (requires fork())\n");
+    test_passed++;
+#endif
+}
+
 static void test_set_invalid_version(void)
 {
     tealet_t *main_tealet;
@@ -370,6 +578,14 @@ int main(void)
         printf("\n");
 
     test_snapshot_abort_policy_subprocess();
+    if (test_count > test_passed)
+        printf("\n");
+
+    test_mprotect_snapshot_prefix_soft_error();
+    if (test_count > test_passed)
+        printf("\n");
+
+    test_mprotect_guard_page_segv_subprocess();
     if (test_count > test_passed)
         printf("\n");
 
