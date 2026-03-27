@@ -93,6 +93,12 @@ No form of scheduler is implemented.
 ## Optional stack checks
 
 libtealet includes optional runtime stack-integrity checks that combine page protection and snapshot verification.
+These checks help verify the promise that each tealet does not access stack areas outside its allowed bounds. They are especially useful during application development and integration to catch boundary-violation bugs early.
+They come with runtime overhead and are generally intended for development/testing builds, not production deployments.
+
+- **Stack guard** (`TEALET_CONFIGF_STACK_GUARD`) protects full pages (typically via `mprotect()` where available).
+- **Stack snapshot** (`TEALET_CONFIGF_STACK_SNAPSHOT`) verifies byte-level regions, including sub-page areas guard mode cannot represent exactly.
+- Together they are used to catch out-of-bounds stack access across both page-aligned and non-page-aligned regions.
 
 - Use `tealet_configure_check_stack()` to enable a sensible default check profile for a main tealet.
 - Use `tealet_configure_get()` / `tealet_configure_set()` for explicit control.

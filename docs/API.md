@@ -684,6 +684,21 @@ In the default project build, both are enabled. You can compile either or both o
 
 When a feature is not available in the current build/platform, `tealet_configure_set()` canonicalizes the request to the supported subset.
 
+### Guard vs snapshot
+
+- `TEALET_CONFIGF_STACK_GUARD` protects full pages in the monitored window.
+    - On Linux/Unix builds with page protection support, this is implemented with `mprotect()`.
+    - Because page protection is page-granular, it cannot precisely cover arbitrary sub-page boundaries.
+- `TEALET_CONFIGF_STACK_SNAPSHOT` captures monitored bytes and verifies them on switch-back.
+    - This is byte-granular and can cover sub-page regions that page protection cannot represent directly.
+
+In typical protected builds, libtealet combines both:
+
+- guard catches direct accesses into guarded pages (hard faults),
+- snapshot checks the remaining unguardable edge bytes (soft integrity failures under configured policy).
+
+This combined mode gives broad coverage of out-of-bounds stack access while keeping behavior configurable by fail policy.
+
 ### `tealet_configure_get()`
 
 ```c
@@ -729,6 +744,8 @@ Convenience helper to turn stack checks on with sensible defaults.
 - `TEALET_CONFIGF_STACK_INTEGRITY`
 - `TEALET_CONFIGF_STACK_GUARD`
 - `TEALET_CONFIGF_STACK_SNAPSHOT`
+
+If guard support is unavailable on the current build/platform, canonicalization leaves snapshot-only integrity enabled where supported.
 
 **Default policy choices:**
 - guard mode: `TEALET_STACK_GUARD_MODE_NOACCESS`
