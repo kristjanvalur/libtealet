@@ -236,6 +236,12 @@ static void tealet_integrity_data_clear(tealet_integrity_data_t *data)
 #endif
 }
 
+/* Initialize persistent integrity workspace state.
+ *
+ * This differs from tealet_integrity_data_clear() in that this function also
+ * initializes long-lived storage fields (snapshot workspace pointer/capacity)
+ * that are only reset at initialize/finalize boundaries.
+ */
 static void tealet_integrity_data_init(tealet_integrity_data_t *data)
 {
     tealet_integrity_data_clear(data);
@@ -245,6 +251,9 @@ static void tealet_integrity_data_init(tealet_integrity_data_t *data)
 #endif
 }
 
+/* Release integrity workspace allocations and return all transient plan state
+ * to a disabled/empty state.
+ */
 static void tealet_integrity_data_free(tealet_main_t *g_main, tealet_integrity_data_t *data)
 {
 #if TEALET_WITH_STACK_SNAPSHOT
@@ -490,6 +499,10 @@ static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
     return required;
 }
 
+/* Ensure snapshot workspace can hold the largest snapshot implied by the
+ * effective configuration.  This is called at configure-set time so switching
+ * never needs to allocate snapshot buffers.
+ */
 static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t required)
 {
     char *new_block;
@@ -513,6 +526,9 @@ static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t require
     return 0;
 }
 
+/* Capture monitored stack bytes for the current tealet into the fixed snapshot
+ * workspace.  Planning decides stack_base/size; this routine only copies.
+ */
 static void tealet_snapshot_capture_current(tealet_main_t *g_main)
 {
     tealet_sub_t *current = g_main->g_current;
@@ -534,6 +550,9 @@ static void tealet_snapshot_capture_current(tealet_main_t *g_main)
     g_main->g_integrity_data.snapshot_bytes = size;
 }
 
+/* Verify previously captured bytes for the current tealet and clear the active
+ * snapshot marker.  Mismatch handling follows configured fail policy.
+ */
 static int tealet_snapshot_verify_current(tealet_main_t *g_main)
 {
     int cmp;
@@ -604,6 +623,14 @@ static int tealet_config_has_header(const tealet_config_t *config)
     return config != NULL && config->size >= min_header;
 }
 
+/* Canonicalize caller-provided configuration in-place.
+ *
+ * Rules enforced here:
+ *  - drop unsupported feature flags for this build/platform,
+ *  - maintain dependency invariants (integrity requires at least one backend),
+ *  - normalize mode/policy enums to valid values,
+ *  - zero stack_integrity_bytes when integrity is disabled.
+ */
 static void tealet_config_canonicalize(tealet_config_t *config)
 {
     unsigned int flags;
@@ -651,6 +678,9 @@ static void tealet_config_canonicalize(tealet_config_t *config)
         config->stack_integrity_bytes = 0;
 }
 
+/* Populate a config struct from current runtime state, then canonicalize to
+ * ensure returned values obey the same invariants as configure_set().
+ */
 static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t *config)
 {
     config->version = TEALET_CONFIG_CURRENT_VERSION;
@@ -1708,6 +1738,11 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
     return 0;
 }
 
+/* Return effective configuration for this main tealet.
+ *
+ * This is a size-versioned copy-out API: only the caller-provided prefix is
+ * written, enabling forward/backward ABI-compatible evolution of the struct.
+ */
 int tealet_configure_get(tealet_t *_tealet, tealet_config_t *config)
 {
     tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
@@ -1733,6 +1768,12 @@ int tealet_configure_get(tealet_t *_tealet, tealet_config_t *config)
     return 0;
 }
 
+/* Apply runtime configuration from caller input.
+ *
+ * The request is copied, canonicalized, and then committed atomically into the
+ * main tealet state. Any required snapshot workspace is preallocated before
+ * commit so switching paths do not allocate.
+ */
 int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
 {
     tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
@@ -1774,6 +1815,13 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
     return 0;
 }
 
+/* Convenience API to enable stack checking with practical defaults.
+ *
+ * - Enables integrity + guard + snapshot flags.
+ * - Uses NOACCESS guard mode and ERROR mismatch policy.
+ * - If stack_integrity_bytes is zero, uses one Linux page when available,
+ *   otherwise falls back to 4096 bytes.
+ */
 int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes)
 {
     tealet_config_t cfg = TEALET_CONFIG_INIT;

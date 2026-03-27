@@ -251,6 +251,11 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg)
 #endif
 
 #if TEALET_WITH_STACK_SNAPSHOT
+/* Exercise snapshot-only integrity behavior through regular switch paths.
+ *
+ * write_inside=1 mutates monitored bytes (expect integrity failure according
+ * to policy). write_inside=0 mutates unrelated memory (expect success).
+ */
 static int run_integrity_switch_case(int fail_policy, int write_inside,
     int *first_result, int *recovery_result)
 {
@@ -301,6 +306,11 @@ static int run_integrity_switch_case(int fail_policy, int write_inside,
 #endif
 
 #if TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+/* Exercise hybrid page-guard + snapshot split behavior.
+ *
+ * write_guard_page=0 targets snapshot region (soft error path).
+ * write_guard_page=1 targets guarded page (hard-fault path, usually subprocess).
+ */
 static int run_mprotect_split_case(int write_guard_page,
     int *first_result, int *recovery_result)
 {
@@ -372,6 +382,7 @@ static void test_get_defaults(void)
 
     TEST("test_get_defaults");
 
+    /* Intentionally use plain init: validates raw default runtime config. */
     main_tealet = new_main_plain();
     result = tealet_configure_get(main_tealet, &cfg);
     assert(result == 0);
@@ -396,6 +407,7 @@ static void test_set_canonicalizes_unsupported(void)
 
     TEST("test_set_canonicalizes_unsupported");
 
+    /* Intentionally use plain init: validates configure_set canonicalization. */
     main_tealet = new_main_plain();
 
     set_cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
@@ -449,6 +461,7 @@ static void test_set_snapshot_supported_build(void)
 
     TEST("test_set_snapshot_supported_build");
 
+    /* Intentionally use plain init: explicit configure_set drives this test. */
     main_tealet = new_main_plain();
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
