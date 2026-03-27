@@ -37,13 +37,30 @@ static int test_passed = 0;
     test_passed++; \
 } while(0)
 
-static tealet_t *new_main(void)
+/* Keep this path unconfigured for tests that verify raw defaults and
+ * canonicalization behavior of tealet_configure_get/set.
+ */
+static tealet_t *new_main_plain(void)
 {
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main_tealet;
 
     main_tealet = tealet_initialize(&alloc, 0);
     assert(main_tealet != NULL);
+    return main_tealet;
+}
+
+/* Use this path for runtime behavior tests so they exercise the convenience
+ * API and run with stack checks enabled by default.
+ */
+static tealet_t *new_main_checked(void)
+{
+    tealet_t *main_tealet;
+    int result;
+
+    main_tealet = new_main_plain();
+    result = tealet_configure_check_stack(main_tealet, 0);
+    assert(result == 0);
     return main_tealet;
 }
 
@@ -247,7 +264,7 @@ static int run_integrity_switch_case(int fail_policy, int write_inside,
     int first_switch_result;
     int second_switch_result;
 
-    main_tealet = new_main();
+    main_tealet = new_main_checked();
     memset(&parent_scratch, 0x22, sizeof(parent_scratch));
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
@@ -300,7 +317,7 @@ static int run_mprotect_split_case(int write_guard_page,
     page_size = (size_t)sysconf(_SC_PAGESIZE);
     assert(page_size > 0);
 
-    main_tealet = new_main();
+    main_tealet = new_main_checked();
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
                 TEALET_CONFIGF_STACK_SNAPSHOT |
@@ -355,7 +372,7 @@ static void test_get_defaults(void)
 
     TEST("test_get_defaults");
 
-    main_tealet = new_main();
+    main_tealet = new_main_plain();
     result = tealet_configure_get(main_tealet, &cfg);
     assert(result == 0);
 
@@ -379,7 +396,7 @@ static void test_set_canonicalizes_unsupported(void)
 
     TEST("test_set_canonicalizes_unsupported");
 
-    main_tealet = new_main();
+    main_tealet = new_main_plain();
 
     set_cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
                     TEALET_CONFIGF_STACK_GUARD |
@@ -432,7 +449,7 @@ static void test_set_snapshot_supported_build(void)
 
     TEST("test_set_snapshot_supported_build");
 
-    main_tealet = new_main();
+    main_tealet = new_main_plain();
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
     cfg.stack_integrity_bytes = 2048;
@@ -641,7 +658,7 @@ static void test_set_invalid_version(void)
 
     TEST("test_set_invalid_version");
 
-    main_tealet = new_main();
+    main_tealet = new_main_plain();
 
     cfg.version = TEALET_CONFIG_VERSION_1 + 1;
     result = tealet_configure_set(main_tealet, &cfg);
@@ -659,7 +676,7 @@ static void test_header_size_validation(void)
 
     TEST("test_header_size_validation");
 
-    main_tealet = new_main();
+    main_tealet = new_main_plain();
 
     cfg.size = offsetof(tealet_config_t, version);
     result = tealet_configure_get(main_tealet, &cfg);
