@@ -1766,6 +1766,32 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
     return 0;
 }
 
+int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes)
+{
+    tealet_config_t cfg = TEALET_CONFIG_INIT;
+    size_t effective_bytes;
+
+    effective_bytes = stack_integrity_bytes;
+    if (effective_bytes == 0) {
+#if TEALET_GUARD_MPROTECT
+        effective_bytes = tealet_guard_pagesize();
+#else
+        effective_bytes = 4096;
+#endif
+        if (effective_bytes == 0)
+            effective_bytes = 4096;
+    }
+
+    cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
+                TEALET_CONFIGF_STACK_GUARD |
+                TEALET_CONFIGF_STACK_SNAPSHOT;
+    cfg.stack_integrity_bytes = effective_bytes;
+    cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
+    cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
+
+    return tealet_configure_set(_tealet, &cfg);
+}
+
 int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
 {
     tealet_sub_t *tealet = (tealet_sub_t *)_tealet;

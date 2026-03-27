@@ -402,6 +402,25 @@ int tealet_configure_get(tealet_t *tealet, tealet_config_t *config);
 TEALET_API
 int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
 
+/* Convenience helper to enable stack checking with sensible defaults.
+ *
+ * This enables stack integrity checks with both guard pages and snapshot
+ * verification, then applies the resulting configuration via
+ * tealet_configure_set().
+ *
+ * If stack_integrity_bytes is 0, a default window of one OS memory page is
+ * used where available.
+ *
+ * This helper is intended as a one-way "turn checks on" API. You can still
+ * use tealet_configure_set() directly for custom tuning.
+ *
+ * Return values:
+ *   0 on success
+ *  <0 on error (e.g. TEALET_ERR_INVAL, TEALET_ERR_MEM)
+ */
+TEALET_API
+int tealet_configure_check_stack(tealet_t *tealet, size_t stack_integrity_bytes);
+
 /**
  * Fork the current active tealet, creating a copy that can run independently.
  *
