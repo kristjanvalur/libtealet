@@ -641,17 +641,41 @@ static void test_mprotect_guard_page_segv_subprocess(void)
      */
     pid_t pid;
     int wait_status;
+    int first_result;
+    int recovery_result;
+    int child_exit;
 
     TEST("test_mprotect_guard_page_segv_subprocess");
 
     pid = fork();
     assert(pid >= 0);
     if (pid == 0) {
-        run_mprotect_split_case(1, NULL, NULL);
+        first_result = 0;
+        recovery_result = 0;
+        if (run_mprotect_split_case(1, &first_result, &recovery_result) != 0)
+            _exit(110);
+        if (first_result == MPROTECT_SPLIT_SKIP_GUARD_OVERLAP)
+            _exit(21);
+        if (first_result == MPROTECT_SPLIT_SKIP_NO_PREFIX)
+            _exit(20);
         _exit(112);
     }
 
     assert(waitpid(pid, &wait_status, 0) == pid);
+    if (WIFEXITED(wait_status)) {
+        child_exit = WEXITSTATUS(wait_status);
+        if (child_exit == 20) {
+            printf("  SKIPPED (snapshot prefix not representable for this stack alignment)\n");
+            test_passed++;
+            return;
+        }
+        if (child_exit == 21) {
+            printf("  SKIPPED (active stack pointer lies inside computed guard interval)\n");
+            test_passed++;
+            return;
+        }
+    }
+
     assert(WIFSIGNALED(wait_status));
     assert(WTERMSIG(wait_status) == SIGSEGV);
 
