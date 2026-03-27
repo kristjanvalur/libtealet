@@ -1173,15 +1173,23 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     tealet_sub_t *g_exit_target;
     int run_on_create = g_new == g_target;  /* true for tealet_new(), we are switching to the new tealet */
     void *run_arg, *switch_arg;
+    void *initial_run_arg;
     assert(g_new->stack == NULL); /* it is fresh */
     assert(run);
 
     if (run_on_create) {
         /* tealet_new() case */
         assert(parg != NULL);
+        /* Capture *parg before switching stacks.  After the switch, the
+         * creator's stack region may be snapshot-checked and/or page-guarded,
+         * so dereferencing the original parg pointer from the new tealet can
+         * fault.
+         */
+        initial_run_arg = *parg;
     } else {
         /* tealet_create() case */
         assert(parg == NULL);
+        initial_run_arg = NULL;
     }
 
     g_new->stack_far = (char *)stack_far;
@@ -1209,7 +1217,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
          */
         if (run_on_create) {
             assert(g_main->g_current == g_new);        /* only valid for tealet_new */
-            run_arg = *parg;  /* tealet_new(). use the arg from the caller */
+            run_arg = initial_run_arg;  /* tealet_new(). captured before stack switch */
         } else {
             run_arg = switch_arg;  /* tealet_create(). use the arg from the switch */
         }
