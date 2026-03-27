@@ -50,10 +50,17 @@ int main(void)
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_stats_t stats;
     tealet_t *t1, *t2, *t3;
+    int configure_result;
     
     g_main = tealet_initialize(&alloc, 0);
     if (!g_main) {
         fprintf(stderr, "Failed to initialize\n");
+        return 1;
+    }
+    configure_result = tealet_configure_check_stack(g_main, 0);
+    if (configure_result != 0) {
+        fprintf(stderr, "Failed to enable stack checks: %d\n", configure_result);
+        tealet_finalize(g_main);
         return 1;
     }
     

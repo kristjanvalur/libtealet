@@ -43,6 +43,16 @@ int main(void)
     tealet_t *tmain = tealet_initialize(&talloc, 0);
     tealet_t *loop;
     void *data; /* data exchange object */
+    int configure_result;
+
+    if (tmain == NULL)
+        return 1;
+
+    configure_result = tealet_configure_check_stack(tmain, 0);
+    if (configure_result != 0) {
+        tealet_finalize(tmain);
+        return 1;
+    }
 
     /* how many rounds? */
     data = (void*)10;
