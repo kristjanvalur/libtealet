@@ -902,24 +902,29 @@ void test_mem_error(void)
 }
 
 
-static void (*test_list[])(void) = {
-  test_main_current,
-  test_stack_further,
-  test_simple,
-  test_simple_create,
-  test_create_previous,
-  test_status,
-  test_exit,
-  test_switch,
-  test_switch_new,
-  test_arg,
-  test_random,
-  test_random2,
-  test_extra,
-  test_memstats,
-  test_stats,
-  test_mem_error,
-  NULL
+typedef struct test_entry_t {
+    const char *name;
+    void (*fn)(void);
+} test_entry_t;
+
+static test_entry_t test_list[] = {
+  {"test_main_current", test_main_current},
+  {"test_stack_further", test_stack_further},
+  {"test_simple", test_simple},
+  {"test_simple_create", test_simple_create},
+  {"test_create_previous", test_create_previous},
+  {"test_status", test_status},
+  {"test_exit", test_exit},
+  {"test_switch", test_switch},
+  {"test_switch_new", test_switch_new},
+  {"test_arg", test_arg},
+  {"test_random", test_random},
+  {"test_random2", test_random2},
+  {"test_extra", test_extra},
+  {"test_memstats", test_memstats},
+  {"test_stats", test_stats},
+  {"test_mem_error", test_mem_error},
+  {NULL, NULL}
 };
 
 
@@ -928,17 +933,26 @@ void runmode(int mode)
     int i;
     newmode = mode;
     printf("+++ Running tests with newmode = %d\n", newmode);
-    for (i = 0; test_list[i] != NULL; i++)
+  fflush(stdout);
+  for (i = 0; test_list[i].fn != NULL; i++)
     {
-        printf("+++ Running test %d... +++\n", i);
-        test_list[i]();
+    printf("+++ Running test %d (%s)... +++\n", i, test_list[i].name);
+    fflush(stdout);
+    test_list[i].fn();
+    printf("+++ Completed test %d (%s). +++\n", i, test_list[i].name);
+    fflush(stdout);
     }
     printf("+++ All ok. +++\n");
+  fflush(stdout);
 }
 
 int main(int argc, char **argv)
 {
     int i;
+  (void)argc;
+  (void)argv;
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stderr, NULL, _IONBF, 0);
     for (i = 0; i<=3; i++)
         runmode(i);
     runmode(-1);
