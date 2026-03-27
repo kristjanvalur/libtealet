@@ -488,28 +488,20 @@ static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t require
     return 0;
 }
 
-static void tealet_snapshot_clear(tealet_main_t *g_main)
-{
-    g_main->g_integrity_data.stack_base = NULL;
-    g_main->g_integrity_data.snapshot_bytes = 0;
-}
-
 static void tealet_snapshot_capture_current(tealet_main_t *g_main)
 {
     tealet_sub_t *current = g_main->g_current;
     char *stack_base = g_main->g_integrity_data.stack_base;
     size_t size = g_main->g_integrity_data.snapshot_bytes;
 
-    assert(current != NULL);
-
-    tealet_snapshot_clear(g_main);
-
     if (size == 0)
         return;
+
+    assert(stack_base != NULL);
+    assert(current != NULL);
+
     assert(size <= g_main->g_integrity_data.snapshot_capacity);
     if (current->stack_far == NULL || current->stack_far == STACKMAN_SP_FURTHEST)
-        return;
-    if (stack_base == NULL)
         return;
 
     memcpy(g_main->g_integrity_data.snapshot_block, stack_base, size);
@@ -522,18 +514,16 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main)
     int cmp;
     assert(g_main->g_current != NULL);
 
-    if (g_main->g_integrity_data.snapshot_bytes == 0 ||
-        g_main->g_integrity_data.stack_base == NULL) {
-        tealet_snapshot_clear(g_main);
+    if (g_main->g_integrity_data.snapshot_bytes == 0) {
         return 0;
     }
+    assert(g_main->g_integrity_data.stack_base != NULL);
 
     cmp = memcmp(g_main->g_integrity_data.snapshot_block, g_main->g_integrity_data.stack_base,
                  g_main->g_integrity_data.snapshot_bytes);
+    g_main->g_integrity_data.snapshot_bytes = 0;
     if (cmp != 0) {
         int policy = g_main->g_cfg_stack_integrity_fail_policy;
-
-        tealet_snapshot_clear(g_main);
 
         if (policy == TEALET_STACK_INTEGRITY_FAIL_ABORT)
             abort();
@@ -543,7 +533,6 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main)
         return TEALET_ERR_INTEGRITY;
     }
 
-    tealet_snapshot_clear(g_main);
     return 0;
 }
 #else
