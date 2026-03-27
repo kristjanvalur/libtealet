@@ -9,7 +9,14 @@
 VERSION = 0.3.0
 STACKMAN_VERSION = 1.2.0
 
-CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1
+# Stack-integrity compile-time defaults (can be overridden from shell).
+# Example disable: make TEALET_WITH_STACK_GUARD=0 TEALET_WITH_STACK_SNAPSHOT=0
+TEALET_WITH_STACK_GUARD ?= 1
+TEALET_WITH_STACK_SNAPSHOT ?= 1
+
+CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1 \
+	-DTEALET_WITH_STACK_GUARD=$(TEALET_WITH_STACK_GUARD) \
+	-DTEALET_WITH_STACK_SNAPSHOT=$(TEALET_WITH_STACK_SNAPSHOT)
 CFLAGS += -fPIC -Wall $(PLATFORMFLAGS)
 LDFLAGS += -Lbin $(PLATFORMFLAGS)
 
@@ -47,7 +54,7 @@ src/tealet.o: src/tealet.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tealet.c
 
 src/tealet_snapshot.o: src/tealet.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DTEALET_WITH_STACK_SNAPSHOT=1 -DTEALET_WITH_STACK_GUARD=1 -c -o $@ src/tealet.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tealet.c
 
 src/tools.o: src/tools.c src/tools.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tools.c
@@ -133,7 +140,7 @@ bin/test-config: bin tests/test_config.o bin/libtealet-snapshot.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_config.o -ltealet-snapshot
 
 tests/test_config.o: tests/test_config.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DTEALET_WITH_STACK_SNAPSHOT=1 -DTEALET_WITH_STACK_GUARD=1 -c -o $@ tests/test_config.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_config.c
 
 # Current tealet test
 bin/test-current: bin tests/test_current.o bin/libtealet.a
