@@ -142,11 +142,14 @@ void *failmalloc(size_t size, void *context)
 
 void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
     tealet_stats_t stats;
+  int result;
     assert(g_main == NULL);
     talloc.malloc_p = failmalloc;
     if (alloc == NULL)
         alloc = &talloc;
     g_main = tealet_initialize(alloc, extrasize);
+  result = tealet_configure_check_stack(g_main, 0);
+  assert(result == 0);
     assert(tealet_current(g_main) == g_main);
     if (extrasize)
         assert(g_main->extra != NULL);
