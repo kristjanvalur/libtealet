@@ -363,8 +363,16 @@ void test_stack_further(void)
 
 tealet_t *test_simple_run(tealet_t *t1, void *arg)
 {
+  tealet_t *prev_current;
+  tealet_t *prev_main;
+  (void)arg;
   assert(t1 != g_main);
-  assert(tealet_previous(g_main) == t1->main);
+  prev_current = tealet_previous(t1);
+  prev_main = tealet_previous(g_main);
+  printf("  test_simple_run: current=%p main=%p prev(current)=%p prev(main)=%p\n",
+         (void *)t1, (void *)t1->main, (void *)prev_current, (void *)prev_main);
+  fflush(stdout);
+  assert(prev_current == t1->main);
   status = 1;
   return g_main;
 }
