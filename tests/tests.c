@@ -379,8 +379,14 @@ tealet_t *test_simple_run(tealet_t *t1, void *arg)
 
 void test_simple(void)
 {
+  tealet_t *t;
   init_test();
-  tealet_new(g_main, test_simple_run, NULL, NULL);
+  printf("  test_simple: before tealet_new (main=%p)\n", (void *)g_main);
+  fflush(stdout);
+  t = tealet_new(g_main, test_simple_run, NULL, NULL);
+  printf("  test_simple: after tealet_new (ret=%p, status=%d)\n", (void *)t, status);
+  fflush(stdout);
+  assert(t != NULL);
   assert(status == 1);
   fini_test();
 }
