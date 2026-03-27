@@ -90,6 +90,26 @@ heap, and not via stack-local variables.
 
 No form of scheduler is implemented.
 
+## Optional stack checks
+
+libtealet includes optional runtime stack-integrity checks that combine page protection and snapshot verification.
+
+- Use `tealet_configure_check_stack()` to enable a sensible default check profile for a main tealet.
+- Use `tealet_configure_get()` / `tealet_configure_set()` for explicit control.
+
+By default, the project build enables both backends:
+
+- `TEALET_WITH_STACK_GUARD=1`
+- `TEALET_WITH_STACK_SNAPSHOT=1`
+
+You can compile them out when needed, for example:
+
+```bash
+make TEALET_WITH_STACK_GUARD=0 TEALET_WITH_STACK_SNAPSHOT=0
+```
+
+When compiled out, configuration calls are canonicalized to the supported subset on the current build/platform.
+
 ## Advanced: Fork-like Semantics
 
 In addition to the traditional approach where each tealet exists within the execution scope of a function (created via `tealet_new()` or `tealet_create()`), libtealet now supports **Unix-like fork semantics** through `tealet_fork()`.

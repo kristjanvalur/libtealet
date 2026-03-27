@@ -669,6 +669,79 @@ Use this when you want to inspect the effective boundary at a specific stack dep
 
 ## Memory Management
 
+## Runtime stack-check configuration
+
+libtealet exposes a versioned configuration API for stack-integrity checks.
+
+### Build-time availability and defaults
+
+Feature support is compile-time gated:
+
+- `TEALET_WITH_STACK_GUARD`
+- `TEALET_WITH_STACK_SNAPSHOT`
+
+In the default project build, both are enabled. You can compile either or both out.
+
+When a feature is not available in the current build/platform, `tealet_configure_set()` canonicalizes the request to the supported subset.
+
+### `tealet_configure_get()`
+
+```c
+int tealet_configure_get(tealet_t *tealet, tealet_config_t *config);
+```
+
+Read current effective runtime configuration from a main tealet.
+
+**Notes:**
+- Uses `tealet_config_t` size/version semantics.
+- Writes only the caller-provided struct prefix (`config->size`).
+- Returned values are canonicalized effective values.
+
+---
+
+### `tealet_configure_set()`
+
+```c
+int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
+```
+
+Apply runtime configuration to a main tealet.
+
+**Behavior:**
+- Validates struct header/version.
+- Canonicalizes unsupported/invalid combinations.
+- Pre-allocates required snapshot workspace.
+- Writes canonicalized effective config back to caller.
+
+Use this for explicit tuning of flags, guard mode, integrity bytes, and fail policy.
+
+---
+
+### `tealet_configure_check_stack()`
+
+```c
+int tealet_configure_check_stack(tealet_t *tealet, size_t stack_integrity_bytes);
+```
+
+Convenience helper to turn stack checks on with sensible defaults.
+
+**What it enables:**
+- `TEALET_CONFIGF_STACK_INTEGRITY`
+- `TEALET_CONFIGF_STACK_GUARD`
+- `TEALET_CONFIGF_STACK_SNAPSHOT`
+
+**Default policy choices:**
+- guard mode: `TEALET_STACK_GUARD_MODE_NOACCESS`
+- fail policy: `TEALET_STACK_INTEGRITY_FAIL_ERROR`
+
+**Size behavior:**
+- if `stack_integrity_bytes != 0`: uses caller value
+- if `stack_integrity_bytes == 0`: uses one Linux page when available, otherwise `4096`
+
+This helper is intended as a simple one-way "enable checks" API; use `tealet_configure_set()` for custom profiles.
+
+---
+
 ### `tealet_delete()`
 
 ```c
