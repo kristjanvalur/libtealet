@@ -337,11 +337,23 @@ static int run_mprotect_split_case(int write_guard_page,
     int first_switch_result;
     int second_switch_result;
     size_t page_size;
+    unsigned char run_local_marker;
+    tealet_config_t before_cfg = TEALET_CONFIG_INIT;
 
     page_size = (size_t)sysconf(_SC_PAGESIZE);
     assert(page_size > 0);
 
     main_tealet = new_main_checked();
+
+    result = tealet_configure_get(main_tealet, &before_cfg);
+    assert(result == 0);
+    if (write_guard_page) {
+        fprintf(stderr,
+            "[test-debug] pre-split-config stack_guard_limit=%p run_local=%p\n",
+            before_cfg.stack_guard_limit,
+            (void *)&run_local_marker);
+        fflush(stderr);
+    }
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
                 TEALET_CONFIGF_STACK_SNAPSHOT |
@@ -354,6 +366,13 @@ static int run_mprotect_split_case(int write_guard_page,
     assert((cfg.flags & TEALET_CONFIGF_STACK_INTEGRITY) != 0);
     assert((cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
     assert((cfg.flags & TEALET_CONFIGF_STACK_GUARD) != 0);
+    if (write_guard_page) {
+        fprintf(stderr,
+            "[test-debug] split-config stack_guard_limit=%p integrity_bytes=%lu\n",
+            cfg.stack_guard_limit,
+            (unsigned long)cfg.stack_integrity_bytes);
+        fflush(stderr);
+    }
 
     writer = tealet_create(main_tealet, run_write_with_mprotect_split, NULL);
     assert(writer != NULL);

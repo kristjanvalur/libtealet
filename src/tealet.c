@@ -301,6 +301,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
     tealet_sub_t *current;
     unsigned int flags;
     size_t integrity_bytes;
+    size_t requested_integrity_bytes;
     uintptr_t far_limit;
 #if TEALET_GUARD_MPROTECT
     uintptr_t begin;
@@ -325,6 +326,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
     integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
     if (integrity_bytes == 0)
         return;
+    requested_integrity_bytes = integrity_bytes;
 
     if (g_main->g_cfg_stack_guard_limit != NULL) {
         far_limit = (uintptr_t)g_main->g_cfg_stack_guard_limit;
@@ -339,6 +341,16 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
 #endif
         if (integrity_bytes == 0)
             return;
+    }
+
+    if (tealet_debug_mprotect_trace_enabled) {
+        fprintf(stderr,
+            "[tealet-debug] integrity-plan stack_far=%p guard_limit=%p requested=%lu effective=%lu\n",
+            (void *)current->stack_far,
+            (void *)g_main->g_cfg_stack_guard_limit,
+            (unsigned long)requested_integrity_bytes,
+            (unsigned long)integrity_bytes);
+        fflush(stderr);
     }
 
 #if STACK_DIRECTION == 0
@@ -1906,6 +1918,14 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
     cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
     cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
     cfg.stack_guard_limit = &local_stack_marker;
+
+    if (tealet_debug_mprotect_trace_enabled) {
+        fprintf(stderr,
+            "[tealet-debug] configure-check-stack marker=%p integrity_bytes=%lu\n",
+            (void *)&local_stack_marker,
+            (unsigned long)effective_bytes);
+        fflush(stderr);
+    }
 
     return tealet_configure_set(_tealet, &cfg);
 }
