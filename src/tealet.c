@@ -16,6 +16,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifndef TEALET_WITH_STACK_GUARD
+#define TEALET_WITH_STACK_GUARD 1
+#endif
+
+#ifndef TEALET_WITH_STACK_SNAPSHOT
+#define TEALET_WITH_STACK_SNAPSHOT 1
+#endif
+
 #if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
 #include <sys/mman.h>
 #include <unistd.h>
@@ -29,14 +37,6 @@
 /* enable collection of tealet stats - default enabled, define TEALET_WITH_STATS=0 to disable */
 #ifndef TEALET_WITH_STATS
 #define TEALET_WITH_STATS 1
-#endif
-
-#ifndef TEALET_WITH_STACK_GUARD
-#define TEALET_WITH_STACK_GUARD 1
-#endif
-
-#ifndef TEALET_WITH_STACK_SNAPSHOT
-#define TEALET_WITH_STACK_SNAPSHOT 1
 #endif
 
 #ifndef MIN
