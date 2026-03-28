@@ -13,12 +13,14 @@
 #include <stdint.h> /* for intptr_t */
 #endif
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
 #include <sys/mman.h>
 #include <unistd.h>
+#include <errno.h>
 #define TEALET_GUARD_MPROTECT 1
 #else
 #define TEALET_GUARD_MPROTECT 0
@@ -141,7 +143,7 @@ typedef struct tealet_main_t {
   size_t        g_cfg_stack_integrity_bytes;
   int           g_cfg_stack_guard_mode;
   int           g_cfg_stack_integrity_fail_policy;
-    char         *g_cfg_stack_guard_limit;
+  char         *g_cfg_stack_guard_limit;
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
   tealet_integrity_data_t g_integrity_data;
 #endif
@@ -434,12 +436,25 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
 static void tealet_guard_unprotect_current(tealet_main_t *g_main)
 {
     const tealet_integrity_data_t *plan = &g_main->g_integrity_data;
+    int rc;
+    int err;
+
     if (plan->guard_bytes == 0)
         return;
     assert(plan->guard_base != NULL);
 
-    (void)mprotect(plan->guard_base, plan->guard_bytes,
-                   PROT_READ | PROT_WRITE);
+    errno = 0;
+    rc = mprotect(plan->guard_base, plan->guard_bytes,
+                  PROT_READ | PROT_WRITE);
+    err = (rc == 0 ? 0 : errno);
+    fprintf(stderr,
+            "[tealet-debug] mprotect(unprotect) base=%p bytes=%lu prot=%d rc=%d errno=%d\n",
+            (void *)plan->guard_base,
+            (unsigned long)plan->guard_bytes,
+            PROT_READ | PROT_WRITE,
+            rc,
+            err);
+    fflush(stderr);
     g_main->g_integrity_data.guard_bytes = 0;
 }
 
@@ -448,6 +463,8 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
     const tealet_integrity_data_t *plan = &g_main->g_integrity_data;
     int guard_mode;
     int prot;
+    int rc;
+    int err;
 
     if (plan->guard_bytes == 0)
         return;
@@ -462,7 +479,21 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
     /* mprotect can only really fail if we are trying to reach outside the stack segment.
      * in this case we can't do anything, so we just ignore the error 
      */
-    if (mprotect(plan->guard_base, plan->guard_bytes, prot) != 0) {
+    errno = 0;
+    rc = mprotect(plan->guard_base, plan->guard_bytes, prot);
+    err = (rc == 0 ? 0 : errno);
+    fprintf(stderr,
+            "[tealet-debug] mprotect(protect) stack_base=%p guard_base=%p bytes=%lu mode=%d prot=%d rc=%d errno=%d\n",
+            (void *)plan->stack_base,
+            (void *)plan->guard_base,
+            (unsigned long)plan->guard_bytes,
+            guard_mode,
+            prot,
+            rc,
+            err);
+    fflush(stderr);
+
+    if (rc != 0) {
         g_main->g_integrity_data.guard_bytes = 0;
         return;
     }

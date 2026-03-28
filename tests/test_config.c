@@ -216,6 +216,20 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg)
 #else
         target = (unsigned char *)(guard_end - 1);
 #endif
+        fprintf(stderr,
+            "[test-debug] guard-write begin=%p end=%p aligned_begin=%p aligned_end=%p guard=[%p,%p) snapshot=[%p,%p) current_sp=%p target=%p bytes=%lu\n",
+            (void *)begin,
+            (void *)end,
+            (void *)aligned_begin,
+            (void *)aligned_end,
+            (void *)guard_begin,
+            (void *)guard_end,
+            (void *)snapshot_begin,
+            (void *)snapshot_end,
+            (void *)current_sp,
+            (void *)target,
+            (unsigned long)command->integrity_bytes);
+        fflush(stderr);
     } else {
         if (!snapshot_has_bytes) {
             if (command->first_switch_result)
