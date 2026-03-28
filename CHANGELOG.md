@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation updates for stack checks**
   - Added README overview for optional stack checks and build-time opt-out flags
   - Added API reference coverage for `tealet_configure_get()`, `tealet_configure_set()`, and `tealet_configure_check_stack()`
+- **Tools helper API update**: `tealet_stub_new()` now takes a `stack_far` argument
+  - New signature: `tealet_stub_new(tealet_t *tealet, void *stack_far)`
+  - Aligns stub creation boundary behavior with `tealet_new()` and `tealet_create()`
+  - Updated stub call sites in tests to pass `NULL` where default behavior is desired
+- **Tools helper documentation**
+  - Added API reference section for `tools.h` helper extensions
+  - Documented `tealet_statsalloc_init()`, `tealet_stub_new()`, and `tealet_stub_run()` as helper layers over core tealet APIs
+- **Source formatting**
+  - applied `clang-format` to the source code
 
 ### Fixed
 - **Protected-stack argument bug in `tealet_new()` path**
@@ -252,7 +261,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/kristjanvalur/libtealet/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kristjanvalur/libtealet/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kristjanvalur/libtealet/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kristjanvalur/libtealet/compare/v0.1.0...v0.2.0
