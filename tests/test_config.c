@@ -687,18 +687,6 @@ static void test_mprotect_guard_page_segv_subprocess(void)
             test_passed++;
             return;
         }
-        if (child_exit == 110) {
-            printf("  SKIPPED (guard split setup did not complete for this stack layout)\n");
-            fflush(stdout);
-            test_passed++;
-            return;
-        }
-        if (child_exit == 112) {
-            printf("  SKIPPED (guard-page write did not produce a signal on this host/layout)\n");
-            fflush(stdout);
-            test_passed++;
-            return;
-        }
     }
 
     assert(WIFSIGNALED(wait_status));
