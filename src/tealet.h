@@ -84,6 +84,59 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
 #define TEALET_ERR_MEM -1       /* memory allocation failed */
 #define TEALET_ERR_DEFUNCT -2   /* the target tealet is corrupt */
 #define TEALET_ERR_UNFORKABLE -3 /* tealet cannot be forked (unbounded stack) */
+#define TEALET_ERR_INVAL -4     /* invalid argument */
+#define TEALET_ERR_INTEGRITY -5 /* current tealet violated stack-integrity boundary */
+
+/* configuration API structure versioning */
+#define TEALET_CONFIG_VERSION_1 1
+#define TEALET_CONFIG_CURRENT_VERSION TEALET_CONFIG_VERSION_1
+
+/* stack integrity configuration flags */
+#define TEALET_CONFIGF_STACK_INTEGRITY  (1u << 0)
+#define TEALET_CONFIGF_STACK_GUARD      (1u << 1)
+#define TEALET_CONFIGF_STACK_SNAPSHOT   (1u << 2)
+
+/* stack guard modes */
+#define TEALET_STACK_GUARD_MODE_NONE      0
+#define TEALET_STACK_GUARD_MODE_READONLY  1
+#define TEALET_STACK_GUARD_MODE_NOACCESS  2
+
+/* stack integrity failure policy */
+#define TEALET_STACK_INTEGRITY_FAIL_ASSERT 0
+#define TEALET_STACK_INTEGRITY_FAIL_ERROR  1
+#define TEALET_STACK_INTEGRITY_FAIL_ABORT  2
+
+/* Runtime configuration for stack integrity and related safety features.
+ *
+ * ABI compatibility contract:
+ * - 'size' must be the first member and set by caller to sizeof(tealet_config_t)
+ *   (or a future/older struct size).
+ * - 'version' is a struct format version, independent from the global libtealet ABI.
+ * - tealet_configure_get()/set() read/write only the prefix known to this build,
+ *   bounded by 'size'. Unknown tail fields are ignored.
+ */
+typedef struct tealet_config_t {
+  size_t size;
+  unsigned int version;
+  unsigned int flags;
+  size_t stack_integrity_bytes;
+  int stack_guard_mode;
+  int stack_integrity_fail_policy;
+  void *stack_guard_limit;
+  unsigned int reserved[3];
+} tealet_config_t;
+
+/* Convenience initializer for configuration structs */
+#define TEALET_CONFIG_INIT { \
+  sizeof(tealet_config_t), \
+  TEALET_CONFIG_CURRENT_VERSION, \
+  0u, \
+  0, \
+  TEALET_STACK_GUARD_MODE_NONE, \
+  TEALET_STACK_INTEGRITY_FAIL_ASSERT, \
+  NULL, \
+  {0u, 0u, 0u} \
+}
 
 /* Initialize and return the main tealet.  The main tealet contains the whole
  * "normal" execution of the program; it starts when the program starts and
@@ -332,6 +385,47 @@ void *tealet_get_far(tealet_t *tealet);
 TEALET_API
 int tealet_set_far(tealet_t *tealet, void *far_boundary);
 
+/* Get or set runtime configuration on the main tealet.
+ *
+ * These functions are intended for feature toggles such as optional stack
+ * integrity checks. The caller supplies a size/versioned config struct.
+ *
+ * tealet_configure_set() canonicalizes the struct in-place to the effective
+ * configuration actually applied by this build/platform (unsupported features
+ * are cleared and dependent fields normalized).
+ *
+ * Return values:
+ *   0 on success
+ *  <0 on error (e.g. TEALET_ERR_INVAL)
+ */
+TEALET_API
+int tealet_configure_get(tealet_t *tealet, tealet_config_t *config);
+
+TEALET_API
+int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
+
+/* Convenience helper to enable stack checking with sensible defaults.
+ *
+ * This enables stack integrity checks with both guard pages and snapshot
+ * verification, then applies the resulting configuration via
+ * tealet_configure_set().
+ *
+ * If stack_integrity_bytes is 0, a default window of one OS memory page is
+ * used where available.
+ *
+ * Note: this helper sets stack_guard_limit to a local stack marker inside this
+ * function. For best results, call it from a program top-level function whose
+ * frame should remain within the intended stack region for switched tealets.
+ *
+ * This helper is intended as a one-way "turn checks on" API. You can still
+ * use tealet_configure_set() directly for custom tuning.
+ *
+ * Return values:
+ *   0 on success
+ *  <0 on error (e.g. TEALET_ERR_INVAL, TEALET_ERR_MEM)
+ */
+TEALET_API
+int tealet_configure_check_stack(tealet_t *tealet, size_t stack_integrity_bytes);
 /**
  * Fork the current active tealet, creating a copy that can run independently.
  *

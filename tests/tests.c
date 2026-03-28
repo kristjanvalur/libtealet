@@ -142,11 +142,14 @@ void *failmalloc(size_t size, void *context)
 
 void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
     tealet_stats_t stats;
+  int result;
     assert(g_main == NULL);
     talloc.malloc_p = failmalloc;
     if (alloc == NULL)
         alloc = &talloc;
     g_main = tealet_initialize(alloc, extrasize);
+  result = tealet_configure_check_stack(g_main, 0);
+  assert(result == 0);
     assert(tealet_current(g_main) == g_main);
     if (extrasize)
         assert(g_main->extra != NULL);
@@ -306,6 +309,7 @@ static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *st
 
 typedef tealet_t* (*t_new)(tealet_t *, tealet_run_t, void**, void*);
 static t_new newarray[] = {tealet_new_rnd, stub_new, stub_new2, stub_new3};
+static tealet_t *(*tealet_new_native)(tealet_t *, tealet_run_t, void **, void *) = tealet_new;
 
 static t_new get_new(){
     if (newmode >= 0)
@@ -327,6 +331,61 @@ static void test_stack_further_inner(void *outer_addr)
   int inner_local;
   void *further = tealet_stack_further(outer_addr, &inner_local);
   assert(further == outer_addr);
+}
+
+typedef struct stack_far_case_t {
+  int value;
+} stack_far_case_t;
+
+typedef struct stack_far_run_arg_t {
+  tealet_t *main;
+  stack_far_case_t *shared;
+  int before;
+  int after;
+} stack_far_run_arg_t;
+
+static tealet_t *test_stack_far_isolation_run(tealet_t *current, void *arg)
+{
+  stack_far_run_arg_t *run_arg = (stack_far_run_arg_t *)arg;
+  assert(current != run_arg->main);
+  assert(run_arg->shared->value == run_arg->before);
+  run_arg->shared->value = run_arg->after;
+  tealet_switch(run_arg->main, NULL);
+  assert(run_arg->shared->value == run_arg->after);
+  return run_arg->main;
+}
+
+static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg)
+{
+  stack_far_case_t shared;
+  stack_far_run_arg_t *run_arg;
+  tealet_t *child;
+  void *child_arg;
+  void *stack_far;
+  (void)arg;
+
+  shared.value = 11;
+  run_arg = (stack_far_run_arg_t *)tealet_malloc(current, sizeof(*run_arg));
+  assert(run_arg != NULL);
+  run_arg->main = current;
+  run_arg->shared = &shared;
+  run_arg->before = 11;
+  run_arg->after = 99;
+  child_arg = run_arg;
+
+  stack_far = tealet_stack_further(&shared, (void *)(&shared + 1));
+  child = tealet_new_native(current, test_stack_far_isolation_run, &child_arg, stack_far);
+  assert(child != NULL);
+
+  /* Child wrote to its own copied stack, parent value remains unchanged. */
+  assert(shared.value == 11);
+
+  tealet_switch(child, NULL);
+
+  /* Child still observes its own modified value on resume. */
+  assert(shared.value == 11);
+  tealet_free(current, run_arg);
+  return g_main;
 }
 
 void test_stack_further(void)
@@ -356,20 +415,36 @@ void test_stack_further(void)
   fini_test();
 }
 
+/* test that stack isolation works if tealets are created with an extended stack. */
+void test_stack_far_isolation(void)
+{
+  tealet_t *parent;
+
+  init_test();
+  parent = tealet_new_native(g_main, test_stack_far_isolation_parent, NULL, NULL);
+  assert(parent != NULL);
+  fini_test();
+}
+
 /************************************************************/
 
 tealet_t *test_simple_run(tealet_t *t1, void *arg)
 {
+  tealet_t *prev_current;
+  (void)arg;
   assert(t1 != g_main);
-  assert(tealet_previous(g_main) == t1->main);
+  prev_current = tealet_previous(t1);
+  assert(prev_current == t1->main);
   status = 1;
   return g_main;
 }
 
 void test_simple(void)
 {
+  tealet_t *t;
   init_test();
-  tealet_new(g_main, test_simple_run, NULL, NULL);
+  t = tealet_new(g_main, test_simple_run, NULL, NULL);
+  assert(t != NULL);
   assert(status == 1);
   fini_test();
 }
@@ -899,24 +974,30 @@ void test_mem_error(void)
 }
 
 
-static void (*test_list[])(void) = {
-  test_main_current,
-  test_stack_further,
-  test_simple,
-  test_simple_create,
-  test_create_previous,
-  test_status,
-  test_exit,
-  test_switch,
-  test_switch_new,
-  test_arg,
-  test_random,
-  test_random2,
-  test_extra,
-  test_memstats,
-  test_stats,
-  test_mem_error,
-  NULL
+typedef struct test_entry_t {
+    const char *name;
+    void (*fn)(void);
+} test_entry_t;
+
+static test_entry_t test_list[] = {
+  {"test_main_current", test_main_current},
+  {"test_stack_further", test_stack_further},
+  {"test_stack_far_isolation", test_stack_far_isolation},
+  {"test_simple", test_simple},
+  {"test_simple_create", test_simple_create},
+  {"test_create_previous", test_create_previous},
+  {"test_status", test_status},
+  {"test_exit", test_exit},
+  {"test_switch", test_switch},
+  {"test_switch_new", test_switch_new},
+  {"test_arg", test_arg},
+  {"test_random", test_random},
+  {"test_random2", test_random2},
+  {"test_extra", test_extra},
+  {"test_memstats", test_memstats},
+  {"test_stats", test_stats},
+  {"test_mem_error", test_mem_error},
+  {NULL, NULL}
 };
 
 
@@ -925,17 +1006,26 @@ void runmode(int mode)
     int i;
     newmode = mode;
     printf("+++ Running tests with newmode = %d\n", newmode);
-    for (i = 0; test_list[i] != NULL; i++)
+  fflush(stdout);
+  for (i = 0; test_list[i].fn != NULL; i++)
     {
-        printf("+++ Running test %d... +++\n", i);
-        test_list[i]();
+    printf("+++ Running test %d (%s)... +++\n", i, test_list[i].name);
+    fflush(stdout);
+    test_list[i].fn();
+    printf("+++ Completed test %d (%s). +++\n", i, test_list[i].name);
+    fflush(stdout);
     }
     printf("+++ All ok. +++\n");
+  fflush(stdout);
 }
 
 int main(int argc, char **argv)
 {
     int i;
+  (void)argc;
+  (void)argv;
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stderr, NULL, _IONBF, 0);
     for (i = 0; i<=3; i++)
         runmode(i);
     runmode(-1);

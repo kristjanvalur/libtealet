@@ -273,6 +273,7 @@ static tealet_t *worker_entry(tealet_t *current, void *arg)
 int main(int argc, char *argv[])
 {
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    int configure_result;
     int i;
     
     /* Parse command line arguments */
@@ -313,6 +314,12 @@ int main(int argc, char *argv[])
     g_main = tealet_initialize(&alloc, 0);
     if (!g_main) {
         fprintf(stderr, "Failed to initialize\n");
+        return 1;
+    }
+    configure_result = tealet_configure_check_stack(g_main, 0);
+    if (configure_result != 0) {
+        fprintf(stderr, "Failed to enable stack checks: %d\n", configure_result);
+        tealet_finalize(g_main);
         return 1;
     }
     

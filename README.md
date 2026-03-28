@@ -90,6 +90,32 @@ heap, and not via stack-local variables.
 
 No form of scheduler is implemented.
 
+## Optional stack checks
+
+libtealet includes optional runtime stack-integrity checks that combine page protection and snapshot verification.
+These checks help verify the promise that each tealet does not access stack areas outside its allowed bounds. They are especially useful during application development and integration to catch boundary-violation bugs early.
+They come with runtime overhead and are generally intended for development/testing builds, not production deployments.
+
+- **Stack guard** (`TEALET_CONFIGF_STACK_GUARD`) protects full pages (typically via `mprotect()` where available).
+- **Stack snapshot** (`TEALET_CONFIGF_STACK_SNAPSHOT`) verifies byte-level regions, including sub-page areas guard mode cannot represent exactly.
+- Together they are used to catch out-of-bounds stack access across both page-aligned and non-page-aligned regions.
+
+- Use `tealet_configure_check_stack()` to enable a sensible default check profile (ideally from a program top-level function, since it derives `stack_guard_limit` from its own stack frame).
+- Use `tealet_configure_get()` / `tealet_configure_set()` for explicit control.
+
+By default, the project build enables both backends:
+
+- `TEALET_WITH_STACK_GUARD=1`
+- `TEALET_WITH_STACK_SNAPSHOT=1`
+
+You can compile them out when needed, for example:
+
+```bash
+make TEALET_WITH_STACK_GUARD=0 TEALET_WITH_STACK_SNAPSHOT=0
+```
+
+When compiled out, configuration calls are canonicalized to the supported subset on the current build/platform.
+
 ## Advanced: Fork-like Semantics
 
 In addition to the traditional approach where each tealet exists within the execution scope of a function (created via `tealet_new()` or `tealet_create()`), libtealet now supports **Unix-like fork semantics** through `tealet_fork()`.

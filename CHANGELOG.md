@@ -7,7 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Stack-check convenience API**: Added `tealet_configure_check_stack(tealet_t*, size_t)`
+  - Enables integrity + guard + snapshot checks with a single call
+  - Uses `TEALET_STACK_GUARD_MODE_NOACCESS` and `TEALET_STACK_INTEGRITY_FAIL_ERROR`
+  - Uses one page by default when `stack_integrity_bytes == 0` (Linux page size when available, fallback 4096)
+
 ### Changed
+- **Default build now includes stack-check backends**
+  - Build defaults enable `TEALET_WITH_STACK_GUARD=1` and `TEALET_WITH_STACK_SNAPSHOT=1`
+  - Feature macros remain overridable at build time (for reduced builds)
+- **Test coverage with checks enabled by default**
+  - Enabled stack checks in core and selected test harnesses (`tests.c`, `test_fork.c`, `test_stochastic.c`, `test_chunks.c`, `setcontext.c`)
+  - `test_config.c` now separates plain-init API-shape tests from checks-enabled runtime behavior tests
+- **Documentation updates for stack checks**
+  - Added README overview for optional stack checks and build-time opt-out flags
+  - Added API reference coverage for `tealet_configure_get()`, `tealet_configure_set()`, and `tealet_configure_check_stack()`
+
+### Fixed
+- **Protected-stack argument bug in `tealet_new()` path**
+  - Fixed a crash where `tealet_initialstub()` dereferenced `*parg` after switching into a new tealet with stack guards active
+  - `tealet_new()` now captures the initial argument value before stack switching
+  - This preserves previously valid usage patterns under stack-protection mode
+
 - **Breaking API change for tealet creation**: `tealet_new()` and `tealet_create()` now require an additional `stack_far` parameter.
   - New signatures:
     - `tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far)`

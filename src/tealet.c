@@ -14,6 +14,24 @@
 #endif
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
+
+#ifndef TEALET_WITH_STACK_GUARD
+#define TEALET_WITH_STACK_GUARD 1
+#endif
+
+#ifndef TEALET_WITH_STACK_SNAPSHOT
+#define TEALET_WITH_STACK_SNAPSHOT 1
+#endif
+
+#if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
+#include <sys/mman.h>
+#include <unistd.h>
+#include <errno.h>
+#define TEALET_GUARD_MPROTECT 1
+#else
+#define TEALET_GUARD_MPROTECT 0
+#endif
 
 
 /* enable collection of tealet stats - default enabled, define TEALET_WITH_STATS=0 to disable */
@@ -21,6 +39,9 @@
 #define TEALET_WITH_STATS 1
 #endif
 
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 /************************************************************/
 
@@ -80,6 +101,21 @@ typedef struct tealet_nonmain_t {
   double _extra[1];                /* start of any extra data */
 } tealet_nonmain_t;
 
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+typedef struct tealet_integrity_data_t {
+  char *stack_base;         /* the "base" of the monitored stack interval (the end of the stack slice) */
+#if TEALET_WITH_STACK_SNAPSHOT
+  size_t snapshot_bytes;    /* the size of the monitored stack interval */
+  char *snapshot_block;     /* fixed snapshot workspace, stores current snapshot */
+  size_t snapshot_capacity; /* capacity of the snapshot workspace */
+#endif
+#if TEALET_WITH_STACK_GUARD
+  char *guard_base;         /* the "base" of the guard interval */
+  size_t guard_bytes;       /* the size of the guard interval */
+#endif
+} tealet_integrity_data_t;
+#endif
+
 /* an enum to maintain state for the save/restore callback
  * which is called twice (with old and new stack pointer)
  */
@@ -102,6 +138,14 @@ typedef struct tealet_main_t {
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e   g_sw;       /* save/restore state */
   int           g_flags;     /* default flags when tealet exits */
+  unsigned int  g_cfg_flags; /* canonicalized runtime config flags */
+  size_t        g_cfg_stack_integrity_bytes;
+  int           g_cfg_stack_guard_mode;
+  int           g_cfg_stack_integrity_fail_policy;
+  char         *g_cfg_stack_guard_limit;
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+  tealet_integrity_data_t g_integrity_data;
+#endif
   int g_tealets;            /* number of active tealets excluding main */
   int g_counter;            /* total number of tealets */
 #if TEALET_WITH_STATS
@@ -176,6 +220,517 @@ static void *tealet_int_malloc(tealet_main_t *main, size_t size)
 static void tealet_int_free(tealet_main_t *main, void *ptr)
 {
     main->g_alloc.free_p(ptr, main->g_alloc.context);
+}
+
+/************************************************************
+ * Stack integrity helpers (snapshot + guard planning).
+ */
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+static void tealet_integrity_data_clear(tealet_integrity_data_t *data)
+{
+    data->stack_base = NULL;
+#if TEALET_WITH_STACK_SNAPSHOT
+    data->snapshot_bytes = 0;
+#endif
+#if TEALET_WITH_STACK_GUARD
+    data->guard_base = NULL;
+    data->guard_bytes = 0;
+#endif
+}
+
+/* Initialize persistent integrity workspace state.
+ *
+ * This differs from tealet_integrity_data_clear() in that this function also
+ * initializes long-lived storage fields (snapshot workspace pointer/capacity)
+ * that are only reset at initialize/finalize boundaries.
+ */
+static void tealet_integrity_data_init(tealet_integrity_data_t *data)
+{
+    tealet_integrity_data_clear(data);
+#if TEALET_WITH_STACK_SNAPSHOT
+    data->snapshot_block = NULL;
+    data->snapshot_capacity = 0;
+#endif
+}
+
+/* Release integrity workspace allocations and return all transient plan state
+ * to a disabled/empty state.
+ */
+static void tealet_integrity_data_free(tealet_main_t *g_main, tealet_integrity_data_t *data)
+{
+#if TEALET_WITH_STACK_SNAPSHOT
+    if (data->snapshot_block != NULL) {
+        tealet_int_free(g_main, data->snapshot_block);
+        data->snapshot_block = NULL;
+    }
+    data->snapshot_capacity = 0;
+#endif
+    tealet_integrity_data_clear(data);
+}
+
+#if TEALET_GUARD_MPROTECT
+static size_t tealet_guard_pagesize(void)
+{
+    long page_size = sysconf(_SC_PAGESIZE);
+
+    if (page_size <= 0)
+        return 0;
+    return (size_t)page_size;
+}
+#endif
+
+/* Build the integrity plan for the currently running tealet.
+ *
+ * The monitored interval is always a linear byte range [begin, end).
+ * Snapshot and page-guard split the same interval:
+ *
+ * - snapshot protects the sub-page bytes that cannot be represented by mprotect()
+ *   under the chosen alignment strategy;
+ * - mprotect() guards whole pages.
+ *
+ * For descending stacks, snapshot keeps the low-address prefix before the first
+ * guarded page. For ascending stacks, snapshot keeps the high-address suffix
+ * after the last guarded page.
+ */
+static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
+{
+    tealet_integrity_data_t *plan = &g_main->g_integrity_data;
+    tealet_sub_t *current;
+    unsigned int flags;
+    size_t integrity_bytes;
+    uintptr_t far_limit;
+#if TEALET_GUARD_MPROTECT
+    uintptr_t begin;
+    uintptr_t end;
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT
+    size_t snapshot_bytes;
+#endif
+
+    tealet_integrity_data_clear(plan);
+
+    current = g_main->g_current;
+    assert(current != NULL);
+
+    if (current->stack_far == NULL || current->stack_far == STACKMAN_SP_FURTHEST)
+        return;
+
+    flags = g_main->g_cfg_flags;
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
+        return;
+
+    integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
+    if (integrity_bytes == 0)
+        return;
+
+    if (g_main->g_cfg_stack_guard_limit != NULL) {
+        far_limit = (uintptr_t)g_main->g_cfg_stack_guard_limit;
+#if STACK_DIRECTION == 0
+        if (far_limit <= (uintptr_t)current->stack_far)
+            return;
+        integrity_bytes = MIN(integrity_bytes, (size_t)(far_limit - (uintptr_t)current->stack_far));
+#else
+        if (far_limit >= (uintptr_t)current->stack_far)
+            return;
+        integrity_bytes = MIN(integrity_bytes, (size_t)((uintptr_t)current->stack_far - far_limit));
+#endif
+        if (integrity_bytes == 0)
+            return;
+    }
+
+#if STACK_DIRECTION == 0
+    plan->stack_base = current->stack_far;
+#else
+    plan->stack_base = current->stack_far - integrity_bytes;
+#endif
+
+#if TEALET_GUARD_MPROTECT
+    begin = (uintptr_t)plan->stack_base;
+    end = begin + integrity_bytes;  /* half-open interval [begin, end) */
+#endif
+
+#if TEALET_WITH_STACK_SNAPSHOT
+    snapshot_bytes = 0;
+    if ((flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0)
+        snapshot_bytes = integrity_bytes;
+#endif
+
+#if TEALET_GUARD_MPROTECT
+    if ((flags & TEALET_CONFIGF_STACK_GUARD) != 0) {
+        size_t page_size = tealet_guard_pagesize();
+
+        if (page_size != 0) {
+            if (end > begin) {
+                uintptr_t page_mask = (uintptr_t)(page_size - 1);
+                uintptr_t aligned_begin;
+                uintptr_t aligned_end;
+
+#if STACK_DIRECTION == 0
+                /* Descending stack:
+                 *  - guard starts at the first page boundary at/above begin;
+                 *  - guard end rounds up so we can cover the full interval with pages.
+                 */
+                aligned_begin = (begin + page_mask) & ~page_mask;
+                aligned_end = (end + page_mask) & ~page_mask;
+
+                if (aligned_begin >= end)
+                    aligned_end = aligned_begin;
+
+#if TEALET_WITH_STACK_SNAPSHOT
+                if (snapshot_bytes != 0) {
+                    /* Snapshot the unguardable prefix [begin, aligned_begin). */
+                    size_t prefix_bytes = (size_t)(aligned_begin - begin);
+
+                    snapshot_bytes = MIN(snapshot_bytes, prefix_bytes);
+                }
+#endif
+
+#else
+                /* Ascending stack:
+                 *  - guard start rounds down so guarded bytes are page-granular;
+                 *  - guard end rounds down to the last full page below end.
+                 */
+                aligned_begin = begin & ~page_mask;
+                aligned_end = end & ~page_mask;
+
+                if (aligned_end <= aligned_begin)
+                    aligned_begin = aligned_end;
+
+#if TEALET_WITH_STACK_SNAPSHOT
+                if (snapshot_bytes != 0) {
+                    /* Snapshot the unguardable suffix [aligned_end, end). */
+                    size_t suffix_bytes = (size_t)(end - aligned_end);
+
+                    snapshot_bytes = MIN(snapshot_bytes, suffix_bytes);
+                    if (snapshot_bytes != 0)
+                        plan->stack_base = (char *)(end - snapshot_bytes);
+                }
+#endif
+#endif
+
+                if (aligned_end > aligned_begin) {
+                    plan->guard_base = (char *)aligned_begin;
+                    plan->guard_bytes = (size_t)(aligned_end - aligned_begin);
+                }
+            }
+        }
+    }
+#endif
+
+#if TEALET_WITH_STACK_SNAPSHOT
+    if (snapshot_bytes != 0) {
+        assert(g_main->g_integrity_data.snapshot_capacity >= snapshot_bytes);
+        if (g_main->g_integrity_data.snapshot_capacity >= snapshot_bytes)
+            plan->snapshot_bytes = snapshot_bytes;
+    }
+#endif
+}
+#endif
+
+/************************************************************
+ * Stack guard helpers.
+ */
+#if TEALET_WITH_STACK_GUARD
+#if TEALET_GUARD_MPROTECT
+static void tealet_guard_unprotect_current(tealet_main_t *g_main)
+{
+    const tealet_integrity_data_t *plan = &g_main->g_integrity_data;
+
+    if (plan->guard_bytes == 0)
+        return;
+    assert(plan->guard_base != NULL);
+
+    /* Best-effort unprotect: if this fails, we still clear active guard state.
+     * There is no in-place recovery path here, and keeping stale guard metadata
+     * would make subsequent behavior inconsistent.
+     */
+    errno = 0;
+    mprotect(plan->guard_base, plan->guard_bytes,
+             PROT_READ | PROT_WRITE);
+    g_main->g_integrity_data.guard_bytes = 0;
+}
+
+static void tealet_guard_protect_current(tealet_main_t *g_main)
+{
+    const tealet_integrity_data_t *plan = &g_main->g_integrity_data;
+    int guard_mode;
+    int prot;
+    int rc;
+
+    if (plan->guard_bytes == 0)
+        return;
+    assert(plan->guard_base != NULL);
+
+    guard_mode = g_main->g_cfg_stack_guard_mode;
+    if (guard_mode == TEALET_STACK_GUARD_MODE_READONLY)
+        prot = PROT_READ;
+    else
+        prot = PROT_NONE;
+
+    /* Best-effort protect: mprotect can fail (for example if the interval is not
+     * representable in mapped stack pages). We intentionally degrade by clearing
+     * active guard state because there is no reliable recovery path here.
+     */
+    errno = 0;
+    rc = mprotect(plan->guard_base, plan->guard_bytes, prot);
+
+    if (rc != 0) {
+        g_main->g_integrity_data.guard_bytes = 0;
+        return;
+    }
+}
+#else
+static void tealet_guard_unprotect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+}
+
+static void tealet_guard_protect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+}
+#endif
+
+#else
+static void tealet_guard_unprotect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+}
+
+static void tealet_guard_protect_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+}
+#endif
+
+/************************************************************
+ * Stack snapshot helpers.
+ */
+#if TEALET_WITH_STACK_SNAPSHOT
+static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
+{
+    size_t required = 0;
+
+    if (config->flags & TEALET_CONFIGF_STACK_SNAPSHOT)
+        required = config->stack_integrity_bytes;
+#if TEALET_GUARD_MPROTECT
+    if ((config->flags & (TEALET_CONFIGF_STACK_SNAPSHOT | TEALET_CONFIGF_STACK_GUARD)) ==
+        (TEALET_CONFIGF_STACK_SNAPSHOT | TEALET_CONFIGF_STACK_GUARD)) {
+        size_t page_size = tealet_guard_pagesize();
+
+        if (page_size > 1) {
+            size_t prefix_limit = page_size - 1;
+
+            required = MIN(required, prefix_limit);
+        }
+    }
+#endif
+    return required;
+}
+
+/* Ensure snapshot workspace can hold the largest snapshot implied by the
+ * effective configuration.  This is called at configure-set time so switching
+ * never needs to allocate snapshot buffers.
+ */
+static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t required)
+{
+    char *new_block;
+
+    if (required == 0)
+        return 0;
+    if (g_main->g_integrity_data.snapshot_capacity >= required)
+        return 0;
+
+    new_block = (char *)tealet_int_malloc(g_main, required);
+    if (new_block == NULL)
+        return TEALET_ERR_MEM;
+
+    /* Resize invalidates any active snapshot that was captured into the old
+     * buffer. We allow reconfiguration during active execution, so clear the
+     * active marker before replacing storage.
+     */
+    g_main->g_integrity_data.snapshot_bytes = 0;
+    g_main->g_integrity_data.stack_base = NULL;
+
+    if (g_main->g_integrity_data.snapshot_block) {
+        tealet_int_free(g_main, g_main->g_integrity_data.snapshot_block);
+    }
+    g_main->g_integrity_data.snapshot_block = new_block;
+    g_main->g_integrity_data.snapshot_capacity = required;
+    return 0;
+}
+
+/* Capture monitored stack bytes for the current tealet into the fixed snapshot
+ * workspace.  Planning decides stack_base/size; this routine only copies.
+ */
+static void tealet_snapshot_capture_current(tealet_main_t *g_main)
+{
+    tealet_sub_t *current = g_main->g_current;
+    char *stack_base = g_main->g_integrity_data.stack_base;
+    size_t size = g_main->g_integrity_data.snapshot_bytes;
+
+    if (size == 0)
+        return;
+
+    assert(stack_base != NULL);
+    assert(current != NULL);
+
+    assert(size <= g_main->g_integrity_data.snapshot_capacity);
+    if (current->stack_far == NULL || current->stack_far == STACKMAN_SP_FURTHEST)
+        return;
+
+    memcpy(g_main->g_integrity_data.snapshot_block, stack_base, size);
+    g_main->g_integrity_data.stack_base = stack_base;
+    g_main->g_integrity_data.snapshot_bytes = size;
+}
+
+/* Verify previously captured bytes for the current tealet and clear the active
+ * snapshot marker.  Mismatch handling follows configured fail policy.
+ *
+ * Note: on mismatch we intentionally clear the active snapshot marker before
+ * returning. In FAIL_ERROR mode this lets the caller continue execution; there
+ * is no API to "repair and retry" the same captured snapshot in-place.
+ */
+static int tealet_snapshot_verify_current(tealet_main_t *g_main)
+{
+    int cmp;
+    assert(g_main->g_current != NULL);
+
+    if (g_main->g_integrity_data.snapshot_bytes == 0) {
+        return 0;
+    }
+    assert(g_main->g_integrity_data.stack_base != NULL);
+
+    cmp = memcmp(g_main->g_integrity_data.snapshot_block, g_main->g_integrity_data.stack_base,
+                 g_main->g_integrity_data.snapshot_bytes);
+    g_main->g_integrity_data.snapshot_bytes = 0;
+    if (cmp != 0) {
+        int policy = g_main->g_cfg_stack_integrity_fail_policy;
+
+        if (policy == TEALET_STACK_INTEGRITY_FAIL_ABORT)
+            abort();
+        if (policy == TEALET_STACK_INTEGRITY_FAIL_ERROR)
+            return TEALET_ERR_INTEGRITY;
+        assert(0 && "stack integrity snapshot mismatch");
+        return TEALET_ERR_INTEGRITY;
+    }
+
+    return 0;
+}
+#else
+static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
+{
+    (void)config;
+    return 0;
+}
+
+static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t required)
+{
+    (void)g_main;
+    (void)required;
+    return 0;
+}
+
+static int tealet_snapshot_verify_current(tealet_main_t *g_main)
+{
+    (void)g_main;
+    return 0;
+}
+#endif
+
+/************************************************************
+ * Config helpers.
+ */
+static unsigned int tealet_config_supported_flags(void)
+{
+    unsigned int supported = 0;
+#if TEALET_GUARD_MPROTECT
+    supported |= TEALET_CONFIGF_STACK_GUARD;
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT
+    supported |= TEALET_CONFIGF_STACK_SNAPSHOT;
+#endif
+    if (supported != 0)
+        supported |= TEALET_CONFIGF_STACK_INTEGRITY;
+    return supported;
+}
+
+static int tealet_config_has_header(const tealet_config_t *config)
+{
+    size_t min_header = offsetof(tealet_config_t, version) + sizeof(config->version);
+    return config != NULL && config->size >= min_header;
+}
+
+/* Canonicalize caller-provided configuration in-place.
+ *
+ * Rules enforced here:
+ *  - drop unsupported feature flags for this build/platform,
+ *  - maintain dependency invariants (integrity requires at least one backend),
+ *  - normalize mode/policy enums to valid values,
+ *  - zero stack_integrity_bytes when integrity is disabled.
+ */
+static void tealet_config_canonicalize(tealet_config_t *config)
+{
+    unsigned int flags;
+    unsigned int supported;
+
+    flags = config->flags;
+    flags &= (TEALET_CONFIGF_STACK_INTEGRITY |
+              TEALET_CONFIGF_STACK_GUARD |
+              TEALET_CONFIGF_STACK_SNAPSHOT);
+
+    supported = tealet_config_supported_flags();
+    flags &= supported;
+
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0) {
+        flags &= ~(TEALET_CONFIGF_STACK_GUARD | TEALET_CONFIGF_STACK_SNAPSHOT);
+    }
+
+    if ((flags & (TEALET_CONFIGF_STACK_GUARD | TEALET_CONFIGF_STACK_SNAPSHOT)) == 0) {
+        flags &= ~TEALET_CONFIGF_STACK_INTEGRITY;
+    }
+
+    if (config->stack_integrity_bytes == 0) {
+        flags &= ~(TEALET_CONFIGF_STACK_INTEGRITY |
+                   TEALET_CONFIGF_STACK_GUARD |
+                   TEALET_CONFIGF_STACK_SNAPSHOT);
+    }
+
+    if ((flags & TEALET_CONFIGF_STACK_GUARD) == 0) {
+        config->stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    } else {
+        if (config->stack_guard_mode != TEALET_STACK_GUARD_MODE_READONLY &&
+            config->stack_guard_mode != TEALET_STACK_GUARD_MODE_NOACCESS) {
+            config->stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
+        }
+    }
+
+    if (config->stack_integrity_fail_policy != TEALET_STACK_INTEGRITY_FAIL_ASSERT &&
+        config->stack_integrity_fail_policy != TEALET_STACK_INTEGRITY_FAIL_ERROR &&
+        config->stack_integrity_fail_policy != TEALET_STACK_INTEGRITY_FAIL_ABORT) {
+        config->stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    }
+
+    config->flags = flags;
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
+        config->stack_integrity_bytes = 0;
+
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
+        config->stack_guard_limit = NULL;
+}
+
+/* Populate a config struct from current runtime state, then canonicalize to
+ * ensure returned values obey the same invariants as configure_set().
+ */
+static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t *config)
+{
+    config->version = TEALET_CONFIG_CURRENT_VERSION;
+    config->flags = g_main->g_cfg_flags;
+    config->stack_integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
+    config->stack_guard_mode = g_main->g_cfg_stack_guard_mode;
+    config->stack_integrity_fail_policy = g_main->g_cfg_stack_integrity_fail_policy;
+    config->stack_guard_limit = g_main->g_cfg_stack_guard_limit;
+    tealet_config_canonicalize(config);
 }
 
 /* Free a tealet, unlinking it from the circular list first */
@@ -610,6 +1165,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
 static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void *in_arg, void **out_arg)
 {
     tealet_sub_t *old_previous = g_main->g_previous;
+    int integrity_result;
     assert(target);
     assert(target != g_main->g_current);
 
@@ -624,6 +1180,17 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
     */
     if (target->stack == (tealet_stack_t*)-1)
         return TEALET_ERR_DEFUNCT;
+
+    tealet_guard_unprotect_current(g_main);
+
+    integrity_result = tealet_snapshot_verify_current(g_main);
+    if (integrity_result)
+        /* Intentional behavior: on integrity error we return without re-arming
+         * current guard/snapshot state. This is a best-effort mode that favors
+         * continued execution after reporting the error.
+         */
+        return integrity_result;
+
     g_main->g_previous = g_main->g_current;
     g_main->g_target = target;
     g_main->g_arg = in_arg;
@@ -640,12 +1207,32 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
         g_main->g_previous = old_previous;
         g_main->g_target = NULL;
         g_main->g_arg = NULL;
+    #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+        tealet_integrity_plan_for_current(g_main);
+    #endif
+    #if TEALET_WITH_STACK_SNAPSHOT
+        tealet_snapshot_capture_current(g_main);
+    #endif
+    #if TEALET_WITH_STACK_GUARD
+        tealet_guard_protect_current(g_main);
+    #endif
         return TEALET_ERR_MEM;
     }
     g_main->g_target = NULL;
     if (out_arg)
         *out_arg = g_main->g_arg;
     g_main->g_arg = NULL;
+
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+    tealet_integrity_plan_for_current(g_main);
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT
+    tealet_snapshot_capture_current(g_main);
+#endif
+#if TEALET_WITH_STACK_GUARD
+    tealet_guard_protect_current(g_main);
+#endif
+
     return g_main->g_sw == SW_RESTORE ? 0 : 1;
 }
 
@@ -662,15 +1249,23 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     tealet_sub_t *g_exit_target;
     int run_on_create = g_new == g_target;  /* true for tealet_new(), we are switching to the new tealet */
     void *run_arg, *switch_arg;
+    void *initial_run_arg;
     assert(g_new->stack == NULL); /* it is fresh */
     assert(run);
 
     if (run_on_create) {
         /* tealet_new() case */
         assert(parg != NULL);
+        /* Capture *parg before switching stacks.  After the switch, the
+         * creator's stack region may be snapshot-checked and/or page-guarded,
+         * so dereferencing the original parg pointer from the new tealet can
+         * fault.
+         */
+        initial_run_arg = *parg;
     } else {
         /* tealet_create() case */
         assert(parg == NULL);
+        initial_run_arg = NULL;
     }
 
     g_new->stack_far = (char *)stack_far;
@@ -698,7 +1293,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
          */
         if (run_on_create) {
             assert(g_main->g_current == g_new);        /* only valid for tealet_new */
-            run_arg = *parg;  /* tealet_new(). use the arg from the caller */
+            run_arg = initial_run_arg;  /* tealet_new(). captured before stack switch */
         } else {
             run_arg = switch_arg;  /* tealet_create(). use the arg from the switch */
         }
@@ -802,6 +1397,14 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_extrasize = extrasize;
     g_main->g_sw = SW_NOP;
     g_main->g_flags = 0;
+    g_main->g_cfg_flags = 0;
+    g_main->g_cfg_stack_integrity_bytes = 0;
+    g_main->g_cfg_stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    g_main->g_cfg_stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    g_main->g_cfg_stack_guard_limit = NULL;
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+    tealet_integrity_data_init(&g_main->g_integrity_data);
+#endif
 #if TEALET_WITH_STATS
     /* Initialize circular list - main tealet points to itself */
     g->next_tealet = g;
@@ -825,6 +1428,12 @@ void tealet_finalize(tealet_t *tealet)
     tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
     assert(TEALET_IS_MAIN(tealet));
     assert(g_main->g_current == (tealet_sub_t *)g_main);
+#if TEALET_WITH_STACK_GUARD
+    tealet_guard_unprotect_current(g_main);
+#endif
+#if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
+    tealet_integrity_data_free(g_main, &g_main->g_integrity_data);
+#endif
     tealet_int_free(g_main, g_main);
 }
 
@@ -1174,6 +1783,119 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary)
     /* Set the far boundary */
     tealet->stack_far = (char *)far_boundary;
     return 0;
+}
+
+/* Return effective configuration for this main tealet.
+ *
+ * This is a size-versioned copy-out API: only the caller-provided prefix is
+ * written, enabling forward/backward ABI-compatible evolution of the struct.
+ */
+int tealet_configure_get(tealet_t *_tealet, tealet_config_t *config)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    tealet_main_t *g_main;
+    tealet_config_t effective;
+    size_t copy_size;
+
+    if (!tealet_config_has_header(config))
+        return TEALET_ERR_INVAL;
+
+    g_main = TEALET_GET_MAIN(tealet);
+
+    memset(&effective, 0, sizeof(effective));
+    effective.size = sizeof(tealet_config_t);
+    effective.version = TEALET_CONFIG_CURRENT_VERSION;
+    effective.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    effective.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    effective.size = config->size;
+    tealet_config_fill_from_main(g_main, &effective);
+
+    copy_size = MIN(config->size, sizeof(tealet_config_t));
+    memcpy(config, &effective, copy_size);
+    return 0;
+}
+
+/* Apply runtime configuration from caller input.
+ *
+ * The request is copied, canonicalized, and then committed atomically into the
+ * main tealet state. Any required snapshot workspace is preallocated before
+ * commit so switching paths do not allocate.
+ */
+int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
+{
+    tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+    tealet_main_t *g_main;
+    tealet_config_t requested;
+    size_t copy_size;
+    size_t snapshot_required;
+    int result;
+
+    if (!tealet_config_has_header(config))
+        return TEALET_ERR_INVAL;
+    if (config->version != TEALET_CONFIG_VERSION_1)
+        return TEALET_ERR_INVAL;
+
+    g_main = TEALET_GET_MAIN(tealet);
+
+    memset(&requested, 0, sizeof(requested));
+    requested.size = sizeof(tealet_config_t);
+    requested.version = TEALET_CONFIG_CURRENT_VERSION;
+    requested.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    requested.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    requested.size = config->size;
+    copy_size = MIN(config->size, sizeof(tealet_config_t));
+    memcpy(&requested, config, copy_size);
+    requested.version = TEALET_CONFIG_VERSION_1;
+    tealet_config_canonicalize(&requested);
+
+    snapshot_required = tealet_snapshot_required_capacity(&requested);
+    result = tealet_snapshot_ensure_capacity(g_main, snapshot_required);
+    if (result)
+        return result;
+
+    g_main->g_cfg_flags = requested.flags;
+    g_main->g_cfg_stack_integrity_bytes = requested.stack_integrity_bytes;
+    g_main->g_cfg_stack_guard_mode = requested.stack_guard_mode;
+    g_main->g_cfg_stack_integrity_fail_policy = requested.stack_integrity_fail_policy;
+    g_main->g_cfg_stack_guard_limit = (char *)requested.stack_guard_limit;
+
+    memcpy(config, &requested, copy_size);
+    return 0;
+}
+
+/* Convenience API to enable stack checking with practical defaults.
+ *
+ * - Enables integrity + guard + snapshot flags.
+ * - Uses NOACCESS guard mode and ERROR mismatch policy.
+ * - If stack_integrity_bytes is zero, uses one Linux page when available,
+ *   otherwise falls back to 4096 bytes.
+ */
+int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes)
+{
+    tealet_config_t cfg = TEALET_CONFIG_INIT;
+    size_t effective_bytes;
+    char local_stack_marker;
+
+    effective_bytes = stack_integrity_bytes;
+    if (effective_bytes == 0) {
+#if TEALET_GUARD_MPROTECT
+        effective_bytes = tealet_guard_pagesize();
+#else
+        effective_bytes = 4096;
+#endif
+        if (effective_bytes == 0)
+            effective_bytes = 4096;
+    }
+
+    cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
+                TEALET_CONFIGF_STACK_GUARD |
+                TEALET_CONFIGF_STACK_SNAPSHOT;
+    cfg.stack_integrity_bytes = effective_bytes;
+    cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
+    cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
+    cfg.stack_guard_limit = &local_stack_marker;
+
+    return tealet_configure_set(_tealet, &cfg);
 }
 
 int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)

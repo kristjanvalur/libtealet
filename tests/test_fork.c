@@ -19,10 +19,22 @@ static int test_passed = 0;
     test_passed++; \
 } while(0)
 
+static tealet_t *new_main_checked(void)
+{
+    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
+    tealet_t *main;
+    int result;
+
+    main = tealet_initialize(&alloc, 0);
+    assert(main != NULL);
+    result = tealet_configure_check_stack(main, 0);
+    assert(result == 0);
+    return main;
+}
+
 /* Test basic fork without TEALET_FORK_SWITCH */
 static void test_basic_fork(void* far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     tealet_t *other = NULL;
     int result;
@@ -30,8 +42,7 @@ static void test_basic_fork(void* far_marker)
     TEST("test_basic_fork");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Set far boundary for main tealet */
     result = tealet_set_far(main, far_marker);
@@ -96,7 +107,6 @@ static void test_basic_fork(void* far_marker)
 /* Test fork with TEALET_FORK_SWITCH */
 static void test_fork_switch(void *far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     tealet_t *other = NULL;
     int result;
@@ -105,8 +115,7 @@ static void test_fork_switch(void *far_marker)
     TEST("test_fork_switch");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Set far boundary for main tealet */
     result = tealet_set_far(main, far_marker);
@@ -157,7 +166,6 @@ static void test_fork_switch(void *far_marker)
 /* Test multiple forks */
 static void test_multiple_forks(void *far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     tealet_t *child1 = NULL;
     tealet_t *child2 = NULL;
@@ -167,8 +175,7 @@ static void test_multiple_forks(void *far_marker)
     TEST("test_multiple_forks");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Set far boundary for main tealet */
     result = tealet_set_far(main, far_marker);
@@ -221,7 +228,6 @@ static void test_multiple_forks(void *far_marker)
 /* Test fork argument passing with TEALET_FORK_SWITCH */
 static void test_fork_switch_arg(void *far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     tealet_t *other = NULL;
     int result;
@@ -230,8 +236,7 @@ static void test_fork_switch_arg(void *far_marker)
     TEST("test_fork_switch_arg");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Set far boundary for main tealet */
     result = tealet_set_far(main, far_marker);
@@ -284,7 +289,6 @@ static void test_fork_switch_arg(void *far_marker)
 /* Test fork argument passing with TEALET_FORK_DEFAULT */
 static void test_fork_default_arg(void *far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     tealet_t *child = NULL;
     int result;
@@ -293,8 +297,7 @@ static void test_fork_default_arg(void *far_marker)
     TEST("test_fork_default_arg");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Set far boundary for main tealet */
     result = tealet_set_far(main, far_marker);
@@ -347,7 +350,6 @@ static void test_fork_default_arg(void *far_marker)
 /* Test fork then switch back and forth */
 static void test_ping_pong(void *far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     tealet_t *child = NULL;
     int result;
@@ -356,8 +358,7 @@ static void test_ping_pong(void *far_marker)
     TEST("test_ping_pong");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Set far boundary for main tealet */
     result = tealet_set_far(main, far_marker);
@@ -441,15 +442,13 @@ static tealet_t *test_new_previous_run(tealet_t *current, void *arg)
 
 static void test_new_previous(void *far_marker)
 {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main;
     void *arg;
     
     TEST("test_new_previous");
     
     /* Initialize main tealet */
-    main = tealet_initialize(&alloc, 0);
-    assert(main != NULL);
+    main = new_main_checked();
     
     /* Test tealet_new() from main */
     arg = main;
