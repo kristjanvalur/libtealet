@@ -75,7 +75,6 @@ typedef struct write_command_t {
 typedef struct mprotect_write_command_t {
     tealet_t *return_to;
     size_t integrity_bytes;
-    void *stack_guard_limit;
     int write_guard_page;
     int *first_switch_result;
     int *recovery_switch_result;
@@ -356,7 +355,6 @@ static int run_mprotect_split_case(int write_guard_page,
     second_switch_result = 0;
     command->return_to = main_tealet;
     command->integrity_bytes = cfg.stack_integrity_bytes;
-    command->stack_guard_limit = cfg.stack_guard_limit;
     command->write_guard_page = write_guard_page;
     command->first_switch_result = &first_switch_result;
     command->recovery_switch_result = &second_switch_result;

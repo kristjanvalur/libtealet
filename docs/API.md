@@ -669,7 +669,7 @@ Use this when you want to inspect the effective boundary at a specific stack dep
 
 ## Memory Management
 
-## Runtime stack-check configuration
+### Runtime stack-check configuration
 
 libtealet exposes a versioned configuration API for stack-integrity checks.
 

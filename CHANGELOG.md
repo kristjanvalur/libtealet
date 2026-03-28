@@ -30,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tealet_new()` now captures the initial argument value before stack switching
   - This preserves previously valid usage patterns under stack-protection mode
 
-### Changed
 - **Breaking API change for tealet creation**: `tealet_new()` and `tealet_create()` now require an additional `stack_far` parameter.
   - New signatures:
     - `tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far)`
