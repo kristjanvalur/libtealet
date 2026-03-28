@@ -309,6 +309,7 @@ static tealet_t * stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *st
 
 typedef tealet_t* (*t_new)(tealet_t *, tealet_run_t, void**, void*);
 static t_new newarray[] = {tealet_new_rnd, stub_new, stub_new2, stub_new3};
+static tealet_t *(*tealet_new_native)(tealet_t *, tealet_run_t, void **, void *) = tealet_new;
 
 static t_new get_new(){
     if (newmode >= 0)
@@ -330,6 +331,61 @@ static void test_stack_further_inner(void *outer_addr)
   int inner_local;
   void *further = tealet_stack_further(outer_addr, &inner_local);
   assert(further == outer_addr);
+}
+
+typedef struct stack_far_case_t {
+  int value;
+} stack_far_case_t;
+
+typedef struct stack_far_run_arg_t {
+  tealet_t *main;
+  stack_far_case_t *shared;
+  int before;
+  int after;
+} stack_far_run_arg_t;
+
+static tealet_t *test_stack_far_isolation_run(tealet_t *current, void *arg)
+{
+  stack_far_run_arg_t *run_arg = (stack_far_run_arg_t *)arg;
+  assert(current != run_arg->main);
+  assert(run_arg->shared->value == run_arg->before);
+  run_arg->shared->value = run_arg->after;
+  tealet_switch(run_arg->main, NULL);
+  assert(run_arg->shared->value == run_arg->after);
+  return run_arg->main;
+}
+
+static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg)
+{
+  stack_far_case_t shared;
+  stack_far_run_arg_t *run_arg;
+  tealet_t *child;
+  void *child_arg;
+  void *stack_far;
+  (void)arg;
+
+  shared.value = 11;
+  run_arg = (stack_far_run_arg_t *)tealet_malloc(current, sizeof(*run_arg));
+  assert(run_arg != NULL);
+  run_arg->main = current;
+  run_arg->shared = &shared;
+  run_arg->before = 11;
+  run_arg->after = 99;
+  child_arg = run_arg;
+
+  stack_far = tealet_stack_further(&shared, (void *)(&shared + 1));
+  child = tealet_new_native(current, test_stack_far_isolation_run, &child_arg, stack_far);
+  assert(child != NULL);
+
+  /* Child wrote to its own copied stack, parent value remains unchanged. */
+  assert(shared.value == 11);
+
+  tealet_switch(child, NULL);
+
+  /* Child still observes its own modified value on resume. */
+  assert(shared.value == 11);
+  tealet_free(current, run_arg);
+  return g_main;
 }
 
 void test_stack_further(void)
@@ -356,6 +412,17 @@ void test_stack_further(void)
 
   /* Cross-frame check: caller frame local should be farther than callee local */
   test_stack_further_inner(&outer_local);
+  fini_test();
+}
+
+/* test that stack isolation works if tealets are created with an extended stack. */
+void test_stack_far_isolation(void)
+{
+  tealet_t *parent;
+
+  init_test();
+  parent = tealet_new_native(g_main, test_stack_far_isolation_parent, NULL, NULL);
+  assert(parent != NULL);
   fini_test();
 }
 
@@ -915,6 +982,7 @@ typedef struct test_entry_t {
 static test_entry_t test_list[] = {
   {"test_main_current", test_main_current},
   {"test_stack_further", test_stack_further},
+  {"test_stack_far_isolation", test_stack_far_isolation},
   {"test_simple", test_simple},
   {"test_simple_create", test_simple_create},
   {"test_create_previous", test_create_previous},
