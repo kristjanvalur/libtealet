@@ -730,6 +730,12 @@ Apply runtime configuration to a main tealet.
 
 Use this for explicit tuning of flags, guard mode, integrity bytes, and fail policy.
 
+`tealet_config_t` also includes `stack_guard_limit`:
+- `NULL`: no explicit far-limit clamp.
+- non-`NULL`: planning clamps monitored bytes so the protected interval does not extend past this address.  It is recommeded to set this to a known address on the
+stack to ensure that stack protection does not try to inspect bytes outside of the
+process stack segment.
+
 ---
 
 ### `tealet_configure_check_stack()`
@@ -750,6 +756,7 @@ If guard support is unavailable on the current build/platform, canonicalization 
 **Default policy choices:**
 - guard mode: `TEALET_STACK_GUARD_MODE_NOACCESS`
 - fail policy: `TEALET_STACK_INTEGRITY_FAIL_ERROR`
+- stack guard limit: address of a local variable inside `tealet_configure_check_stack()` (a sensible in-stack far limit)
 
 **Size behavior:**
 - if `stack_integrity_bytes != 0`: uses caller value

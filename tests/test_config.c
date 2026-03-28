@@ -392,6 +392,7 @@ static void test_get_defaults(void)
     assert(cfg.stack_integrity_bytes == 0);
     assert(cfg.stack_guard_mode == TEALET_STACK_GUARD_MODE_NONE);
     assert(cfg.stack_integrity_fail_policy == TEALET_STACK_INTEGRITY_FAIL_ASSERT);
+    assert(cfg.stack_guard_limit == NULL);
 
     tealet_finalize(main_tealet);
     PASS();
@@ -435,6 +436,7 @@ static void test_set_canonicalizes_unsupported(void)
         assert(set_cfg.stack_integrity_bytes == 0);
     else
         assert(set_cfg.stack_integrity_bytes == 4096);
+    assert(set_cfg.stack_guard_limit == NULL);
 
 #if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
     assert(set_cfg.stack_guard_mode == TEALET_STACK_GUARD_MODE_NOACCESS);
@@ -447,6 +449,7 @@ static void test_set_canonicalizes_unsupported(void)
     assert(get_cfg.flags == expected_flags);
     assert(get_cfg.stack_integrity_bytes == set_cfg.stack_integrity_bytes);
     assert(get_cfg.stack_guard_mode == set_cfg.stack_guard_mode);
+    assert(get_cfg.stack_guard_limit == NULL);
 
     tealet_finalize(main_tealet);
     PASS();

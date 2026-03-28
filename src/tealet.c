@@ -141,6 +141,7 @@ typedef struct tealet_main_t {
   size_t        g_cfg_stack_integrity_bytes;
   int           g_cfg_stack_guard_mode;
   int           g_cfg_stack_integrity_fail_policy;
+    char         *g_cfg_stack_guard_limit;
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
   tealet_integrity_data_t g_integrity_data;
 #endif
@@ -296,6 +297,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
     tealet_sub_t *current;
     unsigned int flags;
     size_t integrity_bytes;
+    uintptr_t far_limit;
 #if TEALET_GUARD_MPROTECT
     uintptr_t begin;
     uintptr_t end;
@@ -319,6 +321,21 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
     integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
     if (integrity_bytes == 0)
         return;
+
+    if (g_main->g_cfg_stack_guard_limit != NULL) {
+        far_limit = (uintptr_t)g_main->g_cfg_stack_guard_limit;
+#if STACK_DIRECTION == 0
+        if (far_limit <= (uintptr_t)current->stack_far)
+            return;
+        integrity_bytes = MIN(integrity_bytes, (size_t)(far_limit - (uintptr_t)current->stack_far));
+#else
+        if (far_limit >= (uintptr_t)current->stack_far)
+            return;
+        integrity_bytes = MIN(integrity_bytes, (size_t)((uintptr_t)current->stack_far - far_limit));
+#endif
+        if (integrity_bytes == 0)
+            return;
+    }
 
 #if STACK_DIRECTION == 0
     plan->stack_base = current->stack_far;
@@ -676,6 +693,9 @@ static void tealet_config_canonicalize(tealet_config_t *config)
     config->flags = flags;
     if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
         config->stack_integrity_bytes = 0;
+
+    if ((flags & TEALET_CONFIGF_STACK_INTEGRITY) == 0)
+        config->stack_guard_limit = NULL;
 }
 
 /* Populate a config struct from current runtime state, then canonicalize to
@@ -688,6 +708,7 @@ static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t 
     config->stack_integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
     config->stack_guard_mode = g_main->g_cfg_stack_guard_mode;
     config->stack_integrity_fail_policy = g_main->g_cfg_stack_integrity_fail_policy;
+    config->stack_guard_limit = g_main->g_cfg_stack_guard_limit;
     tealet_config_canonicalize(config);
 }
 
@@ -1355,6 +1376,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize)
     g_main->g_cfg_stack_integrity_bytes = 0;
     g_main->g_cfg_stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
     g_main->g_cfg_stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+    g_main->g_cfg_stack_guard_limit = NULL;
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
     tealet_integrity_data_init(&g_main->g_integrity_data);
 #endif
@@ -1810,6 +1832,7 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config)
     g_main->g_cfg_stack_integrity_bytes = requested.stack_integrity_bytes;
     g_main->g_cfg_stack_guard_mode = requested.stack_guard_mode;
     g_main->g_cfg_stack_integrity_fail_policy = requested.stack_integrity_fail_policy;
+    g_main->g_cfg_stack_guard_limit = (char *)requested.stack_guard_limit;
 
     memcpy(config, &requested, copy_size);
     return 0;
@@ -1826,6 +1849,7 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
 {
     tealet_config_t cfg = TEALET_CONFIG_INIT;
     size_t effective_bytes;
+    char local_stack_marker;
 
     effective_bytes = stack_integrity_bytes;
     if (effective_bytes == 0) {
@@ -1844,6 +1868,7 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
     cfg.stack_integrity_bytes = effective_bytes;
     cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NOACCESS;
     cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
+    cfg.stack_guard_limit = &local_stack_marker;
 
     return tealet_configure_set(_tealet, &cfg);
 }

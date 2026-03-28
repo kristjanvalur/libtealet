@@ -122,7 +122,8 @@ typedef struct tealet_config_t {
   size_t stack_integrity_bytes;
   int stack_guard_mode;
   int stack_integrity_fail_policy;
-  unsigned int reserved[4];
+  void *stack_guard_limit;
+  unsigned int reserved[3];
 } tealet_config_t;
 
 /* Convenience initializer for configuration structs */
@@ -133,7 +134,8 @@ typedef struct tealet_config_t {
   0, \
   TEALET_STACK_GUARD_MODE_NONE, \
   TEALET_STACK_INTEGRITY_FAIL_ASSERT, \
-  {0u, 0u, 0u, 0u} \
+  NULL, \
+  {0u, 0u, 0u} \
 }
 
 /* Initialize and return the main tealet.  The main tealet contains the whole
