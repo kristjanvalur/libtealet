@@ -1,6 +1,6 @@
 # API Reference
 
-Complete reference for the libtealet API. All functions are declared in `tealet.h`.
+Complete reference for the libtealet API. Core functions are declared in `tealet.h`; helper extensions are declared in `tools.h`.
 
 ## Table of Contents
 
@@ -12,6 +12,7 @@ Complete reference for the libtealet API. All functions are declared in `tealet.
 - [Stack Utilities](#stack-utilities)
 - [Memory Management](#memory-management)
 - [Custom Allocators](#custom-allocators)
+- [Helper Extensions (`tools.h`)](#helper-extensions-toolsh)
 - [Error Codes](#error-codes)
 - [Constants and Macros](#constants-and-macros)
 
@@ -878,6 +879,63 @@ Initializer for standard malloc/free allocator.
 ```c
 tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
 ```
+
+---
+
+## Helper Extensions (`tools.h`)
+
+These APIs are convenience helpers built on top of the core tealet primitives (`tealet_create`, `tealet_switch`, `tealet_malloc`, and `tealet_duplicate`).
+
+They are optional extensions intended for common patterns (stats-collecting allocator and copyable stubs). For low-level behavior details, you can inspect the implementation in `src/tools.c`.
+
+### `tealet_statsalloc_init()`
+
+```c
+void tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
+```
+
+Initialize a wrapper allocator that tracks active allocation count and total bytes.
+
+**Parameters:**
+- `alloc`: Stats allocator state to initialize
+- `base`: Underlying allocator used for actual memory operations
+
+**Notes:**
+- `alloc->alloc` becomes a valid `tealet_alloc_t` for `tealet_initialize()`.
+- Counters are maintained in `n_allocs` and `s_allocs`.
+
+### `tealet_stub_new()`
+
+```c
+tealet_t *tealet_stub_new(tealet_t *tealet, void *stack_far);
+```
+
+Create a paused stub tealet that can later run arbitrary functions via `tealet_stub_run()`.
+
+**Parameters:**
+- `tealet`: Main/owner tealet context
+- `stack_far`: Optional far-boundary requirement for the initial stub stack snapshot (`NULL` uses default). This behaves like `tealet_create()`/`tealet_new()`: it can only extend capture range, never shrink it.
+
+**Returns:** New stub tealet, or `NULL` on allocation failure.
+
+### `tealet_stub_run()`
+
+```c
+int tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg);
+```
+
+Run a previously created stub as if it were a freshly created tealet.
+
+**Parameters:**
+- `stub`: Result of `tealet_stub_new()` (or a duplicate of such a stub)
+- `run`: Run function to execute
+- `parg`: Optional argument pointer for in/out switch data
+
+**Returns:**
+- `0` on success
+- Negative error code on failure (`TEALET_ERR_MEM`, etc.)
+
+**Important:** Behavior is undefined if `stub` was not created from the stub mechanism.
 
 ---
 

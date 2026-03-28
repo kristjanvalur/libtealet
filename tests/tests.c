@@ -213,7 +213,7 @@ static tealet_t *tealet_new_descend(tealet_t *t, int level, tealet_run_t run, vo
   if (run)
     return tealet_new_x(t, run, parg);
   else
-    return tealet_stub_new(t);
+    return tealet_stub_new(t, NULL);
 }
 
 /***************************************

@@ -26,7 +26,7 @@ void tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
 
 /* create a stub and return it */
 TEALET_API
-tealet_t *tealet_stub_new(tealet_t *tealet);
+tealet_t *tealet_stub_new(tealet_t *tealet, void *stack_far);
 
 /*
  * Run a previously created stub.
