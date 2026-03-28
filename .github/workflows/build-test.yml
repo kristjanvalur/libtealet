@@ -12,7 +12,7 @@ jobs:
   format-check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: refresh apt package index
       run: sudo apt-get update
@@ -51,7 +51,7 @@ jobs:
       EMULATOR: ${{matrix.emulator}}
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: refresh apt package index
       run: sudo apt-get update
@@ -78,7 +78,7 @@ jobs:
       run: echo abiname=$(make abiname) >> $GITHUB_ENV
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: libtealet-${{ env.abiname }}
         path: |
@@ -88,7 +88,7 @@ jobs:
   sanitizer-tests:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: refresh apt package index
       run: sudo apt-get update
@@ -118,7 +118,7 @@ jobs:
             abi: darwin_arm64
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     
     - name: Build library
       run: make all
@@ -127,7 +127,7 @@ jobs:
       run: make test
     
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: libtealet-${{ matrix.abi }}
         path: |
@@ -154,7 +154,7 @@ jobs:
             abi: win_arm64
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     
     - uses: microsoft/setup-msbuild@v2
     
@@ -166,7 +166,7 @@ jobs:
       run: .\VS\${{matrix.folder}}\Debug\test.exe
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: libtealet-${{ matrix.abi }}
         path: |
@@ -181,10 +181,10 @@ jobs:
       contents: write
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     
     - name: Download all artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         path: artifacts
     
@@ -225,6 +225,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz
+        generate_release_notes: true
         body: |
           libtealet v${{ steps.get_version.outputs.VERSION }}
           
