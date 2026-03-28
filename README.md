@@ -100,7 +100,7 @@ They come with runtime overhead and are generally intended for development/testi
 - **Stack snapshot** (`TEALET_CONFIGF_STACK_SNAPSHOT`) verifies byte-level regions, including sub-page areas guard mode cannot represent exactly.
 - Together they are used to catch out-of-bounds stack access across both page-aligned and non-page-aligned regions.
 
-- Use `tealet_configure_check_stack()` to enable a sensible default check profile for a main tealet.
+- Use `tealet_configure_check_stack()` to enable a sensible default check profile (ideally from a program top-level function, since it derives `stack_guard_limit` from its own stack frame).
 - Use `tealet_configure_get()` / `tealet_configure_set()` for explicit control.
 
 By default, the project build enables both backends:

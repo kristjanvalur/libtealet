@@ -758,6 +758,10 @@ If guard support is unavailable on the current build/platform, canonicalization 
 - fail policy: `TEALET_STACK_INTEGRITY_FAIL_ERROR`
 - stack guard limit: address of a local variable inside `tealet_configure_check_stack()` (a sensible in-stack far limit)
 
+Because the helper derives `stack_guard_limit` from its own frame, it is best
+called from a program top-level function (or equivalent stable entry frame)
+that defines the intended stack region for switched tealets.
+
 **Size behavior:**
 - if `stack_integrity_bytes != 0`: uses caller value
 - if `stack_integrity_bytes == 0`: uses one Linux page when available, otherwise `4096`

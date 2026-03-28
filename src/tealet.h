@@ -413,6 +413,10 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * If stack_integrity_bytes is 0, a default window of one OS memory page is
  * used where available.
  *
+ * Note: this helper sets stack_guard_limit to a local stack marker inside this
+ * function. For best results, call it from a program top-level function whose
+ * frame should remain within the intended stack region for switched tealets.
+ *
  * This helper is intended as a one-way "turn checks on" API. You can still
  * use tealet_configure_set() directly for custom tuning.
  *
