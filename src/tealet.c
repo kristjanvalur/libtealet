@@ -1,10 +1,3 @@
-/********** A minimal coroutine package for C **********
- * By Armin Rigo
- * Documentation: see the source code of the greenlet package from
- *
- *     http://codespeak.net/svn/greenlet/trunk/c/_greenlet.c
- */
-
 #include "tealet.h"
 #include <stackman.h>
 
