@@ -80,6 +80,11 @@ typedef struct mprotect_write_command_t {
     int *recovery_switch_result;
 } mprotect_write_command_t;
 
+typedef struct resize_snapshot_command_t {
+    tealet_t *return_to;
+    int configure_result;
+} resize_snapshot_command_t;
+
 static tealet_t *run_write_to_target(tealet_t *current, void *arg)
 {
     write_command_t *command = (write_command_t *)arg;
@@ -116,6 +121,25 @@ static tealet_t *run_write_to_target(tealet_t *current, void *arg)
         *command->recovery_switch_result = switch_result;
 
     return current->main;
+}
+
+static tealet_t *run_resize_snapshot_while_active(tealet_t *current, void *arg)
+{
+#if TEALET_WITH_STACK_SNAPSHOT
+    resize_snapshot_command_t *command = (resize_snapshot_command_t *)arg;
+    tealet_config_t cfg = TEALET_CONFIG_INIT;
+
+    cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
+    cfg.stack_integrity_bytes = 4096;
+    cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
+    command->configure_result = tealet_configure_set(current, &cfg);
+    return command->return_to;
+#else
+    (void)current;
+    (void)arg;
+    return NULL;
+#endif
 }
 
 #if TEALET_WITH_STACK_SNAPSHOT && TEALET_WITH_STACK_GUARD && !defined(_WIN32)
@@ -540,6 +564,52 @@ static void test_snapshot_write_outside_watch_range_ok(void)
 #endif
 }
 
+static void test_set_while_snapshot_active_resizes(void)
+{
+#if TEALET_WITH_STACK_SNAPSHOT
+    tealet_t *main_tealet;
+    tealet_t *worker;
+    tealet_config_t cfg = TEALET_CONFIG_INIT;
+    tealet_config_t get_cfg = TEALET_CONFIG_INIT;
+    resize_snapshot_command_t *command;
+    void *arg;
+    int result;
+
+    TEST("test_set_while_snapshot_active_resizes");
+
+    main_tealet = new_main_plain();
+
+    cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
+    cfg.stack_integrity_bytes = 1;
+    cfg.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
+    cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
+    result = tealet_configure_set(main_tealet, &cfg);
+    assert(result == 0);
+
+    command = (resize_snapshot_command_t *)tealet_malloc(main_tealet, sizeof(*command));
+    assert(command != NULL);
+    command->return_to = main_tealet;
+    command->configure_result = TEALET_ERR_MEM;
+
+    worker = tealet_create(main_tealet, run_resize_snapshot_while_active, NULL);
+    assert(worker != NULL);
+
+    arg = command;
+    result = tealet_switch(worker, &arg);
+    assert(result == 0);
+    assert(command->configure_result == 0);
+
+    result = tealet_configure_get(main_tealet, &get_cfg);
+    assert(result == 0);
+    assert((get_cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
+    assert(get_cfg.stack_integrity_bytes == 4096);
+
+    tealet_free(main_tealet, command);
+    tealet_finalize(main_tealet);
+    PASS();
+#endif
+}
+
 static void test_snapshot_abort_policy_subprocess(void)
 {
 #if TEALET_WITH_STACK_SNAPSHOT && (defined(__unix__) || defined(__APPLE__))
@@ -780,6 +850,10 @@ int main(void)
         printf("\n");
 
     test_snapshot_write_outside_watch_range_ok();
+    if (test_count > test_passed)
+        printf("\n");
+
+    test_set_while_snapshot_active_resizes();
     if (test_count > test_passed)
         printf("\n");
 

@@ -535,8 +535,6 @@ static size_t tealet_snapshot_required_capacity(const tealet_config_t *config)
 static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t required)
 {
     char *new_block;
-    /* we can't have an active snapshot while resizing */
-    assert(g_main->g_integrity_data.snapshot_bytes == 0);
 
     if (required == 0)
         return 0;
@@ -546,6 +544,13 @@ static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t require
     new_block = (char *)tealet_int_malloc(g_main, required);
     if (new_block == NULL)
         return TEALET_ERR_MEM;
+
+    /* Resize invalidates any active snapshot that was captured into the old
+     * buffer. We allow reconfiguration during active execution, so clear the
+     * active marker before replacing storage.
+     */
+    g_main->g_integrity_data.snapshot_bytes = 0;
+    g_main->g_integrity_data.stack_base = NULL;
 
     if (g_main->g_integrity_data.snapshot_block) {
         tealet_int_free(g_main, g_main->g_integrity_data.snapshot_block);
