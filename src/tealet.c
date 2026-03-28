@@ -441,6 +441,10 @@ static void tealet_guard_unprotect_current(tealet_main_t *g_main)
         return;
     assert(plan->guard_base != NULL);
 
+    /* Best-effort unprotect: if this fails, we still clear active guard state.
+     * There is no in-place recovery path here, and keeping stale guard metadata
+     * would make subsequent behavior inconsistent.
+     */
     errno = 0;
     mprotect(plan->guard_base, plan->guard_bytes,
              PROT_READ | PROT_WRITE);
@@ -464,8 +468,9 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
     else
         prot = PROT_NONE;
 
-    /* mprotect can only really fail if we are trying to reach outside the stack segment.
-     * in this case we can't do anything, so we just ignore the error 
+    /* Best-effort protect: mprotect can fail (for example if the interval is not
+     * representable in mapped stack pages). We intentionally degrade by clearing
+     * active guard state because there is no reliable recovery path here.
      */
     errno = 0;
     rc = mprotect(plan->guard_base, plan->guard_bytes, prot);
@@ -577,6 +582,10 @@ static void tealet_snapshot_capture_current(tealet_main_t *g_main)
 
 /* Verify previously captured bytes for the current tealet and clear the active
  * snapshot marker.  Mismatch handling follows configured fail policy.
+ *
+ * Note: on mismatch we intentionally clear the active snapshot marker before
+ * returning. In FAIL_ERROR mode this lets the caller continue execution; there
+ * is no API to "repair and retry" the same captured snapshot in-place.
  */
 static int tealet_snapshot_verify_current(tealet_main_t *g_main)
 {
@@ -1172,6 +1181,10 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
 
     integrity_result = tealet_snapshot_verify_current(g_main);
     if (integrity_result)
+        /* Intentional behavior: on integrity error we return without re-arming
+         * current guard/snapshot state. This is a best-effort mode that favors
+         * continued execution after reporting the error.
+         */
         return integrity_result;
 
     g_main->g_previous = g_main->g_current;

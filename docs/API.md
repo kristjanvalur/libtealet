@@ -689,8 +689,10 @@ When a feature is not available in the current build/platform, `tealet_configure
 - `TEALET_CONFIGF_STACK_GUARD` protects full pages in the monitored window.
     - On Linux/Unix builds with page protection support, this is implemented with `mprotect()`.
     - Because page protection is page-granular, it cannot precisely cover arbitrary sub-page boundaries.
+    - Guard application/removal is best-effort; if `mprotect()` cannot represent or apply an interval, libtealet clears active guard state for that cycle and continues.
 - `TEALET_CONFIGF_STACK_SNAPSHOT` captures monitored bytes and verifies them on switch-back.
     - This is byte-granular and can cover sub-page regions that page protection cannot represent directly.
+    - In `TEALET_STACK_INTEGRITY_FAIL_ERROR` mode, a mismatch returns `TEALET_ERR_INTEGRITY` and clears the active snapshot marker for that cycle so execution can continue.
 
 In typical protected builds, libtealet combines both:
 
@@ -732,7 +734,7 @@ Use this for explicit tuning of flags, guard mode, integrity bytes, and fail pol
 
 `tealet_config_t` also includes `stack_guard_limit`:
 - `NULL`: no explicit far-limit clamp.
-- non-`NULL`: planning clamps monitored bytes so the protected interval does not extend past this address.  It is recommeded to set this to a known address on the
+- non-`NULL`: planning clamps monitored bytes so the protected interval does not extend past this address.  It is recommended to set this to a known address on the
 stack to ensure that stack protection does not try to inspect bytes outside of the
 process stack segment.
 

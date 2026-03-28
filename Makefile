@@ -47,13 +47,8 @@ all: bin/libtealet.so bin/libtealet.a
 
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tools.o
-snapshot_coreobj = src/tealet_snapshot.o
-snapshot_allobj = $(snapshot_coreobj) src/tools.o
 
 src/tealet.o: src/tealet.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tealet.c
-
-src/tealet_snapshot.o: src/tealet.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tealet.c
 
 src/tools.o: src/tools.c src/tools.h
@@ -68,14 +63,6 @@ bin/libtealet.so: bin $(allobj)
 bin/libtealet.a: bin $(allobj)
 	$(AR) -rcs $@ $(allobj)
 	@# Extract stackman objects and merge into libtealet.a
-	@mkdir -p bin/tmp_ar
-	@cd bin/tmp_ar && $(AR) -x ../../$(LIB)/libstackman.a
-	@$(AR) -rs $@ bin/tmp_ar/*.o
-	@rm -rf bin/tmp_ar
-
-bin/libtealet-snapshot.a: bin $(snapshot_allobj)
-	$(AR) -rcs $@ $(snapshot_allobj)
-	@# Extract stackman objects and merge into libtealet-snapshot.a
 	@mkdir -p bin/tmp_ar
 	@cd bin/tmp_ar && $(AR) -x ../../$(LIB)/libstackman.a
 	@$(AR) -rs $@ bin/tmp_ar/*.o
@@ -136,8 +123,8 @@ tests/test_fork.o: tests/test_fork.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_fork.c
 
 # Configure API test
-bin/test-config: bin tests/test_config.o bin/libtealet-snapshot.a
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_config.o -ltealet-snapshot
+bin/test-config: bin tests/test_config.o bin/libtealet.a
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_config.o -ltealet
 
 tests/test_config.o: tests/test_config.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_config.c
