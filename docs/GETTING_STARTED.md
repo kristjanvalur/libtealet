@@ -9,7 +9,7 @@
 Download the latest source distribution from the [releases page](https://github.com/kristjanvalur/libtealet/releases) or clone the repository:
 
 ```bash
-git clone --recursive https://github.com/kristjanvalur/libtealet.git
+git clone https://github.com/kristjanvalur/libtealet.git
 cd libtealet
 make
 ```

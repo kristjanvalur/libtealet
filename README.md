@@ -3,13 +3,16 @@
 
 # libtealet
 
-**Version 0.3.2**
+**Version 0.4.0**
 
 LibTealet is a lightweight co-routine library for C.  It is based on the
 technique of stack-slicing, where the execution stack is saved and restored
 in order to maintain separate execution context.
 It uses the [Stackman library][stackman] library for low
 level stack operations, providing implementation for common modern desktop platforms.
+For ease of integration, this repository bundles Stackman **v1.2.0** in `stackman/`
+including pre-built platform libraries used by the default build.
+The official Stackman repository is: https://github.com/stackless-dev/stackman
 There are no other run-time dependencies, ecxcept for `memcpy()`, and the default
 use of `malloc()` can be replaced with a custom memory allocator, and `assert()` which is
 used by debug builds.
