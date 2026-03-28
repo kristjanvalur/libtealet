@@ -664,6 +664,8 @@ static void test_mprotect_guard_page_segv_subprocess(void)
 
     TEST("test_mprotect_guard_page_segv_subprocess");
 
+    tealet_debug_set_mprotect_trace(1);
+
     pid = fork();
     assert(pid >= 0);
     if (pid == 0) {
@@ -679,6 +681,7 @@ static void test_mprotect_guard_page_segv_subprocess(void)
     }
 
     assert(waitpid(pid, &wait_status, 0) == pid);
+    tealet_debug_set_mprotect_trace(0);
     printf("  Diagnostic: child wait_status=%d", wait_status);
     if (WIFEXITED(wait_status))
         printf(", exited=%d", WEXITSTATUS(wait_status));

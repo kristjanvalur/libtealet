@@ -44,6 +44,8 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+static int tealet_debug_mprotect_trace_enabled = 0;
+
 /************************************************************/
 
 /************************************************************
@@ -447,14 +449,16 @@ static void tealet_guard_unprotect_current(tealet_main_t *g_main)
     rc = mprotect(plan->guard_base, plan->guard_bytes,
                   PROT_READ | PROT_WRITE);
     err = (rc == 0 ? 0 : errno);
-    fprintf(stderr,
+        if (tealet_debug_mprotect_trace_enabled) {
+        fprintf(stderr,
             "[tealet-debug] mprotect(unprotect) base=%p bytes=%lu prot=%d rc=%d errno=%d\n",
             (void *)plan->guard_base,
             (unsigned long)plan->guard_bytes,
             PROT_READ | PROT_WRITE,
             rc,
             err);
-    fflush(stderr);
+        fflush(stderr);
+        }
     g_main->g_integrity_data.guard_bytes = 0;
 }
 
@@ -482,7 +486,8 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
     errno = 0;
     rc = mprotect(plan->guard_base, plan->guard_bytes, prot);
     err = (rc == 0 ? 0 : errno);
-    fprintf(stderr,
+        if (tealet_debug_mprotect_trace_enabled) {
+        fprintf(stderr,
             "[tealet-debug] mprotect(protect) stack_base=%p guard_base=%p bytes=%lu mode=%d prot=%d rc=%d errno=%d\n",
             (void *)plan->stack_base,
             (void *)plan->guard_base,
@@ -491,7 +496,8 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
             prot,
             rc,
             err);
-    fflush(stderr);
+        fflush(stderr);
+        }
 
     if (rc != 0) {
         g_main->g_integrity_data.guard_bytes = 0;
@@ -1902,6 +1908,11 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
     cfg.stack_guard_limit = &local_stack_marker;
 
     return tealet_configure_set(_tealet, &cfg);
+}
+
+void tealet_debug_set_mprotect_trace(int enabled)
+{
+    tealet_debug_mprotect_trace_enabled = enabled ? 1 : 0;
 }
 
 int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
