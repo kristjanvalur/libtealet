@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-28
+
+### Summary
+Major feature release introducing runtime **stack validation** for tealets, combining byte-level snapshot verification with page-guard enforcement where supported.
+
 ### Added
+- **Stack validation runtime support**
+  - Added configuration-driven stack validation using integrity checks with guard and snapshot backends
+  - Added `tealet_configure_get()` / `tealet_configure_set()` APIs for explicit runtime control
+  - Added mismatch policy handling via `TEALET_STACK_INTEGRITY_FAIL_*`
 - **Stack-check convenience API**: Added `tealet_configure_check_stack(tealet_t*, size_t)`
   - Enables integrity + guard + snapshot checks with a single call
   - Uses `TEALET_STACK_GUARD_MODE_NOACCESS` and `TEALET_STACK_INTEGRITY_FAIL_ERROR`
@@ -261,7 +270,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kristjanvalur/libtealet/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/kristjanvalur/libtealet/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kristjanvalur/libtealet/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kristjanvalur/libtealet/compare/v0.2.0...v0.3.0
