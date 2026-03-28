@@ -17,11 +17,14 @@ jobs:
     - name: refresh apt package index
       run: sudo apt-get update
 
-    - name: install clang-format
-      run: sudo apt-get install -o Acquire::Retries=3 --fix-missing --no-install-recommends -y clang-format
+    - name: install clang-format-14
+      run: sudo apt-get install -o Acquire::Retries=3 --fix-missing --no-install-recommends -y clang-format-14
+
+    - name: show clang-format version
+      run: clang-format-14 --version
 
     - name: check formatting
-      run: make check-format
+      run: make check-format CLANG_FORMAT=clang-format-14
 
   build-linux-gnu:
     runs-on: ubuntu-latest

@@ -46,6 +46,7 @@ endif
 all: bin/libtealet.so bin/libtealet.a
 
 FORMAT_FILES := $(shell find src tests -type f \( -name '*.c' -o -name '*.h' \))
+CLANG_FORMAT ?= clang-format
 
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tools.o
@@ -104,12 +105,12 @@ endif
 	@echo "*** All test suites passed ***"
 
 format:
-	@command -v clang-format >/dev/null 2>&1 || (echo "ERROR: clang-format not found" && exit 1)
-	clang-format -i $(FORMAT_FILES)
+	@command -v $(CLANG_FORMAT) >/dev/null 2>&1 || (echo "ERROR: $(CLANG_FORMAT) not found" && exit 1)
+	$(CLANG_FORMAT) -i $(FORMAT_FILES)
 
 check-format:
-	@command -v clang-format >/dev/null 2>&1 || (echo "ERROR: clang-format not found" && exit 1)
-	clang-format --dry-run --Werror $(FORMAT_FILES)
+	@command -v $(CLANG_FORMAT) >/dev/null 2>&1 || (echo "ERROR: $(CLANG_FORMAT) not found" && exit 1)
+	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
 
 # Multiple chunks and sharing test
 bin/test-chunks: bin tests/test_chunks.o bin/libtealet.a
