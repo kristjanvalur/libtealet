@@ -422,15 +422,6 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  */
 TEALET_API
 int tealet_configure_check_stack(tealet_t *tealet, size_t stack_integrity_bytes);
-
-/* Experimental debugging helper: enable/disable global mprotect trace logs.
- *
- * When enabled, guard protect/unprotect paths print mprotect address/range,
- * protection flags, return code, and errno to stderr.
- */
-TEALET_API
-void tealet_debug_set_mprotect_trace(int enabled);
-
 /**
  * Fork the current active tealet, creating a copy that can run independently.
  *

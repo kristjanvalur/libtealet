@@ -240,21 +240,6 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg)
 #else
         target = (unsigned char *)(guard_end - 1);
 #endif
-        fprintf(stderr,
-            "[test-debug] guard-write begin=%p end=%p aligned_begin=%p aligned_end=%p guard=[%p,%p) snapshot=[%p,%p) current_sp=%p target=%p limit=%p bytes=%lu\n",
-            (void *)begin,
-            (void *)end,
-            (void *)aligned_begin,
-            (void *)aligned_end,
-            (void *)guard_begin,
-            (void *)guard_end,
-            (void *)snapshot_begin,
-            (void *)snapshot_end,
-            (void *)current_sp,
-            (void *)target,
-            command->stack_guard_limit,
-            (unsigned long)command->integrity_bytes);
-        fflush(stderr);
     } else {
         if (!snapshot_has_bytes) {
             if (command->first_switch_result)
@@ -362,7 +347,6 @@ static int run_mprotect_split_case(int write_guard_page,
     int first_switch_result;
     int second_switch_result;
     size_t page_size;
-    unsigned char run_local_marker;
     unsigned char *guard_window;
     unsigned char *guard_write_target;
 
@@ -375,15 +359,6 @@ static int run_mprotect_split_case(int write_guard_page,
         guard_window = (unsigned char *)alloca(page_size * 2);
         memset(guard_window, 0xA5, page_size * 2);
         guard_write_target = guard_window + page_size;
-
-        fprintf(stderr,
-            "[test-debug] pre-split-config stack_guard_limit=%p run_local=%p guard_window=[%p,%p) target=%p\n",
-            stack_guard_limit,
-            (void *)&run_local_marker,
-            (void *)guard_window,
-            (void *)(guard_window + (page_size * 2)),
-            (void *)guard_write_target);
-        fflush(stderr);
     }
     else {
         guard_window = NULL;
@@ -402,13 +377,6 @@ static int run_mprotect_split_case(int write_guard_page,
     assert((cfg.flags & TEALET_CONFIGF_STACK_INTEGRITY) != 0);
     assert((cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
     assert((cfg.flags & TEALET_CONFIGF_STACK_GUARD) != 0);
-    if (write_guard_page) {
-        fprintf(stderr,
-            "[test-debug] split-config stack_guard_limit=%p integrity_bytes=%lu\n",
-            cfg.stack_guard_limit,
-            (unsigned long)cfg.stack_integrity_bytes);
-        fflush(stderr);
-    }
 
     writer = tealet_create(main_tealet, run_write_with_mprotect_split, NULL);
     assert(writer != NULL);
@@ -733,8 +701,6 @@ static void test_mprotect_guard_page_segv_subprocess(void)
 
     TEST("test_mprotect_guard_page_segv_subprocess");
 
-    tealet_debug_set_mprotect_trace(1);
-
     pid = fork();
     assert(pid >= 0);
     if (pid == 0) {
@@ -750,14 +716,6 @@ static void test_mprotect_guard_page_segv_subprocess(void)
     }
 
     assert(waitpid(pid, &wait_status, 0) == pid);
-    tealet_debug_set_mprotect_trace(0);
-    printf("  Diagnostic: child wait_status=%d", wait_status);
-    if (WIFEXITED(wait_status))
-        printf(", exited=%d", WEXITSTATUS(wait_status));
-    if (WIFSIGNALED(wait_status))
-        printf(", signaled=%d", WTERMSIG(wait_status));
-    printf("\n");
-    fflush(stdout);
 
     if (WIFEXITED(wait_status)) {
         child_exit = WEXITSTATUS(wait_status);

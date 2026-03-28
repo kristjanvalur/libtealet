@@ -44,8 +44,6 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-static int tealet_debug_mprotect_trace_enabled = 0;
-
 /************************************************************/
 
 /************************************************************
@@ -301,7 +299,6 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
     tealet_sub_t *current;
     unsigned int flags;
     size_t integrity_bytes;
-    size_t requested_integrity_bytes;
     uintptr_t far_limit;
 #if TEALET_GUARD_MPROTECT
     uintptr_t begin;
@@ -326,7 +323,6 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
     integrity_bytes = g_main->g_cfg_stack_integrity_bytes;
     if (integrity_bytes == 0)
         return;
-    requested_integrity_bytes = integrity_bytes;
 
     if (g_main->g_cfg_stack_guard_limit != NULL) {
         far_limit = (uintptr_t)g_main->g_cfg_stack_guard_limit;
@@ -341,16 +337,6 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
 #endif
         if (integrity_bytes == 0)
             return;
-    }
-
-    if (tealet_debug_mprotect_trace_enabled) {
-        fprintf(stderr,
-            "[tealet-debug] integrity-plan stack_far=%p guard_limit=%p requested=%lu effective=%lu\n",
-            (void *)current->stack_far,
-            (void *)g_main->g_cfg_stack_guard_limit,
-            (unsigned long)requested_integrity_bytes,
-            (unsigned long)integrity_bytes);
-        fflush(stderr);
     }
 
 #if STACK_DIRECTION == 0
@@ -450,27 +436,14 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main)
 static void tealet_guard_unprotect_current(tealet_main_t *g_main)
 {
     const tealet_integrity_data_t *plan = &g_main->g_integrity_data;
-    int rc;
-    int err;
 
     if (plan->guard_bytes == 0)
         return;
     assert(plan->guard_base != NULL);
 
     errno = 0;
-    rc = mprotect(plan->guard_base, plan->guard_bytes,
-                  PROT_READ | PROT_WRITE);
-    err = (rc == 0 ? 0 : errno);
-        if (tealet_debug_mprotect_trace_enabled) {
-        fprintf(stderr,
-            "[tealet-debug] mprotect(unprotect) base=%p bytes=%lu prot=%d rc=%d errno=%d\n",
-            (void *)plan->guard_base,
-            (unsigned long)plan->guard_bytes,
-            PROT_READ | PROT_WRITE,
-            rc,
-            err);
-        fflush(stderr);
-        }
+    mprotect(plan->guard_base, plan->guard_bytes,
+             PROT_READ | PROT_WRITE);
     g_main->g_integrity_data.guard_bytes = 0;
 }
 
@@ -480,7 +453,6 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
     int guard_mode;
     int prot;
     int rc;
-    int err;
 
     if (plan->guard_bytes == 0)
         return;
@@ -497,19 +469,6 @@ static void tealet_guard_protect_current(tealet_main_t *g_main)
      */
     errno = 0;
     rc = mprotect(plan->guard_base, plan->guard_bytes, prot);
-    err = (rc == 0 ? 0 : errno);
-        if (tealet_debug_mprotect_trace_enabled) {
-        fprintf(stderr,
-            "[tealet-debug] mprotect(protect) stack_base=%p guard_base=%p bytes=%lu mode=%d prot=%d rc=%d errno=%d\n",
-            (void *)plan->stack_base,
-            (void *)plan->guard_base,
-            (unsigned long)plan->guard_bytes,
-            guard_mode,
-            prot,
-            rc,
-            err);
-        fflush(stderr);
-        }
 
     if (rc != 0) {
         g_main->g_integrity_data.guard_bytes = 0;
@@ -1919,20 +1878,7 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
     cfg.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ERROR;
     cfg.stack_guard_limit = &local_stack_marker;
 
-    if (tealet_debug_mprotect_trace_enabled) {
-        fprintf(stderr,
-            "[tealet-debug] configure-check-stack marker=%p integrity_bytes=%lu\n",
-            (void *)&local_stack_marker,
-            (unsigned long)effective_bytes);
-        fflush(stderr);
-    }
-
     return tealet_configure_set(_tealet, &cfg);
-}
-
-void tealet_debug_set_mprotect_trace(int enabled)
-{
-    tealet_debug_mprotect_trace_enabled = enabled ? 1 : 0;
 }
 
 int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags)
