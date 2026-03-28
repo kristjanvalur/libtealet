@@ -24,6 +24,25 @@ The library will be built in `bin/`:
 make test
 ```
 
+### Formatting checks (development)
+
+`clang-format` is required for local contributor formatting checks and for CI parity.
+
+Install `clang-format`:
+
+- Linux (Debian/Ubuntu): `sudo apt install clang-format`
+- macOS (Homebrew): `brew install clang-format`
+- Windows:
+    - `winget install LLVM.LLVM`
+    - or `choco install llvm`
+
+Then run:
+
+```bash
+make check-format   # verify formatting
+make format         # apply formatting
+```
+
 ## Hello Coroutine
 
 The simplest example demonstrates creating and switching between coroutines:

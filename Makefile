@@ -45,6 +45,8 @@ endif
 .PHONY: all
 all: bin/libtealet.so bin/libtealet.a
 
+FORMAT_FILES := $(shell find src tests -type f \( -name '*.c' -o -name '*.h' \))
+
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tools.o
 
@@ -84,7 +86,7 @@ ifeq ($(shell uname -s),Darwin)
 	STATIC_FLAG :=
 endif
 
-.PHONY: test tests
+.PHONY: test tests format check-format
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork bin/test-config
@@ -100,6 +102,14 @@ endif
 	$(EMULATOR) bin/test-fork
 	$(EMULATOR) bin/test-config
 	@echo "*** All test suites passed ***"
+
+format:
+	@command -v clang-format >/dev/null 2>&1 || (echo "ERROR: clang-format not found" && exit 1)
+	clang-format -i $(FORMAT_FILES)
+
+check-format:
+	@command -v clang-format >/dev/null 2>&1 || (echo "ERROR: clang-format not found" && exit 1)
+	clang-format --dry-run --Werror $(FORMAT_FILES)
 
 # Multiple chunks and sharing test
 bin/test-chunks: bin tests/test_chunks.o bin/libtealet.a

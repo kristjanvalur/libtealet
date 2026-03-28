@@ -82,6 +82,25 @@ int main(void) {
 
 Compile: `gcc -o example example.c -Isrc -Lbin -ltealet`
 
+## Development requirements
+
+For contributor workflows, `clang-format` is required.
+
+- CI runs `make check-format` in `.github/workflows/build-test.yml`.
+- Local formatting commands:
+    - `make check-format` (verify formatting)
+    - `make format` (apply formatting)
+
+Install `clang-format`:
+
+- Linux (Debian/Ubuntu): `sudo apt install clang-format`
+- macOS (Homebrew): `brew install clang-format`
+- Windows:
+    - `winget install LLVM.LLVM`
+    - or `choco install llvm`
+
+After installing on Windows, ensure `clang-format.exe` is on your `PATH`.
+
 # Functionality
 The library provides the basic mechanism to create coroutine and to switch between them.
 It takes care of allocating and saving the stack for dormant coroutines.  A way to pass simple values
