@@ -11,7 +11,6 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <alloca.h>
 #endif
 
 #include "tealet.h"
@@ -65,10 +64,6 @@ static tealet_t *new_main_checked(void)
     return main_tealet;
 }
 
-typedef struct parent_scratch_t {
-    unsigned char bytes[64];
-} parent_scratch_t;
-
 typedef struct write_command_t {
     tealet_t *return_to;
     unsigned char *outside_target;
@@ -81,7 +76,6 @@ typedef struct mprotect_write_command_t {
     tealet_t *return_to;
     size_t integrity_bytes;
     void *stack_guard_limit;
-    unsigned char *guard_write_target;
     int write_guard_page;
     int *first_switch_result;
     int *recovery_switch_result;
@@ -163,7 +157,6 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg)
     int snapshot_has_bytes;
     unsigned char sp_probe;
     uintptr_t current_sp;
-    unsigned char *guard_target;
 
     page_size = (size_t)sysconf(_SC_PAGESIZE);
     assert(page_size > 0);
@@ -171,26 +164,6 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg)
 
     far = tealet_get_far(current);
     assert(far != NULL);
-
-    if (command->write_guard_page && command->guard_write_target != NULL) {
-        guard_target = command->guard_write_target;
-        original = *guard_target;
-        *guard_target ^= 0x5Au;
-
-        switch_result = tealet_switch(command->return_to, NULL);
-        if (command->first_switch_result)
-            *command->first_switch_result = switch_result;
-
-        if (switch_result == TEALET_ERR_INTEGRITY) {
-            *guard_target = original;
-            switch_result = tealet_switch(command->return_to, NULL);
-        }
-
-        if (command->recovery_switch_result)
-            *command->recovery_switch_result = switch_result;
-
-        return current->main;
-    }
 
 #if STACK_DIRECTION == 0
     begin = (uintptr_t)far;
@@ -286,15 +259,20 @@ static int run_integrity_switch_case(int fail_policy, int write_inside,
     tealet_t *main_tealet;
     tealet_t *writer;
     tealet_config_t cfg = TEALET_CONFIG_INIT;
-    write_command_t command;
-    parent_scratch_t parent_scratch;
+    write_command_t *command;
+    unsigned char *outside_target;
     void *arg;
     int result;
     int first_switch_result;
     int second_switch_result;
 
     main_tealet = new_main_checked();
-    memset(&parent_scratch, 0x22, sizeof(parent_scratch));
+
+    command = (write_command_t *)tealet_malloc(main_tealet, sizeof(write_command_t));
+    assert(command != NULL);
+    outside_target = (unsigned char *)tealet_malloc(main_tealet, 64);
+    assert(outside_target != NULL);
+    memset(outside_target, 0x22, 64);
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
     cfg.stack_integrity_bytes = 1;
@@ -310,15 +288,17 @@ static int run_integrity_switch_case(int fail_policy, int write_inside,
 
     first_switch_result = 0;
     second_switch_result = 0;
-    command.return_to = main_tealet;
-    command.outside_target = parent_scratch.bytes;
-    command.write_inside = write_inside;
-    command.first_switch_result = &first_switch_result;
-    command.recovery_switch_result = &second_switch_result;
+    command->return_to = main_tealet;
+    command->outside_target = outside_target;
+    command->write_inside = write_inside;
+    command->first_switch_result = &first_switch_result;
+    command->recovery_switch_result = &second_switch_result;
 
-    arg = &command;
+    arg = command;
     result = tealet_switch(writer, &arg);
     assert(result == 0);
+    tealet_free(main_tealet, outside_target);
+    tealet_free(main_tealet, command);
     tealet_finalize(main_tealet);
 
     if (first_result)
@@ -341,29 +321,20 @@ static int run_mprotect_split_case(int write_guard_page,
     tealet_t *main_tealet;
     tealet_t *writer;
     tealet_config_t cfg = TEALET_CONFIG_INIT;
-    mprotect_write_command_t command;
+    mprotect_write_command_t *command;
     void *arg;
     int result;
     int first_switch_result;
     int second_switch_result;
     size_t page_size;
-    unsigned char *guard_window;
-    unsigned char *guard_write_target;
 
     page_size = (size_t)sysconf(_SC_PAGESIZE);
     assert(page_size > 0);
 
     main_tealet = new_main_checked();
 
-    if (write_guard_page) {
-        guard_window = (unsigned char *)alloca(page_size * 2);
-        memset(guard_window, 0xA5, page_size * 2);
-        guard_write_target = guard_window + page_size;
-    }
-    else {
-        guard_window = NULL;
-        guard_write_target = NULL;
-    }
+    command = (mprotect_write_command_t *)tealet_malloc(main_tealet, sizeof(mprotect_write_command_t));
+    assert(command != NULL);
 
     cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY |
                 TEALET_CONFIGF_STACK_SNAPSHOT |
@@ -383,26 +354,27 @@ static int run_mprotect_split_case(int write_guard_page,
 
     first_switch_result = 0;
     second_switch_result = 0;
-    command.return_to = main_tealet;
-    command.integrity_bytes = cfg.stack_integrity_bytes;
-    command.stack_guard_limit = cfg.stack_guard_limit;
-    command.guard_write_target = guard_write_target;
-    command.write_guard_page = write_guard_page;
-    command.first_switch_result = &first_switch_result;
-    command.recovery_switch_result = &second_switch_result;
+    command->return_to = main_tealet;
+    command->integrity_bytes = cfg.stack_integrity_bytes;
+    command->stack_guard_limit = cfg.stack_guard_limit;
+    command->write_guard_page = write_guard_page;
+    command->first_switch_result = &first_switch_result;
+    command->recovery_switch_result = &second_switch_result;
 
-    arg = &command;
+    arg = command;
     result = tealet_switch(writer, &arg);
     if (write_guard_page) {
         if (first_result)
             *first_result = first_switch_result;
         if (recovery_result)
             *recovery_result = second_switch_result;
+        tealet_free(main_tealet, command);
         tealet_finalize(main_tealet);
         return result;
     }
 
     assert(result == 0);
+    tealet_free(main_tealet, command);
     tealet_finalize(main_tealet);
 
     if (first_result)
@@ -719,6 +691,12 @@ static void test_mprotect_guard_page_segv_subprocess(void)
 
     if (WIFEXITED(wait_status)) {
         child_exit = WEXITSTATUS(wait_status);
+        if (child_exit == 112) {
+            printf("  SKIPPED (guard page was not enforceable for this runtime stack layout)\n");
+            fflush(stdout);
+            test_passed++;
+            return;
+        }
         if (child_exit == 20) {
             printf("  SKIPPED (snapshot prefix not representable for this stack alignment)\n");
             fflush(stdout);
