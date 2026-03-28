@@ -6,19 +6,15 @@
  * A tealet allocator that gathers usage statistics
  */
 
-
-typedef struct tealet_statsalloc_t
-{
-    tealet_alloc_t alloc;
-    tealet_alloc_t *base;
-    size_t n_allocs;
-    size_t s_allocs;
+typedef struct tealet_statsalloc_t {
+  tealet_alloc_t alloc;
+  tealet_alloc_t *base;
+  size_t n_allocs;
+  size_t s_allocs;
 } tealet_statsalloc_t;
 
 TEALET_API
-void
-tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
-
+void tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
 
 /****************************************************************
  * A tealet stub mechanism.
@@ -28,10 +24,9 @@ tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
  * position on the stack.
  */
 
- /* create a stub and return it */
+/* create a stub and return it */
 TEALET_API
-tealet_t *
-tealet_stub_new(tealet_t *tealet);
+tealet_t *tealet_stub_new(tealet_t *tealet);
 
 /*
  * Run a previously created stub.
@@ -41,8 +36,6 @@ tealet_stub_new(tealet_t *tealet);
  * behaviour is undefined.
  */
 TEALET_API
-int
-tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg);
-
+int tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg);
 
 #endif /* _TEALET_TOOLS_H_ */
