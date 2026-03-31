@@ -7,7 +7,7 @@
 #endif
 
 #include "tealet.h"
-#include "tools.h"
+#include "tealet_extras.h"
 
 static int status = 0;
 static tealet_t *g_main = NULL;

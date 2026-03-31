@@ -210,6 +210,7 @@ jobs:
         # Copy headers, stackman, and documentation
         mkdir -p release/tealet
         cp src/tealet.h release/tealet/
+        cp src/tealet_extras.h release/tealet/
         cp src/tools.h release/tealet/
         cp -r stackman release/
         cp Makefile README.md LICENSE release/
@@ -239,7 +240,7 @@ jobs:
           ## Contents
           
           ```
-          tealet/             - Header files (tealet.h, tools.h)
+          tealet/             - Header files (tealet.h, tealet_extras.h, tools.h)
           stackman/           - Bundled stackman v${{ env.STACKMAN_VERSION }}
           lib/
             sysv_amd64/       - Linux x86_64

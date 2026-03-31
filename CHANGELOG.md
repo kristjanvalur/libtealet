@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Helper module rename**
+  - Introduced `tealet_extras.h` / `tealet_extras.c` as the primary helper module names.
+  - Updated build, tests, and API docs to use `tealet_extras.h`.
+  - Kept `tools.h` as a compatibility alias header.
+
 ## [0.4.0] - 2026-03-28
 
 ### Summary

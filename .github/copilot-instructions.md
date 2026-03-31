@@ -24,7 +24,7 @@
    - `tealet_run_t`: Function pointer type for coroutine entry points
    - Lifecycle: `tealet_initialize()` → `tealet_create()`/`tealet_new()` → `tealet_switch()` → `tealet_exit()`/`tealet_finalize()`
 
-2. **tools.h / tools.c**: Helper utilities for the library
+2. **tealet_extras.h / tealet_extras.c**: Helper utilities for the library
 
 3. **stackman**: Low-level stack switching (bundled distribution in `stackman/`)
 

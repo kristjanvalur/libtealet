@@ -5,7 +5,7 @@
  *     */
 
 #include "tealet.h"
-#include "tools.h"
+#include "tealet_extras.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
