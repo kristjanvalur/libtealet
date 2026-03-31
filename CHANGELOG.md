@@ -7,11 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-31
+
 ### Changed
 - **Helper module rename**
   - Introduced `tealet_extras.h` / `tealet_extras.c` as the primary helper module names.
   - Updated build, tests, and API docs to use `tealet_extras.h`.
   - Kept `tools.h` as a compatibility alias header.
+
+### Added
+- **`tealet_previous()` API docs**
+  - Added explicit API reference coverage for `tealet_previous()`.
+  - Documented `NULL` return semantics when no previous tealet exists.
+  - Documented `NULL` return semantics when the previously recorded tealet has been destroyed.
+
+### Fixed
+- **`g_previous` stale pointer on tealet destruction**
+  - Clearing `g_previous` when the previously recorded tealet is deleted.
+  - Applies to both automatic deletion on tealet completion and explicit `tealet_delete()`.
+  - Added regression tests for both paths.
+
+---
 
 ## [0.4.0] - 2026-03-28
 
@@ -276,7 +292,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/kristjanvalur/libtealet/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/kristjanvalur/libtealet/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/kristjanvalur/libtealet/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kristjanvalur/libtealet/compare/v0.3.0...v0.3.1

@@ -696,6 +696,10 @@ static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t 
 static void tealet_free_tealet(tealet_main_t *main, tealet_sub_t *t) {
   size_t basesize = offsetof(tealet_nonmain_t, _extra);
   size_t size = basesize + main->g_extrasize;
+
+  if (main->g_previous == t)
+    main->g_previous = NULL;
+
 #if TEALET_WITH_STATS
   TEALET_LIST_REMOVE(t);
 #endif

@@ -504,6 +504,32 @@ This function does not return unless `TEALET_EXIT_DEFER` is set.
 
 ## Status and Inspection
 
+### `tealet_previous()`
+
+```c
+tealet_t *tealet_previous(tealet_t *tealet);
+```
+
+Get the tealet that most recently switched to the current tealet.
+
+**Parameters:**
+- `tealet`: Any tealet derived from the same main tealet
+
+**Returns:**
+- Pointer to the previous tealet when available
+- `NULL` when no previous tealet is recorded
+- `NULL` when the previously recorded tealet has been destroyed
+
+**Usage:**
+```c
+tealet_t *prev = tealet_previous(current);
+if (prev == NULL) {
+    /* No valid previous tealet */
+}
+```
+
+---
+
 ### `tealet_status()`
 
 ```c

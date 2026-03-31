@@ -446,7 +446,7 @@ void test_simple_create_and_run(void) {
   t = tealet_create(g_main, test_simple_run, NULL);
   tealet_switch(t, NULL);
   assert(status == 1);
-  assert(tealet_previous(g_main) == t);
+  assert(tealet_previous(g_main) == NULL);
   fini_test();
 }
 
@@ -467,8 +467,29 @@ void test_create_previous(void) {
   assert(status == 0);
   /* Now switch to it - it should see main as previous */
   tealet_switch(t, NULL);
-  assert(status == 42);                 /* Verify it ran */
-  assert(tealet_previous(g_main) == t); /* Verify we see it as previous */
+  assert(status == 42); /* Verify it ran */
+  assert(tealet_previous(g_main) == NULL);
+  fini_test();
+}
+
+static tealet_t *test_previous_manual_delete_run(tealet_t *t1, void *arg) {
+  (void)arg;
+  tealet_switch(t1->main, NULL);
+  return t1->main;
+}
+
+void test_previous_cleared_on_manual_delete(void) {
+  tealet_t *t;
+
+  init_test();
+  t = tealet_create(g_main, test_previous_manual_delete_run, NULL);
+  assert(t != NULL);
+
+  tealet_switch(t, NULL);
+  assert(tealet_previous(g_main) == t);
+
+  tealet_delete(t);
+  assert(tealet_previous(g_main) == NULL);
   fini_test();
 }
 
@@ -927,7 +948,9 @@ static test_entry_t test_list[] = {{"test_main_current", test_main_current},
                                    {"test_stack_far_isolation", test_stack_far_isolation},
                                    {"test_simple", test_simple},
                                    {"test_simple_create", test_simple_create},
+                                   {"test_simple_create_and_run", test_simple_create_and_run},
                                    {"test_create_previous", test_create_previous},
+                                   {"test_previous_cleared_on_manual_delete", test_previous_cleared_on_manual_delete},
                                    {"test_status", test_status},
                                    {"test_exit", test_exit},
                                    {"test_switch", test_switch},
