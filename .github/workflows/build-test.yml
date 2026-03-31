@@ -230,53 +230,6 @@ jobs:
       with:
         files: libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz
         generate_release_notes: true
-        body: |
-          libtealet v${{ steps.get_version.outputs.VERSION }}
-          
-          ## Download
-          
-          Download `libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz` containing pre-built libraries for all platforms.
-          
-          ## Contents
-          
-          ```
-          tealet/             - Header files (tealet.h, tealet_extras.h, tools.h)
-          stackman/           - Bundled stackman v${{ env.STACKMAN_VERSION }}
-          lib/
-            sysv_amd64/       - Linux x86_64
-            sysv_i386/        - Linux x86 (32-bit)
-            arm32/            - Linux ARM (32-bit, AAPCS)
-            aarch64/          - Linux ARM64 (AAPCS64)
-            riscv64/          - Linux RISC-V 64-bit (LP64D)
-            darwin_x86_64/    - macOS x86_64 (Intel)
-            darwin_arm64/     - macOS ARM64 (Apple Silicon)
-            win_x86/          - Windows x86 (32-bit)
-            win_x64/          - Windows x64
-            win_arm64/        - Windows ARM64
-          README.md
-          LICENSE
-          Makefile
-          ```
-          
-          ## Usage
-          
-          ```bash
-          # Extract
-          tar -xzf libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz
-          
-          # Build detects platform automatically
-          make abiname  # Shows detected ABI (e.g., sysv_amd64)
-          
-          # Link with your project (static or dynamic)
-          gcc -Itealet -Istackman/stackman mycode.c -Llib/sysv_amd64 -ltealet
-          
-          # Or let Makefile auto-detect platform
-          ABI=$(shell make abiname)
-          gcc -Itealet -Istackman/stackman mycode.c -Llib/$(ABI) -ltealet
-          ```
-          
-          **Note**: Both static and dynamic libraries are self-contained with stackman built in.
-          You only need to link with `-ltealet`.
           
           ## Platforms Supported
           
