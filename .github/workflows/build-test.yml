@@ -230,9 +230,3 @@ jobs:
       with:
         files: libtealet-${{ steps.get_version.outputs.VERSION }}.tar.gz
         generate_release_notes: true
-          
-          ## Platforms Supported
-          
-          - **Linux**: x86_64, i386, ARM32, ARM64, RISC-V 64
-          - **macOS**: Intel (x86_64), Apple Silicon (ARM64)
-          - **Windows**: x86, x64, ARM64
