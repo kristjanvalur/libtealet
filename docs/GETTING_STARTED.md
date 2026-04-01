@@ -214,6 +214,16 @@ int main(void) {
 
 **Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 
+### Shutdown Order Requirement
+
+At shutdown, always delete non-main tealets before calling `tealet_finalize(main)`.
+
+- `tealet_finalize()` frees the main tealet and does not walk child tealets.
+- After `tealet_finalize()`, all tealet handles from that main tealet are invalid.
+- That includes `tealet_delete()` and `tealet_free()`, because allocator/context access goes through the main tealet.
+
+There is no supported way to decouple this order.
+
 ### When to Use Each
 
 **Auto-delete (default):**

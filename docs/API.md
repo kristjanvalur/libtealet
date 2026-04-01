@@ -63,9 +63,11 @@ Clean up and destroy the main tealet.
 tealet_finalize(main);
 ```
 
-Call when done with all tealets in the current thread. This frees all resources associated with the main tealet. Do not call on non-main tealets.
+Call when done with all tealets in the current thread. This destroys the main tealet itself. Do not call on non-main tealets.
 
-⚠️ **Warning:** Ensure all child tealets are deleted or have exited before calling this.
+⚠️ **Warning:** `tealet_finalize()` does **not** walk and delete child tealets. Delete non-main tealets before finalizing. After finalize returns, all tealet handles from that main tealet are invalid and must not be used (including `tealet_delete()` and `tealet_free()`).
+
+There is no supported way to decouple this deletion order: tealet API operations rely on allocator/context state stored in the main tealet, and that state is destroyed by `tealet_finalize()`.
 
 ---
 

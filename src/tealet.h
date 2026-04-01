@@ -147,8 +147,14 @@ typedef struct tealet_config_t {
 TEALET_API
 tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize);
 
-/* Tear down the main tealet.  Call e.g. after a thread finishes (including
- * all its tealets).
+/* Tear down the main tealet. Call this after a thread finishes and after all
+ * non-main tealets have already been deleted.
+ * This function frees the main tealet itself; it does not walk and delete
+ * child tealets. Any tealet pointers that still reference this main tealet
+ * become invalid after finalize.
+ * There is no supported way to delete remaining child tealets after finalize,
+ * because allocator/context access for tealet APIs goes through the main
+ * tealet.
  */
 TEALET_API
 void tealet_finalize(tealet_t *tealet);
