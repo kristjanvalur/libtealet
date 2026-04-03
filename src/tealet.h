@@ -81,6 +81,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
                                  */
 #define TEALET_ERR_INVAL -4     /* invalid argument */
 #define TEALET_ERR_INTEGRITY -5 /* current tealet violated stack-integrity boundary */
+#define TEALET_ERR_PANIC -6     /* switched to main due to panic reroute from tealet_exit() */
 
 /* configuration API structure versioning */
 #define TEALET_CONFIG_VERSION_1 1
@@ -204,6 +205,9 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far);
  * provided when switching back here.
  * Take care to not have *arg point to stack allocated data because
  * such data may be overwritten when the context switches.
+ * Return value is 0 on success or a negative TEALET_ERR_* code.
+ * In main tealet, this can include TEALET_ERR_PANIC when control was
+ * rerouted to main from tealet_exit() due to a defunct requested target.
  */
 TEALET_API
 int tealet_switch(tealet_t *target, void **parg);

@@ -126,7 +126,11 @@ Create a new tealet and immediately start executing it.
 - `parg`: Pointer to argument pointer (passed to run function, updated with return value)
 - `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
-**Returns:** New tealet (may be `NULL` if run function deleted it), or `NULL` on allocation failure.
+**Returns:** New tealet (may be `NULL` if run function deleted it), or `NULL` on failure.
+
+Conceptually, `tealet_new()` is `tealet_create()` followed by `tealet_switch()` (create-and-start in one call).
+
+`tealet_new()` performs an internal switch as part of create-and-start. The same switch failure conditions as `tealet_switch()` apply (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`), but `tealet_new()` reports them as `NULL` rather than returning an error code.
 
 **Usage:**
 ```c
@@ -407,6 +411,7 @@ Suspend current tealet and resume target tealet.
 - `0` on success
 - `TEALET_ERR_MEM` on memory allocation failure while saving/restoring state
 - `TEALET_ERR_DEFUNCT` if target is defunct
+- `TEALET_ERR_PANIC` on main when control was rerouted to main from `tealet_exit()` because the requested exit target was defunct
 - Negative error code on failure
 
 **Usage:**
@@ -996,6 +1001,7 @@ Error handling in libtealet is intentionally narrow:
 - **Runtime/resource errors out of user control:**
     - `TEALET_ERR_MEM`
     - `TEALET_ERR_DEFUNCT`
+    - `TEALET_ERR_PANIC` (main-only switch outcome)
 - **Other negative returns** are generally caused by incorrect API usage (invalid context, invalid switching flow, integrity/caller sanity violations) and should be treated as effectively fatal programming errors.
 
 ### Practical handling guide
@@ -1003,8 +1009,12 @@ Error handling in libtealet is intentionally narrow:
 For `tealet_switch()`:
 - On `TEALET_ERR_MEM`: treat as transient resource failure; free optional resources and either retry later or abort the coroutine workflow cleanly.
 - On `TEALET_ERR_DEFUNCT`: treat target as unusable, inspect status, and delete/replace that tealet.
+- On `TEALET_ERR_PANIC` (main only): treat as emergency reroute signal from `tealet_exit()`; report and terminate cleanly.
 
-Practical note for `tealet_switch()` failures (`TEALET_ERR_MEM` or `TEALET_ERR_DEFUNCT`):
+For `tealet_new()`:
+- The same underlying switch failure conditions apply (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`), but the API surface is pointer-based, so these failures are observed as `NULL`.
+
+Practical note for `tealet_switch()` failures (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`):
 - In non-main tealets, the usual recovery path is to perform local cleanup and then exit to `main`.
 - In the main tealet, the usual recovery path is to report the error and terminate the thread/process cleanly.
 
@@ -1014,9 +1024,9 @@ For `tealet_exit()`:
 - If the requested target is defunct, exit is rerouted to `main`.
 - The main tealet itself is never marked defunct.
 
-### Forward-looking note
+### Note
 
-Planned future behavior includes `TEALET_ERR_UNEXPECTED`: a switch error reported in `main` when control returns to `main` unexpectedly (for example after an internal reroute-to-main exit path).
+`TEALET_ERR_PANIC` is currently the dedicated signal for reroute-to-main panic conditions after `tealet_exit()` target failure.
 
 ---
 
@@ -1074,6 +1084,23 @@ if (result == TEALET_ERR_DEFUNCT) {
     return -1;
 }
 ```
+
+---
+
+### `TEALET_ERR_PANIC`
+
+```c
+#define TEALET_ERR_PANIC (-6)
+```
+
+Main-tealet switch result signaling panic reroute.
+
+**When returned:**
+- Returned by `tealet_switch()` in `main` when a non-main tealet called `tealet_exit()` to a defunct target and libtealet rerouted the exit to `main`.
+
+**Recovery:**
+- Treat as fatal control-flow anomaly for the coroutine workflow.
+- Log/report context and terminate the thread/process cleanly.
 
 ---
 

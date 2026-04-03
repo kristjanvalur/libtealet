@@ -9,6 +9,11 @@
 #include "tealet.h"
 #include "tealet_extras.h"
 
+#if TEALET_WITH_TESTING
+/* Internal test hook from tealet.c (not part of public API). */
+int tealet_debug_force_defunct(tealet_t *tealet);
+#endif
+
 static int status = 0;
 static tealet_t *g_main = NULL;
 static tealet_t *the_stub = NULL;
@@ -938,6 +943,40 @@ void test_mem_error(void) {
   fini_test();
 }
 
+#if TEALET_WITH_TESTING
+static tealet_t *test_panic_exit_run(tealet_t *current, void *arg) {
+  tealet_t *target = (tealet_t *)arg;
+
+  assert(current != g_main);
+  tealet_exit(target, NULL, TEALET_EXIT_DELETE);
+  assert(0);
+  return NULL;
+}
+
+void test_exit_reroute_panic(void) {
+  tealet_t *victim;
+  tealet_t *exiter;
+  int result;
+  void *arg;
+
+  init_test();
+
+  victim = tealet_new(g_main, NULL, NULL, NULL);
+  assert(victim != NULL);
+  result = tealet_debug_force_defunct(victim);
+  assert(result == 0);
+
+  exiter = tealet_create(g_main, test_panic_exit_run, NULL);
+  assert(exiter != NULL);
+  arg = (void *)victim;
+  result = tealet_switch(exiter, &arg);
+  assert(result == TEALET_ERR_PANIC);
+
+  tealet_delete(victim);
+  fini_test();
+}
+#endif
+
 typedef struct test_entry_t {
   const char *name;
   void (*fn)(void);
@@ -962,6 +1001,9 @@ static test_entry_t test_list[] = {{"test_main_current", test_main_current},
                                    {"test_memstats", test_memstats},
                                    {"test_stats", test_stats},
                                    {"test_mem_error", test_mem_error},
+#if TEALET_WITH_TESTING
+                                   {"test_exit_reroute_panic", test_exit_reroute_panic},
+#endif
                                    {NULL, NULL}};
 
 void runmode(int mode) {

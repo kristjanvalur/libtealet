@@ -17,6 +17,10 @@
 #define TEALET_WITH_STACK_SNAPSHOT 1
 #endif
 
+#ifndef TEALET_WITH_TESTING
+#define TEALET_WITH_TESTING 0
+#endif
+
 #if TEALET_WITH_STACK_GUARD && !defined(_WIN32)
 #include <errno.h>
 #include <sys/mman.h>
@@ -35,6 +39,9 @@
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
+
+/* Internal main-tealet flags (stored in tealet_main_t::g_flags). */
+#define TEALET_MFLAGS_PANIC (1 << 16)
 
 /************************************************************/
 
@@ -1171,7 +1178,7 @@ static int tealet_check_caller_is_current(tealet_sub_t *g_current) {
  */
 static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void *in_arg, void **out_arg) {
   tealet_sub_t *old_previous = g_main->g_previous;
-  int err_result;
+  int err_result, switch_result;
   assert(target);
   assert(target != g_main->g_current);
 
@@ -1243,7 +1250,13 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
   tealet_guard_protect_current(g_main);
 #endif
 
-  return g_main->g_sw == SW_RESTORE ? 0 : 1;
+  switch_result = (g_main->g_sw == SW_RESTORE ? 0 : 1);
+  if (g_main->g_current == (tealet_sub_t *)g_main && (g_main->g_flags & TEALET_MFLAGS_PANIC)) {
+    g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
+    return TEALET_ERR_PANIC;
+  }
+
+  return switch_result;
 }
 
 /* We are initializing a new tealet, either switching to it and
@@ -1583,6 +1596,8 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   }
   result = tealet_exit_inner(target, arg, flags);
   assert(result < 0);
+  if (result == TEALET_ERR_DEFUNCT && !TEALET_IS_MAIN(target))
+    g_main->g_flags |= TEALET_MFLAGS_PANIC;
   /* fallback: switch to main */
   result = tealet_exit_inner(target->main, arg, flags);
   /* should never reach here */
@@ -1611,7 +1626,8 @@ void tealet_delete(tealet_t *target) {
   tealet_sub_t *g_target = (tealet_sub_t *)target;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   assert(!TEALET_IS_MAIN(target));
-  tealet_stack_decref(g_main, g_target->stack);
+  if (g_target->stack != (tealet_stack_t *)-1)
+    tealet_stack_decref(g_main, g_target->stack);
   tealet_free_tealet(g_main, g_target);
 #if TEALET_WITH_STATS
   g_main->g_tealets--;
@@ -1641,6 +1657,28 @@ int tealet_status(tealet_t *_tealet) {
     return TEALET_STATUS_DEFUNCT;
   return TEALET_STATUS_ACTIVE;
 }
+
+#if TEALET_WITH_TESTING
+/* Internal test hook: force a tealet into defunct state.
+ * Not declared in public headers; test code can declare a matching prototype.
+ */
+int tealet_debug_force_defunct(tealet_t *_tealet) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+
+  if (TEALET_IS_MAIN(_tealet))
+    return TEALET_ERR_INVAL;
+  if (tealet == g_main->g_current)
+    return TEALET_ERR_INVAL;
+  if (tealet->stack_far == NULL)
+    return TEALET_ERR_INVAL;
+
+  if (tealet->stack != NULL && tealet->stack != (tealet_stack_t *)-1)
+    tealet_stack_decref(g_main, tealet->stack);
+  tealet->stack = (tealet_stack_t *)-1;
+  return 0;
+}
+#endif
 
 void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats) {
 #if !TEALET_WITH_STATS
