@@ -2,8 +2,8 @@
 #include <stackman.h>
 
 #include <stddef.h>
-#if !defined _MSC_VER || _MSC_VER >= 1600 /* VS2010 and above */
-#include <stdint.h>                       /* for intptr_t */
+#if !defined(_MSC_VER) || _MSC_VER >= 1600 /* VS2010 and above */
+#include <stdint.h>                        /* for intptr_t */
 #endif
 #include <assert.h>
 #include <stdlib.h>
@@ -122,6 +122,7 @@ typedef enum tealet_sr_e {
 typedef struct tealet_main_t {
   tealet_sub_t base;
   void *g_user; /* user data pointer for main */
+  char *g_main_stack_probe;
   tealet_sub_t *g_current;
   tealet_sub_t *g_previous;
   tealet_sub_t *g_target;   /* Temporary store when switching */
@@ -135,6 +136,7 @@ typedef struct tealet_main_t {
   int g_cfg_stack_guard_mode;
   int g_cfg_stack_integrity_fail_policy;
   char *g_cfg_stack_guard_limit;
+  size_t g_cfg_max_stack_size;
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
   tealet_integrity_data_t g_integrity_data;
 #endif
@@ -605,6 +607,7 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main) {
 }
 #endif
 
+/* helper to compute absolute stack distance, without overflowing */
 /************************************************************
  * Config helpers.
  */
@@ -689,6 +692,7 @@ static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t 
   config->stack_guard_mode = g_main->g_cfg_stack_guard_mode;
   config->stack_integrity_fail_policy = g_main->g_cfg_stack_integrity_fail_policy;
   config->stack_guard_limit = g_main->g_cfg_stack_guard_limit;
+  config->max_stack_size = g_main->g_cfg_max_stack_size;
   tealet_config_canonicalize(config);
 }
 
@@ -1103,6 +1107,63 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
   return NULL;
 }
 
+/* helper to compute absolute stack distance, without overflowing */
+static uintptr_t tealet_abs_ptr_distance(const void *a, const void *b) {
+  uintptr_t ua = (uintptr_t)a;
+  uintptr_t ub = (uintptr_t)b;
+
+  if (ua > ub)
+    return ua - ub;
+  return ub - ua;
+}
+
+/* helper to verify if the current thread appears to match the
+ * current tealet.  The current tealet is maintained by the
+ * library, but there is no guarantee that a calling thread
+ * actually _is_ the current tealet.
+ * We don't maintain any TLS keys in this library but we can
+ * at least check if the current stack pointer is within the range
+ * expected by the current tealet, thereby providing a minimal
+ * sanity check.
+ */
+static int tealet_check_caller_is_current(tealet_sub_t *g_current) {
+  char stack_probe = 0;
+  char *sp = &stack_probe;
+  tealet_main_t *g_main;
+  size_t max_stack_size;
+  uintptr_t dist;
+
+  assert(g_current != NULL);
+
+  /* stack_far is set to null prior to exit as a signal, so we must ignore that case. */
+  if (g_current->stack_far == NULL)
+    return 0;
+
+  g_main = TEALET_GET_MAIN(g_current);
+  max_stack_size = g_main->g_cfg_max_stack_size;
+
+  if (g_current->stack_far != STACKMAN_SP_FURTHEST) {
+    /* if we know the far boundary, we check against it.  We should be
+     * closer than the stack boundary, but not more than max_stack_size if that is configured.
+     */
+    if (!STACKMAN_SP_LS(sp, g_current->stack_far))
+      return TEALET_ERR_INVAL;
+    if (max_stack_size != 0) {
+      dist = tealet_abs_ptr_distance(g_current->stack_far, sp);
+      if (dist > max_stack_size)
+        return TEALET_ERR_INVAL;
+    }
+  } else {
+    /* this is the main stack, with no defined limit. Check absolute distance from the main stack probe. */
+    if (max_stack_size != 0 && g_main->g_main_stack_probe != NULL) {
+      dist = tealet_abs_ptr_distance(g_main->g_main_stack_probe, sp);
+      if (dist > max_stack_size)
+        return TEALET_ERR_INVAL;
+    }
+  }
+  return 0;
+}
+
 /* switch the stack and pass arguments.  we need a separate argument for
  * in and out, because sometimes we need to pass a value in but cannot
  * pass a value out, e.g. when a tealet exits, there is no valid stack
@@ -1110,7 +1171,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
  */
 static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void *in_arg, void **out_arg) {
   tealet_sub_t *old_previous = g_main->g_previous;
-  int integrity_result;
+  int err_result;
   assert(target);
   assert(target != g_main->g_current);
 
@@ -1126,15 +1187,19 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
   if (target->stack == (tealet_stack_t *)-1)
     return TEALET_ERR_DEFUNCT;
 
+  err_result = tealet_check_caller_is_current(g_main->g_current);
+  if (err_result)
+    return err_result;
+
   tealet_guard_unprotect_current(g_main);
 
-  integrity_result = tealet_snapshot_verify_current(g_main);
-  if (integrity_result)
+  err_result = tealet_snapshot_verify_current(g_main);
+  if (err_result)
     /* Intentional behavior: on integrity error we return without re-arming
      * current guard/snapshot state. This is a best-effort mode that favors
      * continued execution after reporting the error.
      */
-    return integrity_result;
+    return err_result;
 
   g_main->g_previous = g_main->g_current;
   g_main->g_target = target;
@@ -1245,7 +1310,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     assert(g_main->g_current->stack == NULL); /* running */
 
     g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, run_arg));
-    tealet_exit((tealet_t *)g_exit_target, NULL, TEALET_FLAG_DELETE);
+    tealet_exit((tealet_t *)g_exit_target, NULL, TEALET_EXIT_DELETE);
     assert(!"This point should not be reached");
   } else {
     /* Either just a create, with no run, or a switch back
@@ -1319,6 +1384,7 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main) {
 /************************************************************/
 
 tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
+  char stack_probe;
   tealet_sub_t *g;
   tealet_main_t *g_main;
   g = tealet_alloc_main(alloc, extrasize);
@@ -1328,6 +1394,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g->stack = NULL;
   g->stack_far = STACKMAN_SP_FURTHEST;
   g_main->g_user = NULL;
+  g_main->g_main_stack_probe = &stack_probe;
   g_main->g_current = g;
   g_main->g_previous = NULL;
   g_main->g_target = NULL;
@@ -1342,6 +1409,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g_main->g_cfg_stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
   g_main->g_cfg_stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
   g_main->g_cfg_stack_guard_limit = NULL;
+  g_main->g_cfg_max_stack_size = TEALET_DEFAULT_MAX_STACK_SIZE;
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
   tealet_integrity_data_init(&g_main->g_integrity_data);
 #endif
@@ -1478,9 +1546,14 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   if (g_target == g_current)
     return -2; /* invalid tealet */
 
+  /* validate current tealet before we clear the stack_far */
+  result = tealet_check_caller_is_current(g_current);
+  if (result)
+    return result;
+
   g_current->stack_far = NULL; /* signal exit */
   assert(g_current->stack == NULL);
-  if (!(flags & TEALET_FLAG_DELETE))
+  if (!(flags & TEALET_EXIT_DELETE))
     g_current->stack = (tealet_stack_t *)-1; /* signal do-not-delete */
   result = tealet_switchstack(g_main, g_target, arg, NULL);
   assert(result < 0); /* only return here if there was failure */
@@ -1493,17 +1566,17 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)target;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   int result;
-  if (flags & TEALET_FLAG_DEFER) {
+  if (flags & TEALET_EXIT_DEFER) {
     /* setting up arg and flags for the run() return value */
     g_main->g_arg = arg;
     g_main->g_flags = flags;
     return 0;
   }
-  if (g_main->g_flags & TEALET_FLAG_DEFER) {
+  if (g_main->g_flags & TEALET_EXIT_DEFER) {
     /* Called second time (e.g. from return of run())
      * use arg and flags from last time
      */
-    flags = g_main->g_flags & (~TEALET_FLAG_DEFER);
+    flags = g_main->g_flags & (~TEALET_EXIT_DEFER);
     arg = g_main->g_arg;
     g_main->g_flags = 0;
     g_main->g_arg = 0;
@@ -1686,14 +1759,9 @@ void *tealet_get_far(tealet_t *_tealet) {
 
 int tealet_set_far(tealet_t *_tealet, void *far_boundary) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
-  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
 
   /* Only the main tealet can have its far boundary set */
   if (!TEALET_IS_MAIN(_tealet))
-    return -1;
-
-  /* Verify we're being called from the main tealet (it must be current) */
-  if (g_main->g_current != tealet)
     return -1;
 
   /* Set the far boundary */
@@ -1756,6 +1824,7 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config) {
   requested.version = TEALET_CONFIG_CURRENT_VERSION;
   requested.stack_guard_mode = TEALET_STACK_GUARD_MODE_NONE;
   requested.stack_integrity_fail_policy = TEALET_STACK_INTEGRITY_FAIL_ASSERT;
+  requested.max_stack_size = g_main->g_cfg_max_stack_size;
   requested.size = config->size;
   copy_size = MIN(config->size, sizeof(tealet_config_t));
   memcpy(&requested, config, copy_size);
@@ -1772,6 +1841,7 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config) {
   g_main->g_cfg_stack_guard_mode = requested.stack_guard_mode;
   g_main->g_cfg_stack_integrity_fail_policy = requested.stack_integrity_fail_policy;
   g_main->g_cfg_stack_guard_limit = (char *)requested.stack_guard_limit;
+  g_main->g_cfg_max_stack_size = requested.max_stack_size;
 
   memcpy(config, &requested, copy_size);
   return 0;

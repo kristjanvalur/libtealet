@@ -28,7 +28,7 @@ tealet_t *loop_func(tealet_t *current, void *arg) {
     /* after switch, any void* passed _to_ us is in 'value' */
   }
   /* exit, without deleting, so that the caller can query status */
-  tealet_exit(tealet_previous(current), NULL, TEALET_FLAG_NONE);
+  tealet_exit(tealet_previous(current), NULL, TEALET_EXIT_DEFAULT);
   return 0; /* not reached */
 }
 

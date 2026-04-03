@@ -250,9 +250,9 @@ static tealet_t *worker_entry(tealet_t *current, void *arg) {
     /* Exit with defer flag to return cleanly, then switch to random tealet */
     target = pick_random_tealet(current);
     if (target) {
-      tealet_exit(target, NULL, TEALET_FLAG_DEFER);
+      tealet_exit(target, NULL, TEALET_EXIT_DEFER);
     } else {
-      tealet_exit(g_main, NULL, TEALET_FLAG_DEFER);
+      tealet_exit(g_main, NULL, TEALET_EXIT_DEFER);
     }
     /* Return cleanly - tealet_exit with DEFER will handle the switch */
     return g_main;
@@ -260,7 +260,7 @@ static tealet_t *worker_entry(tealet_t *current, void *arg) {
 
   /* When we return here normally, we're done - exit to main without auto-delete
    */
-  tealet_exit(g_main, NULL, TEALET_FLAG_NONE);
+  tealet_exit(g_main, NULL, TEALET_EXIT_DEFAULT);
 
   /* Unreachable */
   return g_main;

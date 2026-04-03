@@ -101,6 +101,9 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
 #define TEALET_STACK_INTEGRITY_FAIL_ERROR 1
 #define TEALET_STACK_INTEGRITY_FAIL_ABORT 2
 
+/* conservative default upper bound for caller stack distance checks */
+#define TEALET_DEFAULT_MAX_STACK_SIZE ((size_t)(16u * 1024u * 1024u))
+
 /* Runtime configuration for stack integrity and related safety features.
  *
  * ABI compatibility contract:
@@ -119,15 +122,16 @@ typedef struct tealet_config_t {
   int stack_guard_mode;
   int stack_integrity_fail_policy;
   void *stack_guard_limit;
-  unsigned int reserved[3];
+  size_t max_stack_size; /* max caller stack distance for sanity checks; 0 disables */
+  unsigned int reserved[2];
 } tealet_config_t;
 
 /* Convenience initializer for configuration structs */
 #define TEALET_CONFIG_INIT                                                                                             \
   {                                                                                                                    \
     sizeof(tealet_config_t), TEALET_CONFIG_CURRENT_VERSION, 0u, 0, TEALET_STACK_GUARD_MODE_NONE,                       \
-        TEALET_STACK_INTEGRITY_FAIL_ASSERT, NULL, {                                                                    \
-      0u, 0u, 0u                                                                                                       \
+        TEALET_STACK_INTEGRITY_FAIL_ASSERT, NULL, TEALET_DEFAULT_MAX_STACK_SIZE, {                                     \
+      0u, 0u                                                                                                           \
     }                                                                                                                  \
   }
 
@@ -206,7 +210,7 @@ int tealet_switch(tealet_t *target, void **parg);
 
 /* Exit the current tealet and switch to a target.
  * Similar to tealet_switch except that never returns
- * unless the TEALET_FLAG_DEFER flag is set.
+ * unless the TEALET_EXIT_DEFER flag is set.
  * In case the desired target is defunct, it will switch to the
  * main tealet instead.
  * This allows passing of an arg to the target tealet, in addition to
@@ -217,7 +221,7 @@ int tealet_switch(tealet_t *target, void **parg);
  * main tealet if tealet_switch() fails due to inability to save the stack.
  * Note that exiting to the main tealet is always guaranteed to work.
  * Returning with 'p' from the tealet's run function is equivalent to calling
- * tealet_exit(p, NULL, TEALET_FLAG_DELETE), but the explicit way is
+ * tealet_exit(p, NULL, TEALET_EXIT_DELETE), but the explicit way is
  * recommended.
  * If the TEALET_EXIT_DEFER flag is set, then this function merely sets the
  * flag and arg values.  It returns 0, and the calling function can proceed to
@@ -233,11 +237,6 @@ int tealet_switch(tealet_t *target, void **parg);
 #define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
 #define TEALET_EXIT_DELETE 1  /* Auto-delete on exit */
 #define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
-
-/* Backwards compatibility - old flag names */
-#define TEALET_FLAG_NONE TEALET_EXIT_DEFAULT
-#define TEALET_FLAG_DELETE TEALET_EXIT_DELETE
-#define TEALET_FLAG_DEFER TEALET_EXIT_DEFER
 
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
@@ -271,7 +270,7 @@ TEALET_API
 tealet_t *tealet_duplicate(tealet_t *tealet);
 
 /* Deallocate a tealet.  Use this to delete a tealet that has exited
- * with tealet_exit() with 'TEALET_EXIT_NODELETE', or defunct tealets.
+ * with tealet_exit() with 'TEALET_EXIT_DEFAULT', or defunct tealets.
  * Active tealet can also be
  * deleted, such as stubs that are no longer in use, but take care
  * because any local resources in such tealets won't be freed.
