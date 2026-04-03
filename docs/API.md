@@ -787,8 +787,8 @@ process stack segment.
 
 `tealet_config_t` also includes `max_stack_size`:
 - default: `TEALET_DEFAULT_MAX_STACK_SIZE` (16 MiB)
-- non-zero: upper bound for caller stack-distance sanity checks
-- `0`: disable the caller stack-distance check
+- non-zero: upper bound used only by caller switch-sanity validation (`tealet_switch*` caller-context checks)
+- `0`: disable this validation, removing stack-size assumptions from caller checks
 
 The caller stack-distance check is measured relative to a stack probe captured for the main tealet during `tealet_initialize()`.
 

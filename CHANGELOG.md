@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Panic reroute switch error (`TEALET_ERR_PANIC`)**
+  - Added `TEALET_ERR_PANIC` as a switch result in `main` when `tealet_exit()` reroutes to `main` because the requested exit target is defunct.
+  - Added internal panic-latch handling in switch/exit flow using an internal main-flag bit.
+- **Testing gate for internal hooks**
+  - Added `TEALET_WITH_TESTING` build knob (default `0`) propagated via Makefile.
+  - Added internal test-only hook `tealet_debug_force_defunct()` guarded by `TEALET_WITH_TESTING`.
+
+### Changed
+- **Switch caller sanity checks**
+  - Added caller-context verification in stack-switch paths to catch invalid caller/thread-stack usage earlier.
+  - Added and documented `tealet_config_t.max_stack_size` as caller-switch-sanity-only control:
+    - default `TEALET_DEFAULT_MAX_STACK_SIZE` (16 MiB)
+    - non-zero enforces caller stack-distance bound
+    - `0` removes stack-size assumptions by disabling this caller-distance validation
+- **Error-handling API docs**
+  - Expanded `docs/API.md` with dedicated error-handling guidance for `TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, and `TEALET_ERR_PANIC`.
+  - Documented practical recovery guidance for main vs non-main contexts.
+  - Clarified `tealet_new()` conceptual equivalence to `tealet_create()` + `tealet_switch()` and aligned failure semantics.
+
+### Fixed
+- **Defunct delete safety**
+  - `tealet_delete()` now avoids decref on defunct marker state (`stack == (tealet_stack_t *)-1`).
+
+### Tests
+- **Panic reroute regression coverage**
+  - Added regression test for defunct-target exit reroute signaling (`TEALET_ERR_PANIC`) under `TEALET_WITH_TESTING=1`.
+
 ## [0.4.1] - 2026-03-31
 
 ### Changed
