@@ -71,9 +71,9 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ### Exiting Pattern
 ```c
 // In run function:
-tealet_exit(target, arg, TEALET_FLAG_DELETE);  // Delete current tealet
-tealet_exit(target, arg, TEALET_FLAG_NONE);     // Keep tealet alive
-tealet_exit(target, arg, TEALET_FLAG_DEFER);    // Defer to return statement
+tealet_exit(target, arg, TEALET_EXIT_DELETE);  // Delete current tealet
+tealet_exit(target, arg, TEALET_EXIT_DEFAULT);     // Keep tealet alive
+tealet_exit(target, arg, TEALET_EXIT_DEFER);    // Defer to return statement
 ```
 
 ## Code Style & Conventions
@@ -94,7 +94,7 @@ tealet_exit(target, arg, TEALET_FLAG_DEFER);    // Defer to return statement
 ### Memory Management
 - All allocations go through `tealet_alloc_t` interface
 - Use `TEALET_ALLOC_MALLOC()` and `TEALET_ALLOC_FREE()` macros
-- Tealets auto-freed when run function returns (unless TEALET_FLAG_DELETE not set)
+- Tealets auto-freed when run function returns (unless TEALET_EXIT_DELETE not set)
 
 ### Error Handling
 - Functions return negative error codes or NULL on failure

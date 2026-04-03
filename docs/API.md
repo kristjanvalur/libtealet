@@ -13,6 +13,7 @@ Complete reference for the libtealet API. Core functions are declared in `tealet
 - [Memory Management](#memory-management)
 - [Custom Allocators](#custom-allocators)
 - [Helper Extensions (`tealet_extras.h`)](#helper-extensions-tealet_extrash)
+- [Error handling](#error-handling)
 - [Error Codes](#error-codes)
 - [Constants and Macros](#constants-and-macros)
 
@@ -291,7 +292,7 @@ void my_main(void) {
 
 You can also obtain a call-site boundary marker with `tealet_new_probe()` when you need to inspect boundary requirements at a specific stack depth.
 
-**Current limitation:** Can only be called on the main tealet.
+**Current limitation:** Can only be called for the main tealet.
 
 ---
 
@@ -404,7 +405,8 @@ Suspend current tealet and resume target tealet.
 
 **Returns:** 
 - `0` on success
-- `TEALET_ERR_DEFUNCT` if target is corrupt
+- `TEALET_ERR_MEM` on memory allocation failure while saving/restoring state
+- `TEALET_ERR_DEFUNCT` if target is defunct
 - Negative error code on failure
 
 **Usage:**
@@ -452,14 +454,14 @@ tealet_t *pong(tealet_t *current, void *arg) {
 ### `tealet_exit()`
 
 ```c
-void tealet_exit(tealet_t *target, void **parg, int flags);
+int tealet_exit(tealet_t *target, void *arg, int flags);
 ```
 
 Exit current tealet and transfer control to target.
 
 **Parameters:**
 - `target`: Tealet to switch to
-- `parg`: Argument to pass to target
+- `arg`: Argument to pass to target
 - `flags`: Control flags (see below)
 
 **Flags:**
@@ -500,7 +502,18 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 
 This function does not return unless `TEALET_EXIT_DEFER` is set.
 
+**Returns:**
+- `0` only when `TEALET_EXIT_DEFER` is used (deferred exit setup succeeds)
+- Negative error code on failure
+    - May include `TEALET_ERR_MEM` and `TEALET_ERR_DEFUNCT`
+
+When exit to a non-main target fails, the implementation falls back to exiting to `main`.
+
+If the chosen exit target is defunct, this fallback path reroutes the exit to `main`.
+
 **Note:** Returning from the run function automatically deletes the tealet. Use `tealet_exit()` when you need explicit control over deletion or want to exit from nested calls within the run function.
+
+> Future direction: a dedicated panic API may be added (for example, `tealet_panic()`), either forcing switch-to-main with a panic flag or returning a dedicated panic error code for corrupt stack-state scenarios.
 
 ---
 
@@ -767,6 +780,13 @@ Use this for explicit tuning of flags, guard mode, integrity bytes, and fail pol
 stack to ensure that stack protection does not try to inspect bytes outside of the
 process stack segment.
 
+`tealet_config_t` also includes `max_stack_size`:
+- default: `TEALET_DEFAULT_MAX_STACK_SIZE` (16 MiB)
+- non-zero: upper bound for caller stack-distance sanity checks
+- `0`: disable the caller stack-distance check
+
+The caller stack-distance check is measured relative to a stack probe captured for the main tealet during `tealet_initialize()`.
+
 ---
 
 ### `tealet_configure_check_stack()`
@@ -969,6 +989,37 @@ Run a previously created stub as if it were a freshly created tealet.
 
 ---
 
+## Error handling
+
+Error handling in libtealet is intentionally narrow:
+
+- **Runtime/resource errors out of user control:**
+    - `TEALET_ERR_MEM`
+    - `TEALET_ERR_DEFUNCT`
+- **Other negative returns** are generally caused by incorrect API usage (invalid context, invalid switching flow, integrity/caller sanity violations) and should be treated as effectively fatal programming errors.
+
+### Practical handling guide
+
+For `tealet_switch()`:
+- On `TEALET_ERR_MEM`: treat as transient resource failure; free optional resources and either retry later or abort the coroutine workflow cleanly.
+- On `TEALET_ERR_DEFUNCT`: treat target as unusable, inspect status, and delete/replace that tealet.
+
+Practical note for `tealet_switch()` failures (`TEALET_ERR_MEM` or `TEALET_ERR_DEFUNCT`):
+- In non-main tealets, the usual recovery path is to perform local cleanup and then exit to `main`.
+- In the main tealet, the usual recovery path is to report the error and terminate the thread/process cleanly.
+
+For `tealet_exit()`:
+- In normal (non-`TEALET_EXIT_DEFER`) use, `tealet_exit()` is the panic path: it first attempts the requested target and then attempts fallback to `main`.
+- To preserve forward progress during low-memory exit paths, the implementation may accept degraded state and mark affected saved stacks/tealets as defunct.
+- If the requested target is defunct, exit is rerouted to `main`.
+- The main tealet itself is never marked defunct.
+
+### Forward-looking note
+
+Planned future behavior includes `TEALET_ERR_UNEXPECTED`: a switch error reported in `main` when control returns to `main` unexpectedly (for example after an internal reroute-to-main exit path).
+
+---
+
 ## Error Codes
 
 ### `TEALET_ERR_MEM`
@@ -1001,17 +1052,18 @@ if (t == NULL) {
 #define TEALET_ERR_DEFUNCT (-2)
 ```
 
-Target tealet is defunct (corrupt or completed).
+Target tealet is defunct (invalid for switching).
 
 **Causes:**
-- Run function returned (normal completion)
-- Run function returned `NULL` (error)
-- Internal corruption
+- Saved stack became invalid (for example due to a non-recoverable save/grow failure path)
+- Tealet was left in an unusable state by an internal failure path
+- Caller attempted to switch to a non-switchable tealet handle
 
 **Recovery:**
 - Check `tealet_status()` before switching
 - Delete defunct tealets
-- Don't reuse completed tealets
+- Don't reuse defunct tealet handles
+- Note that the main tealet is never defunct
 
 **Example:**
 ```c
