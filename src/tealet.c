@@ -1681,44 +1681,6 @@ int tealet_status(tealet_t *_tealet) {
   return TEALET_STATUS_ACTIVE;
 }
 
-#if TEALET_WITH_TESTING
-/* Internal test hook: swap stack_far for a tealet.
- * This is used by tests to force caller-validation outcomes.
- * Not declared in public headers; test code can declare a matching prototype.
- */
-int tealet_debug_swap_far(tealet_t *_tealet, void *new_far, void **old_far) {
-  tealet_sub_t *tealet;
-
-  if (_tealet == NULL || old_far == NULL)
-    return TEALET_ERR_INVAL;
-
-  tealet = (tealet_sub_t *)_tealet;
-  *old_far = tealet->stack_far;
-  tealet->stack_far = (char *)new_far;
-  return 0;
-}
-
-/* Internal test hook: force a tealet into defunct state.
- * Not declared in public headers; test code can declare a matching prototype.
- */
-int tealet_debug_force_defunct(tealet_t *_tealet) {
-  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
-  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-
-  if (TEALET_IS_MAIN(_tealet))
-    return TEALET_ERR_INVAL;
-  if (tealet == g_main->g_current)
-    return TEALET_ERR_INVAL;
-  if (tealet->flags & TEALET_TFLAGS_EXITED)
-    return TEALET_ERR_INVAL;
-
-  tealet_stack_decref(g_main, tealet->stack);
-  tealet->stack = NULL;
-  tealet->flags |= TEALET_TFLAGS_DEFUNCT;
-  return 0;
-}
-#endif
-
 void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats) {
 #if !TEALET_WITH_STATS
   (void)tealet; /* unused */
@@ -2052,3 +2014,41 @@ size_t tealet_get_stacksize(tealet_t *_tealet) {
     return tealet->stack->saved;
   return 0;
 }
+
+#if TEALET_WITH_TESTING
+/* Internal test hook: swap stack_far for a tealet.
+ * This is used by tests to force caller-validation outcomes.
+ * Not declared in public headers; test code can declare a matching prototype.
+ */
+int tealet_debug_swap_far(tealet_t *_tealet, void *new_far, void **old_far) {
+  tealet_sub_t *tealet;
+
+  if (_tealet == NULL || old_far == NULL)
+    return TEALET_ERR_INVAL;
+
+  tealet = (tealet_sub_t *)_tealet;
+  *old_far = tealet->stack_far;
+  tealet->stack_far = (char *)new_far;
+  return 0;
+}
+
+/* Internal test hook: force a tealet into defunct state.
+ * Not declared in public headers; test code can declare a matching prototype.
+ */
+int tealet_debug_force_defunct(tealet_t *_tealet) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+
+  if (TEALET_IS_MAIN(_tealet))
+    return TEALET_ERR_INVAL;
+  if (tealet == g_main->g_current)
+    return TEALET_ERR_INVAL;
+  if (tealet->flags & TEALET_TFLAGS_EXITED)
+    return TEALET_ERR_INVAL;
+
+  tealet_stack_decref(g_main, tealet->stack);
+  tealet->stack = NULL;
+  tealet->flags |= TEALET_TFLAGS_DEFUNCT;
+  return 0;
+}
+#endif
