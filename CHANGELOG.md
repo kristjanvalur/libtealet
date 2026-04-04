@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Expanded `docs/API.md` with dedicated error-handling guidance for `TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, and `TEALET_ERR_PANIC`.
   - Documented practical recovery guidance for main vs non-main contexts.
   - Clarified `tealet_new()` conceptual equivalence to `tealet_create()` + `tealet_switch()` and aligned failure semantics.
+- **State model cleanup for exited tealets**
+  - Switched exited-state representation to `TEALET_TFLAGS_EXITED` instead of relying on `stack_far == NULL` sentinel behavior.
+  - Tightened related invariants in exit/switch paths.
+- **Public API layout consistency**
+  - Reorganized declaration/definition order in `src/tealet.h` and `src/tealet.c` by function group:
+    core lifecycle/switching → status/query → configuration → utility.
+  - Kept testing-only debug hooks grouped at file end under `TEALET_WITH_TESTING` in `src/tealet.c`.
+- **In-code documentation conventions**
+  - Expanded declaration-level Doxygen docs in `src/tealet.h` for core/status/config/utility APIs.
+  - Adopted selective documentation style: declaration-level Doxygen in header; implementation-focused comments in `src/tealet.c`.
+  - Normalized section banners to unambiguous non-Doxygen form in both `src/tealet.h` and `src/tealet.c`.
 
 ### Fixed
 - **Defunct delete safety**
