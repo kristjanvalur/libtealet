@@ -52,9 +52,7 @@
 /* Internal per-stack flags (stored in tealet_stack_t::flags). */
 #define TEALET_SFLAGS_DEFUNCT (1u << 0)
 
-/************************************************************/
-
-/************************************************************
+/* ----------------------------------------------------------------
  * Structures for maintaining copies of the C stack.
  */
 
@@ -182,7 +180,7 @@ typedef struct tealet_main_t {
 #define TEALET_STACK_IS_UNBOUNDED(t) (((tealet_sub_t *)(t))->stack_far == STACKMAN_SP_FURTHEST)
 #define TEALET_GET_MAIN(t) ((tealet_main_t *)(((tealet_t *)(t))->main))
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Statistics tracking macros
  */
 #if TEALET_WITH_STATS
@@ -226,7 +224,7 @@ typedef struct tealet_main_t {
 #define STATS_SUB_ALLOC(main, size) ((void)0)
 #endif
 
-/************************************************************
+/* ----------------------------------------------------------------
  * helpers to call the malloc functions provided by the user
  */
 static void *tealet_int_malloc(tealet_main_t *main, size_t size) {
@@ -234,7 +232,7 @@ static void *tealet_int_malloc(tealet_main_t *main, size_t size) {
 }
 static void tealet_int_free(tealet_main_t *main, void *ptr) { main->g_alloc.free_p(ptr, main->g_alloc.context); }
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Stack integrity helpers (snapshot + guard planning).
  */
 #if TEALET_WITH_STACK_SNAPSHOT || TEALET_WITH_STACK_GUARD
@@ -249,7 +247,7 @@ static void tealet_integrity_data_clear(tealet_integrity_data_t *data) {
 #endif
 }
 
-/* Initialize persistent integrity workspace state.
+/** Initialize persistent integrity workspace state.
  *
  * This differs from tealet_integrity_data_clear() in that this function also
  * initializes long-lived storage fields (snapshot workspace pointer/capacity)
@@ -263,7 +261,7 @@ static void tealet_integrity_data_init(tealet_integrity_data_t *data) {
 #endif
 }
 
-/* Release integrity workspace allocations and return all transient plan state
+/** Release integrity workspace allocations and return all transient plan state
  * to a disabled/empty state.
  */
 static void tealet_integrity_data_free(tealet_main_t *g_main, tealet_integrity_data_t *data) {
@@ -287,7 +285,7 @@ static size_t tealet_guard_pagesize(void) {
 }
 #endif
 
-/* Build the integrity plan for the currently running tealet.
+/** Build the integrity plan for the currently running tealet.
  *
  * The monitored interval is always a linear byte range [begin, end).
  * Snapshot and page-guard split the same interval:
@@ -434,7 +432,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main) {
 }
 #endif
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Stack guard helpers.
  */
 #if TEALET_WITH_STACK_GUARD
@@ -495,7 +493,7 @@ static void tealet_guard_unprotect_current(tealet_main_t *g_main) { (void)g_main
 static void tealet_guard_protect_current(tealet_main_t *g_main) { (void)g_main; }
 #endif
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Stack snapshot helpers.
  */
 #if TEALET_WITH_STACK_SNAPSHOT
@@ -519,7 +517,7 @@ static size_t tealet_snapshot_required_capacity(const tealet_config_t *config) {
   return required;
 }
 
-/* Ensure snapshot workspace can hold the largest snapshot implied by the
+/** Ensure snapshot workspace can hold the largest snapshot implied by the
  * effective configuration.  This is called at configure-set time so switching
  * never needs to allocate snapshot buffers.
  */
@@ -550,7 +548,7 @@ static int tealet_snapshot_ensure_capacity(tealet_main_t *g_main, size_t require
   return 0;
 }
 
-/* Capture monitored stack bytes for the current tealet into the fixed snapshot
+/** Capture monitored stack bytes for the current tealet into the fixed snapshot
  * workspace.  Planning decides stack_base/size; this routine only copies.
  */
 static void tealet_snapshot_capture_current(tealet_main_t *g_main) {
@@ -574,7 +572,7 @@ static void tealet_snapshot_capture_current(tealet_main_t *g_main) {
   g_main->g_integrity_data.snapshot_bytes = size;
 }
 
-/* Verify previously captured bytes for the current tealet and clear the active
+/** Verify previously captured bytes for the current tealet and clear the active
  * snapshot marker.  Mismatch handling follows configured fail policy.
  *
  * Note: on mismatch we intentionally clear the active snapshot marker before
@@ -625,7 +623,7 @@ static int tealet_snapshot_verify_current(tealet_main_t *g_main) {
 #endif
 
 /* helper to compute absolute stack distance, without overflowing */
-/************************************************************
+/* ----------------------------------------------------------------
  * Config helpers.
  */
 static unsigned int tealet_config_supported_flags(void) {
@@ -646,7 +644,7 @@ static int tealet_config_has_header(const tealet_config_t *config) {
   return config != NULL && config->size >= min_header;
 }
 
-/* Canonicalize caller-provided configuration in-place.
+/** Canonicalize caller-provided configuration in-place.
  *
  * Rules enforced here:
  *  - drop unsupported feature flags for this build/platform,
@@ -699,7 +697,7 @@ static void tealet_config_canonicalize(tealet_config_t *config) {
     config->stack_guard_limit = NULL;
 }
 
-/* Populate a config struct from current runtime state, then canonicalize to
+/** Populate a config struct from current runtime state, then canonicalize to
  * ensure returned values obey the same invariants as configure_set().
  */
 static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t *config) {
@@ -713,7 +711,7 @@ static void tealet_config_fill_from_main(tealet_main_t *g_main, tealet_config_t 
   tealet_config_canonicalize(config);
 }
 
-/* Free a tealet, unlinking it from the circular list first */
+/** Free a tealet, unlinking it from the circular list first */
 static void tealet_free_tealet(tealet_main_t *main, tealet_sub_t *t) {
   size_t basesize = offsetof(tealet_nonmain_t, _extra);
   size_t size = basesize + main->g_extrasize;
@@ -728,7 +726,7 @@ static void tealet_free_tealet(tealet_main_t *main, tealet_sub_t *t) {
   tealet_int_free(main, t);
 }
 
-/*************************************************************
+/* ----------------------------------------------------------------
  * actual stack management routines.  Copying, growing
  * restoring, duplicating, deleting
  */
@@ -891,11 +889,11 @@ static int tealet_is_defunct(tealet_sub_t *tealet) {
   return 0;
 }
 
-/***************************************************************
+/* ----------------------------------------------------------------
  * utility functions for allocating and growing stacks
  */
 
-/* save a new stack, at least up to "saveto" */
+/** save a new stack, at least up to "saveto" */
 static tealet_stack_t *tealet_stack_saveto(tealet_main_t *main, char *stack_near, char *stack_far, char *saveto,
                                            int *full) {
   ptrdiff_t size;
@@ -916,7 +914,7 @@ static tealet_stack_t *tealet_stack_saveto(tealet_main_t *main, char *stack_near
 }
 
 static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char *saveto, int *full, int fail_ok) {
-  /* Save more of g's stack into the heap -- at least up to 'saveto'
+  /** Save more of g's stack into the heap -- at least up to 'saveto'
 
      g->stack_stop |________|
                    |        |
@@ -965,7 +963,7 @@ static int tealet_stack_growto(tealet_main_t *main, tealet_stack_t *stack, char 
   return 0;
 }
 
-/* Grow a list of stacks to a certain limit.  Unlink those that
+/** Grow a list of stacks to a certain limit.  Unlink those that
  * become fully saved.
  */
 static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list, char *saveto, tealet_stack_t *target,
@@ -1005,12 +1003,12 @@ static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list, cha
   return 0;
 }
 
-/*********************************************************************
+/* ----------------------------------------------------------------
  * the save and restore callbacks.  These implement all the stack
  * save and restore logic using previously defined functions
  */
 
-/* main->g_target contains the tealet we are switching to:
+/** main->g_target contains the tealet we are switching to:
  * target->stack_far is the limit to which we must save the old stack
  * target->stack can be NULL, indicating that the target stack
  * needs not be restored.
@@ -1098,7 +1096,7 @@ static void tealet_restore_state(tealet_main_t *g_main, void *new_stack_pointer)
   g->stack = NULL;
 }
 
-/* this callback is called twice from the raw switch code, once after saving
+/** this callback is called twice from the raw switch code, once after saving
  * registers, where it should save the stack (if needed) and once after
  * updating the stack pointer, where it should restore the stack (if needed)
  */
@@ -1135,7 +1133,7 @@ static void *tealet_save_restore_cb(void *context, int opcode, void *stack_point
   return NULL;
 }
 
-/* helper to compute absolute stack distance, without overflowing */
+/** helper to compute absolute stack distance, without overflowing */
 static uintptr_t tealet_abs_ptr_distance(const void *a, const void *b) {
   uintptr_t ua = (uintptr_t)a;
   uintptr_t ub = (uintptr_t)b;
@@ -1145,7 +1143,7 @@ static uintptr_t tealet_abs_ptr_distance(const void *a, const void *b) {
   return ub - ua;
 }
 
-/* helper to verify if the current thread appears to match the
+/** helper to verify if the current thread appears to match the
  * current tealet.  The current tealet is maintained by the
  * library, but there is no guarantee that a calling thread
  * actually _is_ the current tealet.
@@ -1189,7 +1187,7 @@ static int tealet_check_caller_is_current(tealet_sub_t *g_current) {
   return 0;
 }
 
-/* switch the stack and pass arguments.  we need a separate argument for
+/** switch the stack and pass arguments.  we need a separate argument for
  * in and out, because sometimes we need to pass a value in but cannot
  * pass a value out, e.g. when a tealet exits, there is no valid stack
  * location for that.
@@ -1280,7 +1278,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
   return switch_result;
 }
 
-/* We are initializing a new tealet, either switching to it and
+/** We are initializing a new tealet, either switching to it and
  * running it, or switching from it (saving its virgin stack) back
  * to the caller, in order to switch to it later and run it.
  * stack_far is the far end of this stack and must be
@@ -1416,7 +1414,7 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main) {
   return result;
 }
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Public API - core lifecycle and switching
  */
 
@@ -1481,7 +1479,7 @@ void tealet_finalize(tealet_t *tealet) {
   tealet_int_free(g_main, g_main);
 }
 
-/* choose initial far boundary for tealet creation.
+/** choose initial far boundary for tealet creation.
  * 'hint' can only extend capture range (be farther), never shrink it.
  */
 static void *tealet_pick_initial_far(void *default_far, void *hint) {
@@ -1713,7 +1711,7 @@ void tealet_delete(tealet_t *target) {
 #endif
 }
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Public API - status and query
  */
 
@@ -1857,7 +1855,7 @@ void tealet_reset_peak_stats(tealet_t *tealet) {
 #endif
 }
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Public API - configuration
  */
 
@@ -1983,7 +1981,7 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
   return tealet_configure_set(_tealet, &cfg);
 }
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Public API - utility helpers
  */
 
@@ -2029,12 +2027,12 @@ void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *d4) {
 #pragma warning(pop)
 #endif
 
-/************************************************************
+/* ----------------------------------------------------------------
  * Testing-only debug hooks
  */
 
 #if TEALET_WITH_TESTING
-/* Internal test hook: swap stack_far for a tealet.
+/** Internal test hook: swap stack_far for a tealet.
  * This is used by tests to force caller-validation outcomes.
  * Not declared in public headers; test code can declare a matching prototype.
  */
@@ -2050,7 +2048,7 @@ int tealet_debug_swap_far(tealet_t *_tealet, void *new_far, void **old_far) {
   return 0;
 }
 
-/* Internal test hook: force a tealet into defunct state.
+/** Internal test hook: force a tealet into defunct state.
  * Not declared in public headers; test code can declare a matching prototype.
  */
 int tealet_debug_force_defunct(tealet_t *_tealet) {

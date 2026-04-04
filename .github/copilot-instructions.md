@@ -189,6 +189,21 @@ See `tests/setcontext.c` for a practical example implementing `longjmp()`-like f
 
 ## Documentation Style Guide
 
+### In-code documentation standard
+- Prefer **Doxygen-style** comments for extracted/referenceable API docs.
+- For public APIs in `src/tealet.h`, use `/** ... */` blocks and standard tags where useful
+  (`@brief`, `@param`, `@return`, `@note`, `@warning`).
+- Be selective in `src/tealet.h`: use Doxygen for declaration-level API docs, but keep
+  incidental comments (macro headings, trailing inline comments, header guards) as regular
+  `/* ... */` comments.
+- Keep canonical user-facing API docs on declarations in `tealet.h`; in `tealet.c`, keep
+  comments implementation-focused.
+- In `src/tealet.c`, reserve Doxygen blocks for meaningful internal function-level notes placed
+  immediately before function definitions; keep inline flow comments and local notes as `/* ... */`.
+- Section banners in both files must always be non-Doxygen (`/* ... */`), never `/** ... */`.
+- Preserve section/group organization in docs so generated references mirror code layout:
+  core lifecycle/switching → status/query → configuration → utility.
+
 ### Tone and Voice
 - **Direct and concise**: Avoid unnecessary verbosity; state facts clearly
 - **Technical but accessible**: Explain complex concepts without condescension
