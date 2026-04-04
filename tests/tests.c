@@ -11,6 +11,9 @@
 
 #if TEALET_WITH_TESTING
 /* Internal test hook from tealet.c (not part of public API). */
+int tealet_debug_swap_far(tealet_t *tealet, void *new_far, void **old_far);
+
+/* Internal test hook from tealet.c (not part of public API). */
 int tealet_debug_force_defunct(tealet_t *tealet);
 #endif
 
@@ -975,6 +978,76 @@ void test_exit_reroute_panic(void) {
   tealet_delete(victim);
   fini_test();
 }
+
+void test_debug_swap_far_invalid_caller_check_main(void) {
+  tealet_t *child;
+  void *old_far;
+  void *new_far;
+  char stack_probe;
+  int result;
+
+  /* Test purpose: validate caller-check failure on the main tealet.
+   * We move main->stack_far to current stack probe + 64 MiB so the
+   * max-stack-distance check fails deterministically, then restore it.
+   */
+  init_test();
+
+  child = tealet_new(g_main, NULL, NULL, NULL);
+  assert(child != NULL);
+
+  new_far = (void *)((uintptr_t)&stack_probe + ((uintptr_t)64 << 20));
+  result = tealet_debug_swap_far(g_main, new_far, &old_far);
+  assert(result == 0);
+
+  result = tealet_switch(child, NULL);
+  assert(result == TEALET_ERR_INVAL);
+
+  result = tealet_debug_swap_far(g_main, old_far, &old_far);
+  assert(result == 0);
+
+  tealet_delete(child);
+  fini_test();
+}
+
+static tealet_t *test_invalid_caller_check_child_run(tealet_t *current, void *arg) {
+  void *old_far;
+  void *new_far;
+  char stack_probe;
+  int result;
+  (void)arg;
+
+  /* Test purpose: validate caller-check failure on a running child tealet.
+   * We move child->stack_far to current stack probe + 64 MiB so switching to
+   * main fails with TEALET_ERR_INVAL, then restore and exit normally.
+   */
+  new_far = (void *)((uintptr_t)&stack_probe + ((uintptr_t)64 << 20));
+  result = tealet_debug_swap_far(current, new_far, &old_far);
+  assert(result == 0);
+
+  result = tealet_switch(g_main, NULL);
+  assert(result == TEALET_ERR_INVAL);
+
+  result = tealet_debug_swap_far(current, old_far, &old_far);
+  assert(result == 0);
+
+  tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
+  assert(0);
+  return NULL;
+}
+
+void test_debug_swap_far_invalid_caller_check_child(void) {
+  tealet_t *runner;
+
+  /* Test purpose: ensure child-path caller validation is covered using
+   * debug far-pointer mutation and proper restoration.
+   */
+  init_test();
+
+  runner = tealet_new(g_main, test_invalid_caller_check_child_run, NULL, NULL);
+  assert(runner != NULL);
+
+  fini_test();
+}
 #endif
 
 typedef struct test_entry_t {
@@ -982,29 +1055,32 @@ typedef struct test_entry_t {
   void (*fn)(void);
 } test_entry_t;
 
-static test_entry_t test_list[] = {{"test_main_current", test_main_current},
-                                   {"test_stack_further", test_stack_further},
-                                   {"test_stack_far_isolation", test_stack_far_isolation},
-                                   {"test_simple", test_simple},
-                                   {"test_simple_create", test_simple_create},
-                                   {"test_simple_create_and_run", test_simple_create_and_run},
-                                   {"test_create_previous", test_create_previous},
-                                   {"test_previous_cleared_on_manual_delete", test_previous_cleared_on_manual_delete},
-                                   {"test_status", test_status},
-                                   {"test_exit", test_exit},
-                                   {"test_switch", test_switch},
-                                   {"test_switch_new", test_switch_new},
-                                   {"test_arg", test_arg},
-                                   {"test_random", test_random},
-                                   {"test_random2", test_random2},
-                                   {"test_extra", test_extra},
-                                   {"test_memstats", test_memstats},
-                                   {"test_stats", test_stats},
-                                   {"test_mem_error", test_mem_error},
+static test_entry_t test_list[] = {
+    {"test_main_current", test_main_current},
+    {"test_stack_further", test_stack_further},
+    {"test_stack_far_isolation", test_stack_far_isolation},
+    {"test_simple", test_simple},
+    {"test_simple_create", test_simple_create},
+    {"test_simple_create_and_run", test_simple_create_and_run},
+    {"test_create_previous", test_create_previous},
+    {"test_previous_cleared_on_manual_delete", test_previous_cleared_on_manual_delete},
+    {"test_status", test_status},
+    {"test_exit", test_exit},
+    {"test_switch", test_switch},
+    {"test_switch_new", test_switch_new},
+    {"test_arg", test_arg},
+    {"test_random", test_random},
+    {"test_random2", test_random2},
+    {"test_extra", test_extra},
+    {"test_memstats", test_memstats},
+    {"test_stats", test_stats},
+    {"test_mem_error", test_mem_error},
 #if TEALET_WITH_TESTING
-                                   {"test_exit_reroute_panic", test_exit_reroute_panic},
+    {"test_exit_reroute_panic", test_exit_reroute_panic},
+    {"test_debug_swap_far_invalid_caller_check_main", test_debug_swap_far_invalid_caller_check_main},
+    {"test_debug_swap_far_invalid_caller_check_child", test_debug_swap_far_invalid_caller_check_child},
 #endif
-                                   {NULL, NULL}};
+    {NULL, NULL}};
 
 void runmode(int mode) {
   int i;

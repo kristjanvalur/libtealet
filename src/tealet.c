@@ -1659,6 +1659,22 @@ int tealet_status(tealet_t *_tealet) {
 }
 
 #if TEALET_WITH_TESTING
+/* Internal test hook: swap stack_far for a tealet.
+ * This is used by tests to force caller-validation outcomes.
+ * Not declared in public headers; test code can declare a matching prototype.
+ */
+int tealet_debug_swap_far(tealet_t *_tealet, void *new_far, void **old_far) {
+  tealet_sub_t *tealet;
+
+  if (_tealet == NULL || old_far == NULL)
+    return TEALET_ERR_INVAL;
+
+  tealet = (tealet_sub_t *)_tealet;
+  *old_far = tealet->stack_far;
+  tealet->stack_far = (char *)new_far;
+  return 0;
+}
+
 /* Internal test hook: force a tealet into defunct state.
  * Not declared in public headers; test code can declare a matching prototype.
  */
