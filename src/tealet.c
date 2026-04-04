@@ -45,6 +45,10 @@
 
 /* Internal per-tealet flags (stored in tealet_sub_t::flags). */
 #define TEALET_TFLAGS_EXITING (1u << 0)
+#define TEALET_TFLAGS_DEFUNCT (1u << 1)
+
+/* Internal per-stack flags (stored in tealet_stack_t::flags). */
+#define TEALET_SFLAGS_DEFUNCT (1u << 0)
 
 /************************************************************/
 
@@ -69,6 +73,7 @@ typedef struct tealet_stack_t {
   int refcount;                 /* controls lifetime */
   struct tealet_stack_t **prev; /* previous 'next' pointer */
   struct tealet_stack_t *next;  /* next unsaved stack */
+  unsigned int flags;           /* internal per-stack state flags */
   char *stack_far;              /* the far boundary of this stack (or STACKMAN_SP_FURTHEST
                                    for unbounded) */
   size_t saved;                 /* total amount of memory saved in all chunks */
@@ -79,7 +84,7 @@ typedef struct tealet_stack_t {
  * The main tealet will have stack_far set to STACKMAN_SP_FURTHEST,
  * representing an unbounded stack extent (the entire process stack).
  * "stack" is zero for a running tealet, otherwise it points
- * to the saved stack, or is -1 if the state is invalid.
+ * to the saved stack.
  * In addition, stack_far is set to NULL value to indicate
  * that a tealet has exited.
  */
@@ -87,7 +92,7 @@ typedef struct tealet_sub_t {
   tealet_t base;         /* the public part of the tealet */
   char *stack_far;       /* the "far" end of the stack, NULL when exited, or
                             STACKMAN_SP_FURTHEST for unbounded */
-  tealet_stack_t *stack; /* saved stack or 0 if active or -1 if invalid*/
+  tealet_stack_t *stack; /* saved stack or 0 if active */
   unsigned int flags;    /* internal per-tealet state flags */
 #if TEALET_WITH_STATS
   struct tealet_sub_t *next_tealet; /* next in circular list of all tealets */
@@ -743,6 +748,7 @@ static tealet_stack_t *tealet_stack_new(tealet_main_t *main, char *stack_near, c
   s->refcount = 1;
   s->prev = NULL;
   s->stack_far = stack_far;
+  s->flags = 0;
   s->saved = size;
 
   s->chunk.next = NULL;
@@ -860,7 +866,8 @@ static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack) {
   tealet_chunk_t *chunk;
   chunk = stack->chunk.next;
   stack->chunk.next = NULL;
-  stack->saved = (size_t)-1;
+  stack->flags |= TEALET_SFLAGS_DEFUNCT;
+  stack->saved = 0;
   while (chunk) {
     tealet_chunk_t *next = chunk->next;
     STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
@@ -873,9 +880,13 @@ static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack) {
   }
 }
 
-static size_t tealet_stack_getsize(tealet_stack_t *stack) {
-  if (stack->saved != (size_t)-1)
-    return stack->saved;
+static int tealet_is_defunct(tealet_sub_t *tealet) {
+  if (tealet->flags & TEALET_TFLAGS_DEFUNCT)
+    return 1;
+  if (tealet->stack != NULL && (tealet->stack->flags & TEALET_SFLAGS_DEFUNCT)) {
+    tealet->flags |= TEALET_TFLAGS_DEFUNCT;
+    return 1;
+  }
   return 0;
 }
 
@@ -1058,9 +1069,12 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
     if (!stack) {
       if (fail_ok)
         return -1;
-      /* Main tealet's stack must always be saveable - can't mark it defunct */
+      /* Main tealet's stack must always be saveable - can't mark it defunct.
+       * Only intermediate targets ever become defunct (the target tealet does not need
+       * saving) and we only invoke !fail_ok) when switching to main)
+       */
       assert(!TEALET_IS_MAIN((tealet_t *)g_current));
-      g_current->stack = (tealet_stack_t *)-1; /* signal invalid stack */
+      g_current->flags |= TEALET_TFLAGS_DEFUNCT;
     } else {
       g_current->stack = stack;
       /* if it is partially saved, link it in to previous stacks */
@@ -1194,7 +1208,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
    * -1 = error, couldn't save state
    * -2 = error, target tealet corrupt
    */
-  if (target->stack == (tealet_stack_t *)-1)
+  if (tealet_is_defunct(target))
     return TEALET_ERR_DEFUNCT;
 
   err_result = tealet_check_caller_is_current(g_main->g_current);
@@ -1626,8 +1640,7 @@ void tealet_delete(tealet_t *target) {
   tealet_sub_t *g_target = (tealet_sub_t *)target;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   assert(!TEALET_IS_MAIN(target));
-  if (g_target->stack != (tealet_stack_t *)-1)
-    tealet_stack_decref(g_main, g_target->stack);
+  tealet_stack_decref(g_main, g_target->stack);
   tealet_free_tealet(g_main, g_target);
 #if TEALET_WITH_STATS
   g_main->g_tealets--;
@@ -1653,7 +1666,7 @@ int tealet_status(tealet_t *_tealet) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
   if (tealet->stack_far == NULL)
     return TEALET_STATUS_EXITED;
-  if (tealet->stack == (tealet_stack_t *)-1)
+  if (tealet_is_defunct(tealet))
     return TEALET_STATUS_DEFUNCT;
   return TEALET_STATUS_ACTIVE;
 }
@@ -1691,7 +1704,8 @@ int tealet_debug_force_defunct(tealet_t *_tealet) {
 
   if (tealet->stack != NULL && tealet->stack != (tealet_stack_t *)-1)
     tealet_stack_decref(g_main, tealet->stack);
-  tealet->stack = (tealet_stack_t *)-1;
+  tealet->stack = NULL;
+  tealet->flags |= TEALET_TFLAGS_DEFUNCT;
   return 0;
 }
 #endif
@@ -1732,7 +1746,7 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats) {
     tealet_count++;
     /* Count tealets with saved stacks (current tealet won't have stack saved)
      */
-    if (t->stack && t->stack != (tealet_stack_t *)-1) {
+    if (t->stack) {
       tealet_stack_t *stack = t->stack;
       tealet_chunk_t *chunk;
       size_t this_naive = 0;
@@ -2023,7 +2037,9 @@ void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *d4) {
 
 size_t tealet_get_stacksize(tealet_t *_tealet) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  if (tealet_is_defunct(tealet))
+    return 0;
   if (tealet->stack)
-    return tealet_stack_getsize(tealet->stack);
+    return tealet->stack->saved;
   return 0;
 }
