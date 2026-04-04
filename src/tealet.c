@@ -43,6 +43,9 @@
 /* Internal main-tealet flags (stored in tealet_main_t::g_flags). */
 #define TEALET_MFLAGS_PANIC (1 << 16)
 
+/* Internal per-tealet flags (stored in tealet_sub_t::flags). */
+#define TEALET_TFLAGS_EXITING (1u << 0)
+
 /************************************************************/
 
 /************************************************************
@@ -78,13 +81,14 @@ typedef struct tealet_stack_t {
  * "stack" is zero for a running tealet, otherwise it points
  * to the saved stack, or is -1 if the state is invalid.
  * In addition, stack_far is set to NULL value to indicate
- * that a tealet is exiting.
+ * that a tealet has exited.
  */
 typedef struct tealet_sub_t {
   tealet_t base;         /* the public part of the tealet */
-  char *stack_far;       /* the "far" end of the stack, NULL when exiting, or
+  char *stack_far;       /* the "far" end of the stack, NULL when exited, or
                             STACKMAN_SP_FURTHEST for unbounded */
   tealet_stack_t *stack; /* saved stack or 0 if active or -1 if invalid*/
+  unsigned int flags;    /* internal per-tealet state flags */
 #if TEALET_WITH_STATS
   struct tealet_sub_t *next_tealet; /* next in circular list of all tealets */
   struct tealet_sub_t *prev_tealet; /* prev in circular list of all tealets */
@@ -1007,7 +1011,7 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
   assert(target_stop != NULL); /* target is't exiting */
   assert(g_current != g_target);
 
-  exiting = g_current->stack_far == NULL;
+  exiting = ((g_current->flags & TEALET_TFLAGS_EXITING) != 0);
   /* if task is exiting, failure cannot be signalled. the switch
    * must proceed. A stack failing to get saved (due to memory shortage)
    * with this flag set will be set as invalid, so that it cannot
@@ -1033,6 +1037,8 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
   if (exiting) {
     /* tealet is exiting. We don't save its stack. */
     assert(!TEALET_IS_MAIN((tealet_t *)g_current));
+    g_current->flags &= ~TEALET_TFLAGS_EXITING;
+    g_current->stack_far = NULL;
     if (g_current->stack == NULL) {
       /* auto-delete the tealet */
 #if TEALET_WITH_STATS
@@ -1141,10 +1147,7 @@ static int tealet_check_caller_is_current(tealet_sub_t *g_current) {
   uintptr_t dist;
 
   assert(g_current != NULL);
-
-  /* stack_far is set to null prior to exit as a signal, so we must ignore that case. */
-  if (g_current->stack_far == NULL)
-    return 0;
+  assert(g_current->stack_far != NULL);
 
   g_main = TEALET_GET_MAIN(g_current);
   max_stack_size = g_main->g_cfg_max_stack_size;
@@ -1362,6 +1365,7 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
     g->base.extra = NULL;
   g->stack = NULL;
   g->stack_far = NULL;
+  g->flags = 0;
 #ifndef NDEBUG
   g->id = 0;
 #endif
@@ -1559,12 +1563,7 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   if (g_target == g_current)
     return -2; /* invalid tealet */
 
-  /* validate current tealet before we clear the stack_far */
-  result = tealet_check_caller_is_current(g_current);
-  if (result)
-    return result;
-
-  g_current->stack_far = NULL; /* signal exit */
+  g_current->flags |= TEALET_TFLAGS_EXITING;
   assert(g_current->stack == NULL);
   if (!(flags & TEALET_EXIT_DELETE))
     g_current->stack = (tealet_stack_t *)-1; /* signal do-not-delete */
@@ -1615,6 +1614,7 @@ tealet_t *tealet_duplicate(tealet_t *tealet) {
   if (g_copy == NULL)
     return NULL;
   g_copy->stack_far = g_tealet->stack_far;
+  g_copy->flags = g_tealet->flags;
   /* can't fail */
   g_copy->stack = tealet_stack_dup(g_tealet->stack);
   if (g_main->g_extrasize)
