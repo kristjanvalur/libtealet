@@ -28,6 +28,27 @@
 
 3. **stackman**: Low-level stack switching (bundled distribution in `stackman/`)
 
+### Recent structural conventions (important)
+
+- Keep public API layout grouped consistently in both `src/tealet.c` and `src/tealet.h`:
+  1) **core lifecycle/switching**, 2) **status/query**, 3) **configuration**, 4) **utility helpers**,
+  and testing-only debug hooks at file end under `#if TEALET_WITH_TESTING`.
+- Preserve section banners (`/************************************************************ ... */`) when adding/moving APIs.
+- In `tealet.h`, treat declaration order and comments as the canonical API surface; keep
+  implementation-only detail in `tealet.c`.
+- Preserve the `g_` member naming convention (for example `g_current`, `g_flags`):
+  this is a historical carry-over from the codebase's greenlet origins and is
+  intentionally retained as a nod to that lineage.
+- Prefer explicit flag-based state over sentinel signaling where practical:
+  - per-tealet flags now include `EXITING`, `DEFUNCT`, `AUTODELETE`, `EXITED`
+  - per-stack flags include `DEFUNCT`
+- Exited tealets are represented by `TEALET_TFLAGS_EXITED` (not by nulling `stack_far`).
+- Deferred exit currently borrows main temporary storage (`g_flags`/`g_arg`); keep the
+  invariant assert before setting deferred state.
+- For test-only debug entry points, keep them non-public and colocated at end of `tealet.c`
+  within the testing guard.
+
+
 ### Key Data Structures
 
 - **tealet_t**: User-visible coroutine structure

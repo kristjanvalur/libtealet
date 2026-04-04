@@ -1416,7 +1416,9 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main) {
   return result;
 }
 
-/************************************************************/
+/************************************************************
+ * Public API - core lifecycle and switching
+ */
 
 tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   char stack_probe;
@@ -1477,16 +1479,6 @@ void tealet_finalize(tealet_t *tealet) {
   tealet_integrity_data_free(g_main, &g_main->g_integrity_data);
 #endif
   tealet_int_free(g_main, g_main);
-}
-
-void *tealet_malloc(tealet_t *tealet, size_t s) {
-  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  return tealet_int_malloc(g_main, s);
-}
-
-void tealet_free(tealet_t *tealet, void *p) {
-  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  tealet_int_free(g_main, p);
 }
 
 /* choose initial far boundary for tealet creation.
@@ -1628,6 +1620,70 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   return result;
 }
 
+int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  tealet_sub_t *g_current = g_main->g_current;
+  tealet_sub_t *previous;
+  tealet_sub_t *g_child;
+  int result, is_parent;
+
+  /* Current tealet must have a bounded stack (far boundary set).
+   * Even the main tealet can fork if its far boundary has been set.
+   */
+  if (TEALET_STACK_IS_UNBOUNDED(g_current))
+    return TEALET_ERR_UNFORKABLE;
+
+  /* Active tealets have NULL stack (implied by the check above) */
+  assert(g_current->stack == NULL);
+
+  /* Allocate the child tealet */
+  g_child = tealet_alloc(g_main);
+  if (g_child == NULL)
+    return TEALET_ERR_MEM;
+
+  /* Copy extra data if present */
+  if (g_main->g_extrasize)
+    memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
+
+  /* Copy the far boundary */
+  g_child->stack_far = g_current->stack_far;
+
+  /* result of tealet_switchstack is:
+   * 1 if this was just a save
+   * 0 if this was a restore (switch back)
+   * <0 on error
+   */
+  if (flags & TEALET_FORK_SWITCH) {
+    /* save parent, switch to child*/
+    result = tealet_switchstack(g_main, g_child, NULL, parg);
+    is_parent = result == 0;
+  } else {
+    /* we are just saving the child's stack for later.
+     *Save the stack in the child, don't modify 'previous'
+     */
+    previous = g_main->g_previous;
+    g_main->g_current = g_child; /* Child becomes current (temporarily) */
+    result = tealet_switchstack(g_main, g_current, NULL, parg);
+    /* only in the case of just saving do we restore previous. otherwise
+     * we respect the previous from the switch
+     */
+    if (result == 1)
+      g_main->g_previous = previous;
+    is_parent = result == 1;
+  }
+
+  if (result < 0) {
+    /* Failed to save stack */
+    tealet_free_tealet(g_main, g_child);
+    return TEALET_ERR_MEM;
+  }
+
+  if (pother)
+    *pother = (tealet_t *)(is_parent ? g_child : g_current);
+  return is_parent;
+}
+
 tealet_t *tealet_duplicate(tealet_t *tealet) {
   tealet_sub_t *g_tealet = (tealet_sub_t *)tealet;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_tealet);
@@ -1657,6 +1713,10 @@ void tealet_delete(tealet_t *target) {
 #endif
 }
 
+/************************************************************
+ * Public API - status and query
+ */
+
 tealet_t *tealet_current(tealet_t *tealet) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
   return (tealet_t *)g_main->g_current;
@@ -1679,6 +1739,20 @@ int tealet_status(tealet_t *_tealet) {
   if (tealet_is_defunct(tealet))
     return TEALET_STATUS_DEFUNCT;
   return TEALET_STATUS_ACTIVE;
+}
+
+size_t tealet_get_stacksize(tealet_t *_tealet) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  if (tealet_is_defunct(tealet))
+    return 0;
+  if (tealet->stack)
+    return tealet->stack->saved;
+  return 0;
+}
+
+void *tealet_get_far(tealet_t *_tealet) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  return tealet->stack_far;
 }
 
 void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats) {
@@ -1783,18 +1857,9 @@ void tealet_reset_peak_stats(tealet_t *tealet) {
 #endif
 }
 
-ptrdiff_t tealet_stack_diff(void *a, void *b) { return STACKMAN_SP_DIFF((ptrdiff_t)a, (ptrdiff_t)(b)); }
-
-void *tealet_stack_further(void *a, void *b) {
-  if (STACKMAN_SP_LE(a, b))
-    return b;
-  return a;
-}
-
-void *tealet_get_far(tealet_t *_tealet) {
-  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
-  return tealet->stack_far;
-}
+/************************************************************
+ * Public API - configuration
+ */
 
 int tealet_set_far(tealet_t *_tealet, void *far_boundary) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
@@ -1918,68 +1983,26 @@ int tealet_configure_check_stack(tealet_t *_tealet, size_t stack_integrity_bytes
   return tealet_configure_set(_tealet, &cfg);
 }
 
-int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
-  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+/************************************************************
+ * Public API - utility helpers
+ */
+
+void *tealet_malloc(tealet_t *tealet, size_t s) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  tealet_sub_t *g_current = g_main->g_current;
-  tealet_sub_t *previous;
-  tealet_sub_t *g_child;
-  int result, is_parent;
+  return tealet_int_malloc(g_main, s);
+}
 
-  /* Current tealet must have a bounded stack (far boundary set).
-   * Even the main tealet can fork if its far boundary has been set.
-   */
-  if (TEALET_STACK_IS_UNBOUNDED(g_current))
-    return TEALET_ERR_UNFORKABLE;
+void tealet_free(tealet_t *tealet, void *p) {
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  tealet_int_free(g_main, p);
+}
 
-  /* Active tealets have NULL stack (implied by the check above) */
-  assert(g_current->stack == NULL);
+ptrdiff_t tealet_stack_diff(void *a, void *b) { return STACKMAN_SP_DIFF((ptrdiff_t)a, (ptrdiff_t)(b)); }
 
-  /* Allocate the child tealet */
-  g_child = tealet_alloc(g_main);
-  if (g_child == NULL)
-    return TEALET_ERR_MEM;
-
-  /* Copy extra data if present */
-  if (g_main->g_extrasize)
-    memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
-
-  /* Copy the far boundary */
-  g_child->stack_far = g_current->stack_far;
-
-  /* result of tealet_switchstack is:
-   * 1 if this was just a save
-   * 0 if this was a restore (switch back)
-   * <0 on error
-   */
-  if (flags & TEALET_FORK_SWITCH) {
-    /* save parent, switch to child*/
-    result = tealet_switchstack(g_main, g_child, NULL, parg);
-    is_parent = result == 0;
-  } else {
-    /* we are just saving the child's stack for later.
-     *Save the stack in the child, don't modify 'previous'
-     */
-    previous = g_main->g_previous;
-    g_main->g_current = g_child; /* Child becomes current (temporarily) */
-    result = tealet_switchstack(g_main, g_current, NULL, parg);
-    /* only in the case of just saving do we restore previous. otherwise
-     * we respect the previous from the switch
-     */
-    if (result == 1)
-      g_main->g_previous = previous;
-    is_parent = result == 1;
-  }
-
-  if (result < 0) {
-    /* Failed to save stack */
-    tealet_free_tealet(g_main, g_child);
-    return TEALET_ERR_MEM;
-  }
-
-  if (pother)
-    *pother = (tealet_t *)(is_parent ? g_child : g_current);
-  return is_parent;
+void *tealet_stack_further(void *a, void *b) {
+  if (STACKMAN_SP_LE(a, b))
+    return b;
+  return a;
 }
 
 #if __GNUC__ > 4
@@ -2006,14 +2029,9 @@ void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *d4) {
 #pragma warning(pop)
 #endif
 
-size_t tealet_get_stacksize(tealet_t *_tealet) {
-  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
-  if (tealet_is_defunct(tealet))
-    return 0;
-  if (tealet->stack)
-    return tealet->stack->saved;
-  return 0;
-}
+/************************************************************
+ * Testing-only debug hooks
+ */
 
 #if TEALET_WITH_TESTING
 /* Internal test hook: swap stack_far for a tealet.
