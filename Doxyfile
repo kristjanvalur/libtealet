@@ -45,7 +45,7 @@ EXCLUDE                = src/tealet.c \
                          src/tools.c \
                          src/tools.h
 
-USE_MDFILE_AS_MAINPAGE = docs/DOXYGEN_INDEX.md
+USE_MDFILE_AS_MAINPAGE = README.md
 MARKDOWN_SUPPORT       = YES
 TOC_INCLUDE_HEADINGS   = 3
 AUTOLINK_SUPPORT       = YES
