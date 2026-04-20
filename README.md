@@ -155,6 +155,7 @@ This feature enables advanced use cases like coroutine cloning and continuation 
 
 - **[Getting Started](docs/GETTING_STARTED.md)** - Installation, examples, common patterns
 - **[API Reference](docs/API.md)** - Complete function reference
+- **[Doxygen Workflow](docs/DOXYGEN.md)** - Local authored+generated API docs setup
 - **[Architecture](docs/ARCHITECTURE.md)** - Internals and stack-chaining design
 - **[Changelog](CHANGELOG.md)** - Version history
 

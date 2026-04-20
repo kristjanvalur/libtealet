@@ -1,3 +1,7 @@
+/**
+ * @file tealet_extras.h
+ * @brief Public helper extensions for libtealet.
+ */
 #include "tealet.h"
 #ifndef _TEALET_EXTRAS_H_
 #define _TEALET_EXTRAS_H_

@@ -46,3 +46,4 @@ bin/setcontext
 .vscodetmp/
 .vscode/
 **/tmp/
+docs/_build/

@@ -43,6 +43,29 @@ make check-format   # verify formatting
 make format         # apply formatting
 ```
 
+### API docs generation (development)
+
+`doxygen` is used to generate local API documentation from header comments and Markdown guides.
+
+Install tools:
+
+- Linux (Debian/Ubuntu): `sudo apt install doxygen graphviz`
+- macOS (Homebrew): `brew install doxygen graphviz`
+- Windows:
+    - `winget install DimitriVanHeesch.Doxygen`
+    - `winget install Graphviz.Graphviz`
+    - or `choco install doxygen.install graphviz`
+
+Then run:
+
+```bash
+make docs        # generate docs/_build/doxygen/html/index.html
+make docs-check  # fail on Doxygen warnings
+make docs-clean  # remove generated docs
+```
+
+See `docs/DOXYGEN.md` for the hybrid authored+generated documentation workflow.
+
 ## Hello Coroutine
 
 The simplest example demonstrates creating and switching between coroutines:

@@ -1,3 +1,7 @@
+/**
+ * @file tealet.h
+ * @brief Public core API for libtealet.
+ */
 /* A minimal coroutine package for C */
 #ifndef _TEALET_H_
 #define _TEALET_H_
