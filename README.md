@@ -1,4 +1,5 @@
 [![build and test](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml/badge.svg)](https://github.com/kristjanvalur/libtealet/actions/workflows/build-test.yml)
+[![docs](https://img.shields.io/badge/docs-github_pages-blue)](https://kristjanvalur.github.io/libtealet/)
 [![Powered by Stackman](https://img.shields.io/badge/powered_by-stackman_🦸-blue)](https://github.com/stackless-dev/stackman)
 
 # libtealet
