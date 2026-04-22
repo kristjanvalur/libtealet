@@ -31,7 +31,6 @@ WARN_LOGFILE           = docs/_build/doxygen/warnings.log
 
 INPUT                  = src/tealet.h \
                          src/tealet_extras.h \
-                         docs/DOXYGEN_INDEX.md \
                          README.md \
                          docs/GETTING_STARTED.md \
                          docs/ARCHITECTURE.md \
