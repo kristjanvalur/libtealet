@@ -54,10 +54,10 @@ For C, there also exist some other approaches. For an overview, see [Coroutines 
 
 ## Stack-chaining Optimization
 
-Unlike traditional coroutine implementations that save entire stacks, libtealet uses an incremental stack-saving technique with chunk chaining. When switching contexts, only the portion of the stack that has changed is saved. Stack chunks are linked via a `g_prev` chain, enabling:
+Unlike traditional coroutine implementations that save entire stacks, libtealet uses an incremental stack-saving technique with chunk chaining. When switching contexts, it saves only the portion needed for the current target stack boundary (that is, the overlapping stack region required for that switch). Stack chunks are linked via a `g_prev` chain, enabling:
 
-- **Incremental growth**: Small initial allocations (512 bytes), doubling on demand up to 256KB
-- **Shared stack segments**: Coroutines that diverged from a common point share unchanged stack portions via reference counting
+- **On-demand overlap saves**: Initial and subsequent saves are boundary-driven, and additional bytes are copied only when a later switch requires a deeper overlapping region
+- **Shared stack snapshots (duplicate/clone cases)**: Tealets created via stack duplication can share unchanged saved stack segments via reference counting
 - **Memory efficiency**: Typical coroutine overhead is a few KB, not the 1-8MB of OS thread stacks
 
 This makes libtealet suitable for applications with thousands of concurrent coroutines.

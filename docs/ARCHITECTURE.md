@@ -410,6 +410,8 @@ tealet_t *tealet_duplicate(tealet_t *tealet) {
 
 Multiple tealets can share a stack snapshot, useful for the **stub pattern** (template tealets).
 
+In the current implementation, this sharing is introduced by duplication paths (for example `tealet_duplicate()` and helpers built on it). `tealet_fork()` creates a new tealet by saving stack state through switch/save logic and does not directly use `tealet_stack_dup()`.
+
 ## The Switch Operation
 
 ### High-Level Flow
