@@ -50,6 +50,9 @@ all: bin/libtealet.so bin/libtealet.a
 
 FORMAT_FILES := $(shell find src tests -type f \( -name '*.c' -o -name '*.h' \))
 CLANG_FORMAT ?= clang-format
+DOXYGEN ?= doxygen
+DOXYFILE ?= Doxyfile
+DOC_OUTPUT_DIR ?= docs/_build/doxygen
 
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tealet_extras.o
@@ -90,7 +93,7 @@ ifeq ($(shell uname -s),Darwin)
 	STATIC_FLAG :=
 endif
 
-.PHONY: test tests format check-format
+.PHONY: test tests format check-format docs docs-clean docs-check
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork bin/test-config
@@ -114,6 +117,24 @@ format:
 check-format:
 	@command -v $(CLANG_FORMAT) >/dev/null 2>&1 || (echo "ERROR: $(CLANG_FORMAT) not found" && exit 1)
 	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
+
+docs:
+	@command -v $(DOXYGEN) >/dev/null 2>&1 || (echo "ERROR: $(DOXYGEN) not found" && exit 1)
+	@rm -rf $(DOC_OUTPUT_DIR)
+	@mkdir -p $(DOC_OUTPUT_DIR)
+	$(DOXYGEN) $(DOXYFILE)
+	@echo "*** Docs generated at $(DOC_OUTPUT_DIR)/html/index.html ***"
+
+docs-clean:
+	rm -rf $(DOC_OUTPUT_DIR)
+
+docs-check:
+	@command -v $(DOXYGEN) >/dev/null 2>&1 || (echo "ERROR: $(DOXYGEN) not found" && exit 1)
+	@rm -rf $(DOC_OUTPUT_DIR)
+	@mkdir -p $(DOC_OUTPUT_DIR)
+	$(DOXYGEN) $(DOXYFILE)
+	@test ! -s $(DOC_OUTPUT_DIR)/warnings.log || (echo "ERROR: Doxygen warnings detected:" && cat $(DOC_OUTPUT_DIR)/warnings.log && exit 1)
+	@echo "*** Docs check passed (no Doxygen warnings) ***"
 
 # Multiple chunks and sharing test
 bin/test-chunks: bin tests/test_chunks.o bin/libtealet.a

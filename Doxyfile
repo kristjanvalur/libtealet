@@ -1,0 +1,74 @@
+PROJECT_NAME           = "libtealet"
+PROJECT_NUMBER         = 0.4.2
+OUTPUT_DIRECTORY       = docs/_build/doxygen
+CREATE_SUBDIRS         = NO
+ALLOW_UNICODE_NAMES    = YES
+
+OUTPUT_LANGUAGE        = English
+BRIEF_MEMBER_DESC      = YES
+REPEAT_BRIEF           = NO
+JAVADOC_AUTOBRIEF      = NO
+MULTILINE_CPP_IS_BRIEF = NO
+ALWAYS_DETAILED_SEC    = NO
+
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TYPEDEF_HIDES_STRUCT   = NO
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_METHODS  = NO
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+HIDE_SCOPE_NAMES       = NO
+INTERNAL_DOCS          = NO
+
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = NO
+WARN_LOGFILE           = docs/_build/doxygen/warnings.log
+
+INPUT                  = src/tealet.h \
+                         src/tealet_extras.h \
+                         README.md \
+                         docs/GETTING_STARTED.md \
+                         docs/ARCHITECTURE.md \
+                         docs/DOXYGEN.md \
+                         docs/MEMORY_STATS.md
+FILE_PATTERNS          = *.h \
+                         *.md
+RECURSIVE              = NO
+EXCLUDE                = src/tealet.c \
+                         src/tealet_extras.c \
+                         src/tools.c \
+                         src/tools.h
+
+USE_MDFILE_AS_MAINPAGE = README.md
+MARKDOWN_SUPPORT       = YES
+TOC_INCLUDE_HEADINGS   = 3
+AUTOLINK_SUPPORT       = YES
+BUILTIN_STL_SUPPORT    = NO
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_EXTRA_STYLESHEET  = docs/theme/doxygen-awesome-css/doxygen-awesome.css
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+GENERATE_RTF           = NO
+GENERATE_XML           = NO
+GENERATE_DOCBOOK       = NO
+
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+GRAPHICAL_HIERARCHY    = NO
+DOT_CLEANUP            = YES
