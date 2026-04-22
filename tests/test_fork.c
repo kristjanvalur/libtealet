@@ -9,6 +9,20 @@
 static int test_count = 0;
 static int test_passed = 0;
 
+static void assert_origin_main(tealet_t *t) {
+  unsigned int origin;
+  origin = tealet_get_origin(t);
+  assert((origin & TEALET_ORIGIN_MAIN_LINEAGE) != 0);
+  assert((origin & TEALET_ORIGIN_FORK) == 0);
+}
+
+static void assert_origin_main_fork(tealet_t *t) {
+  unsigned int origin;
+  origin = tealet_get_origin(t);
+  assert((origin & TEALET_ORIGIN_MAIN_LINEAGE) != 0);
+  assert((origin & TEALET_ORIGIN_FORK) != 0);
+}
+
 #define TEST(name)                                                                                                     \
   do {                                                                                                                 \
     printf("Running test: %s\n", name);                                                                                \
@@ -43,6 +57,7 @@ static void test_basic_fork(void *far_marker) {
 
   /* Initialize main tealet */
   main = new_main_checked();
+  assert_origin_main(main);
 
   /* Set far boundary for main tealet */
   result = tealet_set_far(main, far_marker);
@@ -56,6 +71,8 @@ static void test_basic_fork(void *far_marker) {
   if (result == 1) {
     /* We are the parent, other = child */
     assert(other != NULL);
+    assert_origin_main(main);
+    assert_origin_main_fork(other);
     assert(testvalue == 0); /* Parent should have saved value */
     printf("  Parent: switching to child...\n");
 
@@ -79,6 +96,8 @@ static void test_basic_fork(void *far_marker) {
     PASS();
   } else if (result == 0) {
     /* We are the child, other = parent */
+    assert_origin_main_fork(tealet_current(main));
+    assert_origin_main(other);
     assert(testvalue == 0); /* Child should start with saved value */
 
     /* Verify tealet_previous() in child after switch from parent
@@ -115,6 +134,7 @@ static void test_fork_switch(void *far_marker) {
 
   /* Initialize main tealet */
   main = new_main_checked();
+  assert_origin_main(main);
 
   /* Set far boundary for main tealet */
   result = tealet_set_far(main, far_marker);
@@ -130,6 +150,8 @@ static void test_fork_switch(void *far_marker) {
 
   if (result == 0) {
     /* We are the child */
+    assert_origin_main_fork(tealet_current(main));
+    assert_origin_main(other);
     assert(testvalue == 0);    /* Child should start with saved value */
     assert(switch_count == 1); /* Child should have incremented value */
 
@@ -149,6 +171,8 @@ static void test_fork_switch(void *far_marker) {
   } else {
     /* We are the parent, switched back to */
     assert(result == 1);
+    assert_origin_main(main);
+    assert_origin_main_fork(other);
     assert(testvalue == 0);    /* Parent should have saved value, not child's 42 */
     assert(switch_count == 1); /* Parent should have saved value, not child's 2 */
 
@@ -176,6 +200,7 @@ static void test_multiple_forks(void *far_marker) {
 
   /* Initialize main tealet */
   main = new_main_checked();
+  assert_origin_main(main);
 
   /* Set far boundary for main tealet */
   result = tealet_set_far(main, far_marker);
@@ -190,6 +215,7 @@ static void test_multiple_forks(void *far_marker) {
     assert(0);
   }
   assert(child1 != NULL);
+  assert_origin_main_fork(child1);
   printf("  Parent: created child1=%p\n", (void *)child1);
 
   /* Create second child */
@@ -201,6 +227,7 @@ static void test_multiple_forks(void *far_marker) {
     assert(0);
   }
   assert(child2 != NULL);
+  assert_origin_main_fork(child2);
   printf("  Parent: created child2=%p\n", (void *)child2);
 
   /* Switch to child1 */
@@ -236,6 +263,7 @@ static void test_fork_switch_arg(void *far_marker) {
 
   /* Initialize main tealet */
   main = new_main_checked();
+  assert_origin_main(main);
 
   /* Set far boundary for main tealet */
   result = tealet_set_far(main, far_marker);
@@ -248,6 +276,8 @@ static void test_fork_switch_arg(void *far_marker) {
   if (result == 0) {
     /* We are the child - arg should be NULL initially */
     void *childarg;
+    assert_origin_main_fork(tealet_current(main));
+    assert_origin_main(other);
     assert(arg == NULL);
 
     /* Switch back to parent with a value */
@@ -267,6 +297,8 @@ static void test_fork_switch_arg(void *far_marker) {
     /* We are the parent - child should have passed back a value */
     void *parentarg;
     assert(result == 1);
+    assert_origin_main(main);
+    assert_origin_main_fork(other);
     printf("  Parent: received arg=%p from child\n", arg);
     assert(arg == (void *)0x12345678);
     parentarg = (void *)0xdeadbeef;
@@ -297,6 +329,7 @@ static void test_fork_default_arg(void *far_marker) {
 
   /* Initialize main tealet */
   main = new_main_checked();
+  assert_origin_main(main);
 
   /* Set far boundary for main tealet */
   result = tealet_set_far(main, far_marker);
@@ -310,6 +343,7 @@ static void test_fork_default_arg(void *far_marker) {
     void *parentarg;
     assert(arg == NULL);
     assert(child != NULL);
+    assert_origin_main_fork(child);
     printf("  Parent: fork returned, arg=%p, switching to child with value\n", arg);
 
     /* Switch to child with a value */
@@ -330,6 +364,8 @@ static void test_fork_default_arg(void *far_marker) {
   } else if (result == 0) {
     /* We are the child - arg should have the value parent passed */
     void *childarg;
+    assert_origin_main_fork(tealet_current(main));
+    assert_origin_main(child);
     printf("  Child: woke up with arg=%p\n", arg);
     assert(arg == (void *)0xABCDEF00);
 
@@ -357,6 +393,7 @@ static void test_ping_pong(void *far_marker) {
 
   /* Initialize main tealet */
   main = new_main_checked();
+  assert_origin_main(main);
 
   /* Set far boundary for main tealet */
   result = tealet_set_far(main, far_marker);
@@ -373,6 +410,8 @@ static void test_ping_pong(void *far_marker) {
   if (result == 1) {
     /* Parent */
     tealet_t *child_saved = child; /* Save - local vars on swapped stack */
+    assert_origin_main(child_saved->main);
+    assert_origin_main_fork(child_saved);
     printf("  Parent: counter=%d, data=[%d,%d,%d,%d,%d], switching to child\n", counter, data[0], data[1], data[2],
            data[3], data[4]);
 
@@ -401,6 +440,8 @@ static void test_ping_pong(void *far_marker) {
   } else {
     /* Child */
     assert(result == 0);
+    assert_origin_main_fork(tealet_current(main));
+    assert_origin_main(child);
     printf("  Child: counter=%d, data=[%d,%d,%d,%d,%d], switching to parent\n", counter, data[0], data[1], data[2],
            data[3], data[4]);
 

@@ -422,8 +422,16 @@ void test_stack_far_isolation(void) {
 
 tealet_t *test_simple_run(tealet_t *t1, void *arg) {
   tealet_t *prev_current;
+  unsigned int origin_current;
+  unsigned int origin_main;
   (void)arg;
   assert(t1 != g_main);
+  origin_current = tealet_get_origin(t1);
+  origin_main = tealet_get_origin(g_main);
+  assert((origin_current & TEALET_ORIGIN_MAIN_LINEAGE) == 0);
+  assert((origin_current & TEALET_ORIGIN_FORK) == 0);
+  assert((origin_main & TEALET_ORIGIN_MAIN_LINEAGE) != 0);
+  assert((origin_main & TEALET_ORIGIN_FORK) == 0);
   prev_current = tealet_previous(t1);
   assert(prev_current == t1->main);
   status = 1;

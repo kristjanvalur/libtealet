@@ -290,7 +290,7 @@ void my_main(void) {
 ```
 
 **Why set boundaries?**
-- **Required before forking:** Prevents creating two unbounded stacks
+- **Required for main-lineage forks:** Prevents creating two unbounded stacks when forking main (or clones of main)
 - **Memory control:** Limits stack growth for specific tealets
 - **Scope discipline:** Ensures execution stays within promised bounds
 
@@ -376,14 +376,18 @@ int main(void) {
 
 **Critical responsibilities:**
 
-1. **Set stack boundary first:** Must call `tealet_set_far()` before forking to avoid unbounded stacks
-2. **Forked tealets must use `tealet_exit()`:** Unlike tealets created with `tealet_new()`, forked tealets have no run function. Simply returning from the fork point is undefined behavior.
-3. **No DEFER flag:** Forked tealets must not use `TEALET_EXIT_DEFER` when exiting
-4. **Stay within bounds:** All switching must occur within the stack region bounded by `far_boundary`
+1. **Forking main-lineage execution requires a boundary:** When `current` is the main tealet (or a clone of main), call `tealet_set_far()` first to avoid unbounded-stack forks.
+2. **Far boundary is inherited by the child:** The forked child copies the
+    parent's current far boundary at fork time.
+3. **Exit style depends on what was forked:**
+    - Main-lineage forks should exit via `tealet_exit()` with an explicit target.
+    - Forks of regular function-scoped tealets can generally return through the same run-function path as the original tealet.
+4. **No DEFER for main-lineage forks:** Do not use `TEALET_EXIT_DEFER` in that mode.
+5. **Stay within bounds:** All switching must occur within the stack region bounded by `far_boundary` where a boundary is in effect.
 
 **Philosophical note:**
 
-Traditional tealet creation (`tealet_new()`, `tealet_create()`) maintains clean function-scope discipline - each tealet exists within a specific function's execution. `tealet_fork()` breaks this discipline, enabling dynamic coroutine cloning at any point. This power comes with responsibility: you must manually manage stack boundaries and explicit exit.
+Traditional tealet creation (`tealet_new()`, `tealet_create()`) maintains clean function-scope discipline - each tealet exists within a specific function's execution. `tealet_fork()` can break this discipline when used on main-lineage execution, but behaves like a direct continuation clone when used inside a regular function-scoped tealet.
 
 This feature mirrors functionality from Stackless Python but was historically omitted from libtealet to keep the API simple and safe. Use it when you need advanced patterns like continuation capture or coroutine cloning.
 
@@ -628,6 +632,38 @@ tealet_t *main = TEALET_MAIN(current);
 ```
 
 Equivalent to `t->main` but works correctly for both main and non-main tealets.
+
+---
+
+### `tealet_get_origin()`
+
+```c
+unsigned int tealet_get_origin(tealet_t *tealet);
+```
+
+Get origin flags that describe tealet origin/lineage.
+
+**Returns:** Bitwise OR of:
+
+- `TEALET_ORIGIN_MAIN_LINEAGE`: Main tealet, or fork-descended from main-lineage
+- `TEALET_ORIGIN_FORK`: Tealet originated via `tealet_fork()`
+
+**Usage:**
+
+```c
+unsigned int origin = tealet_get_origin(current);
+if (origin & TEALET_ORIGIN_MAIN_LINEAGE) {
+    /* main-like fork caveats apply */
+}
+if (origin & TEALET_ORIGIN_FORK) {
+    /* current tealet was produced by tealet_fork() */
+}
+```
+
+Convenience macros are also available:
+
+- `TEALET_IS_MAIN_LINEAGE(t)`
+- `TEALET_IS_FORK(t)`
 
 ---
 

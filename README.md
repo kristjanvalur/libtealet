@@ -4,7 +4,7 @@
 
 # libtealet
 
-**Version 0.4.2**
+**Version 0.4.3**
 
 LibTealet is a lightweight co-routine library for C.  It is based on the
 technique of stack-slicing, where the execution stack is saved and restored
@@ -54,10 +54,10 @@ For C, there also exist some other approaches. For an overview, see [Coroutines 
 
 ## Stack-chaining Optimization
 
-Unlike traditional coroutine implementations that save entire stacks, libtealet uses an incremental stack-saving technique with chunk chaining. When switching contexts, only the portion of the stack that has changed is saved. Stack chunks are linked via a `g_prev` chain, enabling:
+Unlike traditional coroutine implementations that save entire stacks, libtealet uses an incremental stack-saving technique with chunk chaining. When switching contexts, it saves only the portion needed for the current target stack boundary (that is, the overlapping stack region required for that switch). Stack chunks are linked via a `g_prev` chain, enabling:
 
-- **Incremental growth**: Small initial allocations (512 bytes), doubling on demand up to 256KB
-- **Shared stack segments**: Coroutines that diverged from a common point share unchanged stack portions via reference counting
+- **On-demand overlap saves**: Initial and subsequent saves are boundary-driven, and additional bytes are copied only when a later switch requires a deeper overlapping region
+- **Shared stack snapshots (duplicate/clone cases)**: Tealets created via stack duplication can share unchanged saved stack segments via reference counting
 - **Memory efficiency**: Typical coroutine overhead is a few KB, not the 1-8MB of OS thread stacks
 
 This makes libtealet suitable for applications with thousands of concurrent coroutines.
@@ -146,11 +146,20 @@ In addition to the traditional approach where each tealet exists within the exec
 This functionality was available in Stackless Python but has historically been omitted from this library to maintain the clean discipline of function-scoped coroutines. `tealet_fork()` breaks out of this restriction, enabling more dynamic coroutine creation patterns.
 
 **Important responsibilities when using fork:**
-- **Stack boundaries must be set**: Call `tealet_set_far()` to establish a stack boundary before forking, ensuring the forked execution doesn't exceed the promised scope
-- **Explicit exit required**: Forked tealets have no run function to return from, so they **must** explicitly exit using `tealet_exit()` (without the `TEALET_EXIT_DEFER` flag)
-- **Scope discipline**: All switching must occur within the bounded stack region defined by the `far` boundary
+- **When forking main-lineage execution** (main tealet or a clone of main):
+    call `tealet_set_far()` first to bound the stack; otherwise `tealet_fork()` can fail with `TEALET_ERR_UNFORKABLE`.
+- **Boundary inheritance:** A forked tealet inherits the parent's current far
+    boundary at fork time. For main-lineage forks, this means the configured
+    main boundary is carried into the child clone.
+- **When forking main-lineage execution**: exit explicitly using `tealet_exit()` (without `TEALET_EXIT_DEFER`).
+- **When forking a regular function-scoped tealet**: no extra far-boundary setup is needed for the fork itself, and the forked tealet can generally return through the same run-function path as the original.
+- **Scope discipline**: For boundary-based fork flows, all switching must occur within the bounded stack region defined by the `far` boundary
 
 This feature enables advanced use cases like coroutine cloning and continuation capture, but requires careful management of stack boundaries and explicit lifetime control.
+
+If your code needs to branch behavior at runtime, use `tealet_get_origin()` (or
+`TEALET_IS_MAIN_LINEAGE()` / `TEALET_IS_FORK()`) to detect whether a tealet is
+main-lineage and/or fork-originated.
 
 ## Documentation
 

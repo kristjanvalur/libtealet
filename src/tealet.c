@@ -48,6 +48,8 @@
 #define TEALET_TFLAGS_DEFUNCT (1u << 1)
 #define TEALET_TFLAGS_AUTODELETE (1u << 2)
 #define TEALET_TFLAGS_EXITED (1u << 3)
+#define TEALET_TFLAGS_MAIN_LINEAGE (1u << 4)
+#define TEALET_TFLAGS_FORK (1u << 5)
 
 /* Internal per-stack flags (stored in tealet_stack_t::flags). */
 #define TEALET_SFLAGS_DEFUNCT (1u << 0)
@@ -1428,6 +1430,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g_main = (tealet_main_t *)g;
   g->stack = NULL;
   g->stack_far = STACKMAN_SP_FURTHEST;
+  g->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
   g_main->g_user = NULL;
   g_main->g_main_stack_probe = &stack_probe;
   g_main->g_current = g;
@@ -1646,6 +1649,9 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
 
   /* Copy the far boundary */
   g_child->stack_far = g_current->stack_far;
+  g_child->flags |= TEALET_TFLAGS_FORK;
+  if (g_current->flags & TEALET_TFLAGS_MAIN_LINEAGE)
+    g_child->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
 
   /* result of tealet_switchstack is:
    * 1 if this was just a save
@@ -1728,6 +1734,17 @@ tealet_t *tealet_previous(tealet_t *tealet) {
 void **tealet_main_userpointer(tealet_t *tealet) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
   return &g_main->g_user;
+}
+
+unsigned int tealet_get_origin(tealet_t *_tealet) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  unsigned int origin = 0;
+
+  if (tealet->flags & TEALET_TFLAGS_MAIN_LINEAGE)
+    origin |= TEALET_ORIGIN_MAIN_LINEAGE;
+  if (tealet->flags & TEALET_TFLAGS_FORK)
+    origin |= TEALET_ORIGIN_FORK;
+  return origin;
 }
 
 int tealet_status(tealet_t *_tealet) {

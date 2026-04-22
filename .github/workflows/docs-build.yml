@@ -8,9 +8,6 @@ on:
       - experiment/doxygen-awesome-css
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build-docs:
     runs-on: ubuntu-latest
