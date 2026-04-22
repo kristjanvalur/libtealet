@@ -2,8 +2,8 @@ name: docs-pages
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - v*.*.*
   workflow_dispatch:
 
 permissions:
