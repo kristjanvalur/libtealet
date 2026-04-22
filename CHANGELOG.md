@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Tealet origin flags API**
+  - Added `tealet_get_origin()` to expose tealet origin/lineage flags.
+  - Added public origin bits:
+    - `TEALET_ORIGIN_MAIN_LINEAGE`
+    - `TEALET_ORIGIN_FORK`
+  - Added convenience macros:
+    - `TEALET_IS_MAIN_LINEAGE()`
+    - `TEALET_IS_FORK()`
+  - Origin bits are tracked on existing per-tealet internal flags and preserved across relevant clone paths.
+
+### Changed
+- **Fork semantics documentation clarity**
+  - Clarified in `src/tealet.h`, `README.md`, and `docs/API.md` that main-lineage fork caveats are scoped to main-lineage execution (main or clone-of-main), not all forks.
+  - Clarified that forked children inherit the parent/current far boundary (`stack_far`) at fork time.
+
+### Tests
+- **Origin flag coverage**
+  - Added origin-flag assertions directly into existing `tealet_fork()` behavior tests in `tests/test_fork.c`.
+  - Added a regular non-fork tealet assertion path in `tests/tests.c` to verify baseline origin classification.
+
 ## [0.4.2] - 2026-04-04
 
 ### Added

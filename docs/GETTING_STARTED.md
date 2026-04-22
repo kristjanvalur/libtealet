@@ -170,7 +170,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 **Why use `tealet_exit()`?**
 - More explicit about where execution goes
 - Controls auto-deletion with flags
-- Required for forked tealets (see Advanced section)
+- Required for main-lineage fork flows (see Advanced section)
 - Clearer intent in complex switching scenarios
 
 ### ⚠️ Auto-Delete Danger

@@ -239,7 +239,8 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  * @retval TEALET_ERR_UNFORKABLE Current stack is unbounded (set far boundary first).
  * @retval TEALET_ERR_MEM Memory allocation failure.
  *
- * @warning Forked tealets must exit via tealet_exit() and must not use #TEALET_EXIT_DEFER.
+ * @warning For forks originating from main-lineage execution (main tealet or a clone
+ * of main), exit explicitly via tealet_exit() and do not use #TEALET_EXIT_DEFER.
 
  * This function duplicates the currently executing tealet, including its entire
  * execution stack. Both the parent and child tealets will resume execution from
@@ -273,9 +274,9 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  *
  * Prerequisites:
  * - The current tealet must be either:
- *   a) A regular (non-main) tealet, OR
- *   b) The main tealet with a bounded stack (far boundary set via
- * tealet_set_far())
+ *   a) A regular function-scoped tealet, OR
+ *   b) The main tealet (or a clone of main) with a bounded stack
+ *      (far boundary set via tealet_set_far()).
  * - The current tealet must be active (not suspended)
  *
  * Flags:
@@ -285,15 +286,20 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  * Memory considerations:
  * - The child tealet has its own stack copy (heap-allocated)
  * - Both parent and child share the same main tealet
+ * - The child inherits the current tealet far boundary (`stack_far`)
+ *   at fork time. For main-lineage forks, this means the configured
+ *   main boundary propagates to the child clone.
  * - Stack-allocated data is duplicated, heap data is shared
  * - Use tealet_current() to get the current tealet pointer after forking
  *
- * Important: Forked tealets do not have a run function like tealets created
- * with tealet_new() or tealet_create(). They continue to exist until
- * explicitly terminated. Therefore, a forked tealet wishing to exit cleanly
- * MUST use tealet_exit() with an explicit target, and must NOT use the
- * TEALET_EXIT_DEFER flag. Simply returning from the forked context is not
- * possible as with a normal tealet's top level function.
+ * Exit behavior depends on what was forked:
+ * - Forking main-lineage execution (main tealet or a clone of main) creates a
+ *   continuation without a normal run-function return path. In that case,
+ *   exit via tealet_exit() with an explicit target and do not use
+ *   TEALET_EXIT_DEFER.
+ * - Forking a regular function-scoped tealet duplicates that existing call
+ *   chain. The forked tealet can generally return through the same run-function
+ *   path as the original tealet.
  *
  * Example:
  *   tealet_t *child = NULL;
@@ -381,6 +387,23 @@ tealet_t *tealet_previous(tealet_t *tealet);
  */
 TEALET_API
 void **tealet_main_userpointer(tealet_t *tealet);
+
+/* Tealet origin flags returned by tealet_get_origin(). */
+#define TEALET_ORIGIN_MAIN_LINEAGE (1u << 0) /* main tealet, or fork-descended from main */
+#define TEALET_ORIGIN_FORK (1u << 1)         /* tealet originated from tealet_fork() */
+
+/**
+ * @brief Get tealet origin flags.
+ * @param tealet Target tealet.
+ * @return Bitwise OR of #TEALET_ORIGIN_* flags.
+ *
+ * Origin flags are immutable identity markers:
+ * - #TEALET_ORIGIN_MAIN_LINEAGE marks main-like lineage (main and descendants
+ *   produced through tealet_fork() from main lineage).
+ * - #TEALET_ORIGIN_FORK marks tealets that originated from tealet_fork().
+ */
+TEALET_API
+unsigned int tealet_get_origin(tealet_t *tealet);
 
 /* Status code: active tealet. */
 #define TEALET_STATUS_ACTIVE 0
@@ -637,6 +660,8 @@ void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, voi
 #define TEALET_MAIN(t) ((t)->main)
 #define TEALET_IS_MAIN(t) ((t) == TEALET_MAIN(t))
 #define TEALET_CURRENT_IS_MAIN(t) (tealet_current(t) == TEALET_MAIN(t))
+#define TEALET_IS_MAIN_LINEAGE(t) ((tealet_get_origin(t) & TEALET_ORIGIN_MAIN_LINEAGE) != 0)
+#define TEALET_IS_FORK(t) ((tealet_get_origin(t) & TEALET_ORIGIN_FORK) != 0)
 
 /* see if two tealets share the same MAIN, and can therefore be switched between
  */
