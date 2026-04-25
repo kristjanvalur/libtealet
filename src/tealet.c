@@ -60,6 +60,7 @@
 
 /* a chunk represents a single segment of saved stack */
 typedef struct tealet_chunk_t {
+  int refcount;                 /* controls chunk lifetime */
   struct tealet_chunk_t *next; /* additional chunks */
   char *stack_near;            /* near stack address */
   size_t size;                 /* amount of data saved */
@@ -79,6 +80,7 @@ typedef struct tealet_stack_t {
   char *stack_far;              /* the far boundary of this stack (or STACKMAN_SP_FURTHEST
                                    for unbounded) */
   size_t saved;                 /* total amount of memory saved in all chunks */
+  struct tealet_chunk_t *last;  /* last chunk in the chain */
   struct tealet_chunk_t chunk;  /* the initial chunk */
 } tealet_stack_t;
 
@@ -751,8 +753,10 @@ static tealet_stack_t *tealet_stack_new(tealet_main_t *main, char *stack_near, c
   s->stack_far = stack_far;
   s->flags = 0;
   s->saved = size;
+  s->last = &s->chunk;
 
   s->chunk.next = NULL;
+  s->chunk.refcount = 1;
   s->chunk.stack_near = stack_near;
   s->chunk.size = size;
 #if STACK_DIRECTION == 0
@@ -778,6 +782,7 @@ static int tealet_stack_grow(tealet_main_t *main, tealet_stack_t *stack, size_t 
   main->g_stack_chunk_count++; /* Additional chunk */
   main->g_stack_bytes += tsize;
 #endif
+  chunk->refcount = 1;
 #if STACK_DIRECTION == 0
   chunk->stack_near = stack->chunk.stack_near + stack->saved;
   memcpy(&chunk->data[0], chunk->stack_near, diff);
@@ -786,8 +791,10 @@ static int tealet_stack_grow(tealet_main_t *main, tealet_stack_t *stack, size_t 
   memcpy(&chunk->data[0], chunk->stack_near - diff, diff);
 #endif
   chunk->size = diff;
-  chunk->next = stack->chunk.next;
-  stack->chunk.next = chunk;
+  chunk->next = NULL;
+  assert(stack->last != NULL);
+  stack->last->next = chunk;
+  stack->last = chunk;
   stack->saved = size;
   return 0;
 }
@@ -834,6 +841,27 @@ static void tealet_stack_unlink(tealet_stack_t *stack) {
   stack->prev = NULL;
 }
 
+static void tealet_chunk_decref(tealet_main_t *main, tealet_chunk_t *chunk) {
+  while (chunk != NULL) {
+    tealet_chunk_t *next;
+
+    if (--chunk->refcount > 0)
+      return;
+
+    /* Only release the remainder of the chain if this node was actually
+     * released. Shared nodes keep ownership of their successors.
+     */
+    next = chunk->next;
+    STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
+#if TEALET_WITH_STATS
+    main->g_stack_chunk_count--; /* Additional chunk */
+    main->g_stack_bytes -= offsetof(tealet_chunk_t, data[0]) + chunk->size;
+#endif
+    tealet_int_free(main, (void *)chunk);
+    chunk = next;
+  }
+}
+
 static void tealet_stack_decref(tealet_main_t *main, tealet_stack_t *stack) {
   tealet_chunk_t *chunk;
   if (stack == NULL || --stack->refcount > 0)
@@ -849,16 +877,8 @@ static void tealet_stack_decref(tealet_main_t *main, tealet_stack_t *stack) {
   main->g_stack_bytes -= offsetof(tealet_stack_t, chunk.data[0]) + stack->chunk.size;
 #endif
   tealet_int_free(main, (void *)stack);
-  while (chunk) {
-    tealet_chunk_t *next = chunk->next;
-    STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
-#if TEALET_WITH_STATS
-    main->g_stack_chunk_count--; /* Additional chunk */
-    main->g_stack_bytes -= offsetof(tealet_chunk_t, data[0]) + chunk->size;
-#endif
-    tealet_int_free(main, (void *)chunk);
-    chunk = next;
-  }
+  if (chunk != NULL)
+    tealet_chunk_decref(main, chunk);
 }
 
 static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack) {
@@ -867,18 +887,11 @@ static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack) {
   tealet_chunk_t *chunk;
   chunk = stack->chunk.next;
   stack->chunk.next = NULL;
+  stack->last = &stack->chunk;
   stack->flags |= TEALET_SFLAGS_DEFUNCT;
   stack->saved = 0;
-  while (chunk) {
-    tealet_chunk_t *next = chunk->next;
-    STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
-#if TEALET_WITH_STATS
-    main->g_stack_chunk_count--; /* Additional chunk being made defunct */
-    main->g_stack_bytes -= offsetof(tealet_chunk_t, data[0]) + chunk->size;
-#endif
-    tealet_int_free(main, (void *)chunk);
-    chunk = next;
-  }
+  if (chunk != NULL)
+    tealet_chunk_decref(main, chunk);
 }
 
 static int tealet_is_defunct(tealet_sub_t *tealet) {
