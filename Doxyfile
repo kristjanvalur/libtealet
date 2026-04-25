@@ -34,6 +34,7 @@ INPUT                  = src/tealet.h \
                          README.md \
                          docs/GETTING_STARTED.md \
                          docs/ARCHITECTURE.md \
+                         docs/INCEMENTAL_SAVE.md \
                          docs/DOXYGEN.md \
                          docs/MEMORY_STATS.md
 FILE_PATTERNS          = *.h \
