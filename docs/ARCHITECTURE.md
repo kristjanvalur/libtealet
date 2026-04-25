@@ -634,6 +634,7 @@ For a low-level C library, reference counting fits better.
 
 - [GETTING_STARTED.md](GETTING_STARTED.md) - Practical usage examples
 - [API.md](API.md) - Complete function reference
+- [INCEMENTAL_SAVE.md](INCEMENTAL_SAVE.md) - Partial-save algorithm and invariants
 - [stackman documentation](https://github.com/stackless-dev/stackman) - Low-level stack operations
 - [Stackless Python](https://github.com/stackless-dev/stackless) - Original inspiration
 - [Greenlet](https://greenlet.readthedocs.io/) - Related Python project
