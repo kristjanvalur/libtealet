@@ -82,17 +82,20 @@ static void check_stats(int verbose) {
     /* Each stack has one initial chunk (embedded in tealet_stack_t structure)
      */
     /* Additional chunks beyond the first add overhead for the chunk header */
-    /* Chunk header contains: next pointer, stack_near pointer, size field (~24
-     * bytes) */
+    /* Chunk header contains: next pointer, stack_near pointer, size field,
+     * and refcount. Header size is architecture/alignment dependent, so we
+     * compute an aligned overhead estimate below. */
     /*
      * Example: Stack with 2 chunks saving 288 bytes total
      *   - naive = 64 (struct overhead) + 288 (extent) = 352 bytes
-     *   - expanded = 64 + 144 (chunk1) + 24 (chunk2 header) + 144 (chunk2 data)
-     * = 376 bytes
-     *   - difference = 24 bytes (one extra chunk header)
+    *   - expanded = base + data + one extra chunk header + extra chunk data
+    *   - difference = one extra chunk header
      */
     size_t extra_chunks = stats.stack_chunk_count - stats.stack_count;
-    size_t max_overhead = extra_chunks * 24; /* approximate chunk header size */
+    size_t chunk_header_raw = sizeof(void *) * 2 + sizeof(size_t) + sizeof(int);
+    size_t chunk_header_align = sizeof(void *);
+    size_t chunk_header_overhead = ((chunk_header_raw + chunk_header_align - 1) / chunk_header_align) * chunk_header_align;
+    size_t max_overhead = extra_chunks * chunk_header_overhead;
     if (stats.stack_bytes_expanded > stats.stack_bytes_naive + max_overhead) {
       fprintf(stderr,
               "INVARIANT FAIL: expanded=%zu > naive=%zu + overhead=%zu "
