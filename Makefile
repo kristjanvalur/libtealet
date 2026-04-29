@@ -79,7 +79,7 @@ bin/libtealet.a: bin $(allobj)
 
 clean:
 	rm -f src/*.o tests/*.o *.out *.so
-	rm -f bin/*
+	rm -rf bin/*
 
 .PHONY: abiname
 abiname:
