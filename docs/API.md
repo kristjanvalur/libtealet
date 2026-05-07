@@ -862,6 +862,46 @@ This helper is intended as a simple one-way "enable checks" API; use `tealet_con
 
 ---
 
+### `tealet_config_set_locking()`
+
+```c
+int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+```
+
+Configure optional lock/unlock callbacks for a main-tealet domain.
+
+`tealet_lock_t` contains:
+- `void (*lock)(void *arg)`
+- `void (*unlock)(void *arg)`
+- `void *arg`
+
+The descriptor is copied into internal main-tealet state. Pass `NULL` to clear it.
+
+**Recommendation:** Call this immediately after `tealet_initialize()` and before sharing tealet handles across threads. This avoids races where concurrent lifecycle operations run before lock callbacks are installed.
+
+**Allocator interaction contract:** libtealet may invoke allocator callbacks either with or without the configured tealet lock held, depending on internal call path. Integrators must not rely on the tealet lock as allocator protection, and allocator implementations must avoid deadlocking in either state.
+
+---
+
+### `tealet_lock()` / `tealet_unlock()`
+
+```c
+void tealet_lock(tealet_t *tealet);
+void tealet_unlock(tealet_t *tealet);
+```
+
+Invoke the configured locking callbacks for the tealet domain.
+
+**Behavior:**
+- If lock callbacks are configured, these forward to them with the configured `arg`.
+- If callbacks are not configured, both APIs are no-ops.
+
+These helpers are intended for synchronizing access to tealet structures and lifecycle operations (for example duplicate/delete) in multi-threaded integrations.
+
+They do not make context switching itself multi-thread-safe. In particular, switching between related tealets from different threads is unsupported: a tealet domain must be switched by one thread at a time, and cross-thread `tealet_switch()` usage is invalid.
+
+---
+
 ### `tealet_delete()`
 
 ```c
@@ -910,6 +950,8 @@ typedef struct tealet_alloc {
 ```
 
 Custom memory allocator interface.
+
+Allocator callbacks may be invoked either with or without the configured tealet lock held. Design allocators to be safe in both contexts and do not assume lock state.
 
 **Fields:**
 - `context`: User-defined allocator state (passed to malloc/free functions)

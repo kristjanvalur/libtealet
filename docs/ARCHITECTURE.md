@@ -71,6 +71,23 @@ This abstraction allows the same algorithm to work regardless of platform stack 
 
 libtealet implements **symmetric coroutines** through stack-slicing: saving portions of the C execution stack to the heap and restoring them later. The innovation lies in **incremental stack saving** that minimizes memory usage.
 
+## Threading Model and Locking Rationale
+
+libtealet uses a **single-threaded switching model**: a switch operation must execute on exactly one thread within a main-tealet domain.
+
+At the same time, some lifecycle operations can be initiated from multiple threads in real integrations, especially:
+- Duplicating tealet structures
+- Deleting tealet structures
+- Inspecting and updating shared tealet metadata
+
+This creates a mixed concurrency requirement:
+- **Context switching is not multi-threaded** and must remain serialized by design.
+- **Structure access and lifecycle management may be multi-threaded** and therefore require synchronization support.
+
+For this reason, libtealet should provide **locking helpers** around tealet structure access so library users can make metadata and lifecycle operations thread-safe without changing the core single-threaded switch semantics.
+
+In short: switching stays thread-affine, while auxiliary structure operations need explicit thread-safety support.
+
 ## Core Data Structures
 
 ### tealet_chunk_t - Stack Segment

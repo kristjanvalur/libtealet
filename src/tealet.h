@@ -34,6 +34,12 @@
 /** A structure to define the memory allocation api used.
  * the functions have C89 semantics and take an additional "context"
  * pointer that they can use as they please
+ *
+ * Threading contract with optional tealet locking:
+ * allocator callbacks may be invoked either with or without the configured
+ * tealet lock held. Integrations must not rely on tealet_lock() for allocator
+ * protection, and allocator implementations must avoid deadlocking in either
+ * call context.
  */
 typedef void *(*tealet_malloc_t)(size_t size, void *context);
 typedef void (*tealet_free_t)(void *ptr, void *context);
@@ -42,6 +48,17 @@ typedef struct tealet_alloc_t {
   tealet_free_t free_p;
   void *context;
 } tealet_alloc_t;
+
+/** Optional locking hooks for thread-safe tealet-structure access.
+ *
+ * The callbacks are invoked by tealet_lock()/tealet_unlock() with @p arg.
+ * If either callback is NULL, the corresponding API becomes a no-op.
+ */
+typedef struct tealet_lock_t {
+  void (*lock)(void *arg);
+  void (*unlock)(void *arg);
+  void *arg;
+} tealet_lock_t;
 
 /** use the following macro to initialize a tealet_alloc_t
  * structure with stdlib malloc functions, for convenience, e.g.:
@@ -557,6 +574,22 @@ TEALET_API
 int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
 
 /**
+ * @brief Configure optional locking callbacks for a main-tealet domain.
+ * @param tealet Any tealet in the domain.
+ * @param locking Lock callback descriptor to copy; pass NULL to clear (no-op mode).
+ * @return 0 on success.
+ *
+ * This stores callback pointers and argument on the domain's main tealet.
+ * It does not acquire or release locks itself.
+ *
+ * Locking/allocator interaction contract: libtealet may call allocator
+ * callbacks with or without this lock held, depending on call path.
+ * Do not assume either state.
+ */
+TEALET_API
+int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+
+/**
  * @brief Enable stack-integrity checking with practical defaults.
  * @param tealet Any tealet in the domain.
  * @param stack_integrity_bytes Requested watch window bytes; 0 picks sensible default.
@@ -609,6 +642,24 @@ void *tealet_malloc(tealet_t *tealet, size_t s);
  */
 TEALET_API
 void tealet_free(tealet_t *tealet, void *p);
+
+/**
+ * @brief Invoke configured lock callback for this tealet domain.
+ * @param tealet Any tealet in the domain.
+ *
+ * No-op when no lock callback is configured.
+ */
+TEALET_API
+void tealet_lock(tealet_t *tealet);
+
+/**
+ * @brief Invoke configured unlock callback for this tealet domain.
+ * @param tealet Any tealet in the domain.
+ *
+ * No-op when no unlock callback is configured.
+ */
+TEALET_API
+void tealet_unlock(tealet_t *tealet);
 
 /* functions for stack arithmetic.  Useful when deciding
  * if you want to start a new tealet, or when doing stack

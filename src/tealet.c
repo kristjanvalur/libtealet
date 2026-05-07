@@ -144,6 +144,7 @@ typedef struct tealet_main_t {
   tealet_sub_t *g_target;   /* Temporary store when switching */
   void *g_arg;              /* argument passed around when switching */
   tealet_alloc_t g_alloc;   /* the allocation context used */
+  tealet_lock_t g_locking;  /* optional external lock callbacks */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e g_sw;         /* save/restore state */
   int g_flags;              /* default flags when tealet exits */
@@ -1438,6 +1439,9 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g_main->g_target = NULL;
   g_main->g_arg = NULL;
   g_main->g_alloc = *alloc;
+  g_main->g_locking.lock = NULL;
+  g_main->g_locking.unlock = NULL;
+  g_main->g_locking.arg = NULL;
   g_main->g_prev = NULL;
   g_main->g_extrasize = extrasize;
   g_main->g_sw = SW_NOP;
@@ -1966,6 +1970,20 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config) {
   return 0;
 }
 
+int tealet_config_set_locking(tealet_t *_tealet, const tealet_lock_t *locking) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+
+  if (locking == NULL) {
+    g_main->g_locking.lock = NULL;
+    g_main->g_locking.unlock = NULL;
+    g_main->g_locking.arg = NULL;
+  } else {
+    g_main->g_locking = *locking;
+  }
+  return 0;
+}
+
 /* Convenience API to enable stack checking with practical defaults.
  *
  * - Enables integrity + guard + snapshot flags.
@@ -2010,6 +2028,18 @@ void *tealet_malloc(tealet_t *tealet, size_t s) {
 void tealet_free(tealet_t *tealet, void *p) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
   tealet_int_free(g_main, p);
+}
+
+void tealet_lock(tealet_t *tealet) {
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  if (g_main->g_locking.lock)
+    g_main->g_locking.lock(g_main->g_locking.arg);
+}
+
+void tealet_unlock(tealet_t *tealet) {
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  if (g_main->g_locking.unlock)
+    g_main->g_locking.unlock(g_main->g_locking.arg);
 }
 
 ptrdiff_t tealet_stack_diff(void *a, void *b) { return STACKMAN_SP_DIFF((ptrdiff_t)a, (ptrdiff_t)(b)); }
