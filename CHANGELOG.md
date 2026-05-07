@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-07
+
+### Added
+- **Locking callback API for synchronized foreign-thread structure access**
+  - Added `tealet_lock_t` callback descriptor.
+  - Added `tealet_config_set_locking()` to configure lock/unlock callbacks per main-tealet domain.
+  - Added utility entry points `tealet_lock()` and `tealet_unlock()`.
+- **Incremental save algorithm documentation**
+  - Added `docs/INCREMENTAL_SAVE.md` describing partial-save invariants and transition behavior.
+
+### Changed
+- **Automatic lock ownership is now limited to core switching APIs**
+  - Internal auto-lock scope is centered on:
+    - `tealet_new()`
+    - `tealet_create()`
+    - `tealet_switch()`
+    - `tealet_exit()`
+    - `tealet_fork()`
+  - Non-switch APIs remain caller-synchronized where foreign-thread access is possible.
+
+### Fixed
+- **Unreachable exit fallback hardening**
+  - Hardened the unreachable `tealet_exit()` return path to fail fast via `abort()` in release builds.
+
 ## [0.4.3] - 2026-04-22
 
 ### Added
@@ -356,7 +380,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kristjanvalur/libtealet/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/kristjanvalur/libtealet/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/kristjanvalur/libtealet/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/kristjanvalur/libtealet/compare/v0.4.0...v0.4.1
