@@ -60,6 +60,7 @@
 
 /* a chunk represents a single segment of saved stack */
 typedef struct tealet_chunk_t {
+  int refcount;                /* controls chunk lifetime */
   struct tealet_chunk_t *next; /* additional chunks */
   char *stack_near;            /* near stack address */
   size_t size;                 /* amount of data saved */
@@ -79,6 +80,7 @@ typedef struct tealet_stack_t {
   char *stack_far;              /* the far boundary of this stack (or STACKMAN_SP_FURTHEST
                                    for unbounded) */
   size_t saved;                 /* total amount of memory saved in all chunks */
+  struct tealet_chunk_t *last;  /* last chunk in the chain */
   struct tealet_chunk_t chunk;  /* the initial chunk */
 } tealet_stack_t;
 
@@ -144,6 +146,7 @@ typedef struct tealet_main_t {
   tealet_sub_t *g_target;   /* Temporary store when switching */
   void *g_arg;              /* argument passed around when switching */
   tealet_alloc_t g_alloc;   /* the allocation context used */
+  tealet_lock_t g_locking;  /* optional external lock callbacks */
   tealet_stack_t *g_prev;   /* previously active unsaved stacks */
   tealet_sr_e g_sw;         /* save/restore state */
   int g_flags;              /* default flags when tealet exits */
@@ -234,6 +237,30 @@ static void *tealet_int_malloc(tealet_main_t *main, size_t size) {
 }
 static void tealet_int_free(tealet_main_t *main, void *ptr) { main->g_alloc.free_p(ptr, main->g_alloc.context); }
 
+/* Debug-only sanity check that caller stack plausibly matches current tealet.
+ *
+ * This is intentionally best-effort: we do not know the full virtual-memory
+ * extent for the current stack slice, so for bounded stacks we can only check
+ * ordering against current->stack_far. That catches some foreign-thread calls,
+ * but not all of them.
+ */
+static void tealet_verify_current_matches_caller(tealet_sub_t *current) {
+#ifndef NDEBUG
+  char stack_probe = 0;
+  char *sp = &stack_probe;
+
+  assert(current != NULL);
+  assert((current->flags & TEALET_TFLAGS_EXITED) == 0);
+
+  if (current->stack_far != STACKMAN_SP_FURTHEST) {
+    assert(current->stack_far != NULL);
+    assert(STACKMAN_SP_LS(sp, current->stack_far));
+  }
+#else
+  (void)current;
+#endif
+}
+
 /* ----------------------------------------------------------------
  * Stack integrity helpers (snapshot + guard planning).
  */
@@ -317,6 +344,7 @@ static void tealet_integrity_plan_for_current(tealet_main_t *g_main) {
   tealet_integrity_data_clear(plan);
 
   current = g_main->g_current;
+  tealet_verify_current_matches_caller(current);
   assert(current != NULL);
 
   if (current->stack_far == STACKMAN_SP_FURTHEST)
@@ -558,6 +586,8 @@ static void tealet_snapshot_capture_current(tealet_main_t *g_main) {
   char *stack_base = g_main->g_integrity_data.stack_base;
   size_t size = g_main->g_integrity_data.snapshot_bytes;
 
+  tealet_verify_current_matches_caller(current);
+
   if (size == 0)
     return;
 
@@ -751,8 +781,10 @@ static tealet_stack_t *tealet_stack_new(tealet_main_t *main, char *stack_near, c
   s->stack_far = stack_far;
   s->flags = 0;
   s->saved = size;
+  s->last = &s->chunk;
 
   s->chunk.next = NULL;
+  s->chunk.refcount = 1;
   s->chunk.stack_near = stack_near;
   s->chunk.size = size;
 #if STACK_DIRECTION == 0
@@ -778,6 +810,7 @@ static int tealet_stack_grow(tealet_main_t *main, tealet_stack_t *stack, size_t 
   main->g_stack_chunk_count++; /* Additional chunk */
   main->g_stack_bytes += tsize;
 #endif
+  chunk->refcount = 1;
 #if STACK_DIRECTION == 0
   chunk->stack_near = stack->chunk.stack_near + stack->saved;
   memcpy(&chunk->data[0], chunk->stack_near, diff);
@@ -786,8 +819,10 @@ static int tealet_stack_grow(tealet_main_t *main, tealet_stack_t *stack, size_t 
   memcpy(&chunk->data[0], chunk->stack_near - diff, diff);
 #endif
   chunk->size = diff;
-  chunk->next = stack->chunk.next;
-  stack->chunk.next = chunk;
+  chunk->next = NULL;
+  assert(stack->last != NULL);
+  stack->last->next = chunk;
+  stack->last = chunk;
   stack->saved = size;
   return 0;
 }
@@ -834,6 +869,27 @@ static void tealet_stack_unlink(tealet_stack_t *stack) {
   stack->prev = NULL;
 }
 
+static void tealet_chunk_decref(tealet_main_t *main, tealet_chunk_t *chunk) {
+  while (chunk != NULL) {
+    tealet_chunk_t *next;
+
+    if (--chunk->refcount > 0)
+      return;
+
+    /* Only release the remainder of the chain if this node was actually
+     * released. Shared nodes keep ownership of their successors.
+     */
+    next = chunk->next;
+    STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
+#if TEALET_WITH_STATS
+    main->g_stack_chunk_count--; /* Additional chunk */
+    main->g_stack_bytes -= offsetof(tealet_chunk_t, data[0]) + chunk->size;
+#endif
+    tealet_int_free(main, (void *)chunk);
+    chunk = next;
+  }
+}
+
 static void tealet_stack_decref(tealet_main_t *main, tealet_stack_t *stack) {
   tealet_chunk_t *chunk;
   if (stack == NULL || --stack->refcount > 0)
@@ -849,16 +905,8 @@ static void tealet_stack_decref(tealet_main_t *main, tealet_stack_t *stack) {
   main->g_stack_bytes -= offsetof(tealet_stack_t, chunk.data[0]) + stack->chunk.size;
 #endif
   tealet_int_free(main, (void *)stack);
-  while (chunk) {
-    tealet_chunk_t *next = chunk->next;
-    STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
-#if TEALET_WITH_STATS
-    main->g_stack_chunk_count--; /* Additional chunk */
-    main->g_stack_bytes -= offsetof(tealet_chunk_t, data[0]) + chunk->size;
-#endif
-    tealet_int_free(main, (void *)chunk);
-    chunk = next;
-  }
+  if (chunk != NULL)
+    tealet_chunk_decref(main, chunk);
 }
 
 static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack) {
@@ -867,18 +915,11 @@ static void tealet_stack_defunct(tealet_main_t *main, tealet_stack_t *stack) {
   tealet_chunk_t *chunk;
   chunk = stack->chunk.next;
   stack->chunk.next = NULL;
+  stack->last = &stack->chunk;
   stack->flags |= TEALET_SFLAGS_DEFUNCT;
   stack->saved = 0;
-  while (chunk) {
-    tealet_chunk_t *next = chunk->next;
-    STATS_SUB_ALLOC(main, offsetof(tealet_chunk_t, data[0]) + chunk->size);
-#if TEALET_WITH_STATS
-    main->g_stack_chunk_count--; /* Additional chunk being made defunct */
-    main->g_stack_bytes -= offsetof(tealet_chunk_t, data[0]) + chunk->size;
-#endif
-    tealet_int_free(main, (void *)chunk);
-    chunk = next;
-  }
+  if (chunk != NULL)
+    tealet_chunk_decref(main, chunk);
 }
 
 static int tealet_is_defunct(tealet_sub_t *tealet) {
@@ -1020,6 +1061,9 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
   tealet_sub_t *g_current = g_main->g_current;
   char *target_stop = g_target->stack_far;
   int exiting, fail, fail_ok, auto_delete;
+
+  tealet_verify_current_matches_caller(g_current);
+
   assert((g_target->flags & TEALET_TFLAGS_EXITED) == 0); /* target isn't exiting */
   assert(g_current != g_target);
 
@@ -1163,6 +1207,7 @@ static int tealet_check_caller_is_current(tealet_sub_t *g_current) {
 
   assert(g_current != NULL);
   assert((g_current->flags & TEALET_TFLAGS_EXITED) == 0);
+  tealet_verify_current_matches_caller(g_current);
 
   g_main = TEALET_GET_MAIN(g_current);
   max_stack_size = g_main->g_cfg_max_stack_size;
@@ -1200,8 +1245,13 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
   assert(target);
   assert(target != g_main->g_current);
 
-  if (target->flags & TEALET_TFLAGS_EXITED)
+  /* Locking is owned by top-level switching APIs (new/create/switch/exit/fork).
+   * This helper assumes the caller already established the desired lock scope.
+   */
+
+  if (target->flags & TEALET_TFLAGS_EXITED) {
     return TEALET_ERR_INVAL;
+  }
 
   /* if the target saved stack is invalid (due to a failure to save it
    * during the exit of another tealet), we detect this here and
@@ -1212,22 +1262,26 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
    * -1 = error, couldn't save state
    * -2 = error, target tealet corrupt
    */
-  if (tealet_is_defunct(target))
+  if (tealet_is_defunct(target)) {
     return TEALET_ERR_DEFUNCT;
+  }
 
   err_result = tealet_check_caller_is_current(g_main->g_current);
-  if (err_result)
+  if (err_result) {
     return err_result;
+  }
 
   tealet_guard_unprotect_current(g_main);
 
   err_result = tealet_snapshot_verify_current(g_main);
   if (err_result)
-    /* Intentional behavior: on integrity error we return without re-arming
-     * current guard/snapshot state. This is a best-effort mode that favors
-     * continued execution after reporting the error.
-     */
+  /* Intentional behavior: on integrity error we return without re-arming
+   * current guard/snapshot state. This is a best-effort mode that favors
+   * continued execution after reporting the error.
+   */
+  {
     return err_result;
+  }
 
   g_main->g_previous = g_main->g_current;
   g_main->g_target = target;
@@ -1286,6 +1340,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
  * stack_far is the far end of this stack and must be
  * far enough that local variables in this function get saved.
  * A stack variable in the calling function is sufficient.
+ * The lock is held on entry.
  */
 static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet_sub_t *g_target, tealet_run_t run,
                               void **parg, void *stack_far) {
@@ -1343,7 +1398,10 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     }
     assert(g_main->g_current->stack == NULL); /* running */
 
+    /* release the lock and run the tealet */
+    tealet_unlock((tealet_t *)g_main);
     g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, run_arg));
+
     tealet_exit((tealet_t *)g_exit_target, NULL, TEALET_EXIT_DELETE);
     assert(!"This point should not be reached");
   } else {
@@ -1409,9 +1467,11 @@ static tealet_sub_t *tealet_alloc(tealet_main_t *g_main) {
   tealet_sub_t *result;
   size_t basesize = offsetof(tealet_nonmain_t, _extra);
   size_t extrasize = g_main->g_extrasize;
+
   result = tealet_alloc_raw(g_main, &g_main->g_alloc, basesize, extrasize);
 #if TEALET_WITH_STATS
-  g_main->g_tealets++;
+  if (result != NULL)
+    g_main->g_tealets++;
 #endif
   return result;
 }
@@ -1438,6 +1498,9 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g_main->g_target = NULL;
   g_main->g_arg = NULL;
   g_main->g_alloc = *alloc;
+  g_main->g_locking.lock = NULL;
+  g_main->g_locking.unlock = NULL;
+  g_main->g_locking.arg = NULL;
   g_main->g_prev = NULL;
   g_main->g_extrasize = extrasize;
   g_main->g_sw = SW_NOP;
@@ -1493,6 +1556,11 @@ static void *tealet_pick_initial_far(void *default_far, void *hint) {
 
 /* create a tealet by saving the current stack and starting
  * immediate execution of a new one
+ *
+ * Switching API lock policy:
+ * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * the lock internally.
  */
 tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far) {
   tealet_sub_t *result; /* store this until we return */
@@ -1501,24 +1569,33 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stac
   void *default_far;
   void *stack_far_used;
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  tealet_lock((tealet_t *)g_main);
   assert(!g_main->g_target);
   result = tealet_alloc(g_main);
-  if (result == NULL)
-    return NULL; /* Could not allocate */
+  if (result == NULL) {
+    goto done; /* Could not allocate */
+  }
   default_far = (void *)&result;
   stack_far_used = tealet_pick_initial_far(default_far, stack_far);
   fail = tealet_initialstub(g_main, result, result, run, (parg != NULL ? parg : &arg), stack_far_used);
   if (fail) {
     /* could not save stack */
     tealet_delete((tealet_t *)result);
-    return NULL;
+    result = NULL;
   }
+done:
+  tealet_unlock((tealet_t *)g_main);
   return (tealet_t *)result;
 }
 
 /* create a tealet by saving the target stack and switching
  * back to the caller, allowing the caller to run the
  * tealet proper later, by switching to it.
+ *
+ * Switching API lock policy:
+ * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * the lock internally.
  */
 tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far) {
   tealet_sub_t *result; /* store this until we return */
@@ -1526,12 +1603,17 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far) {
   void *default_far;
   void *stack_far_used;
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  tealet_sub_t *previous = g_main->g_previous;
-  tealet_sub_t *current = g_main->g_current;
+  tealet_sub_t *previous;
+  tealet_sub_t *current;
+
+  tealet_lock((tealet_t *)g_main);
+  previous = g_main->g_previous;
+  current = g_main->g_current;
+  tealet_verify_current_matches_caller(current);
   assert(!g_main->g_target);
   result = tealet_alloc(g_main);
   if (result == NULL)
-    return NULL; /* Could not allocate */
+    goto done; /* Could not allocate */
   /* we turn into the new tealet and switch back, in order
    * to save the new tealet's stack at this position
    */
@@ -1543,7 +1625,7 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far) {
     /* could not save stack */
     tealet_delete((tealet_t *)result);
     g_main->g_current = current;
-    return NULL;
+    result = NULL;
   } else {
     /* restore g_previous to whatever it was.  We don't count
      * this switch from the temporary tealet back to us
@@ -1551,17 +1633,36 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far) {
      */
     g_main->g_previous = previous;
   }
+done:
+  tealet_unlock((tealet_t *)g_main);
   return (tealet_t *)result;
 }
 
+/* Switch to a tealet and back.
+ *
+ * Switching API lock policy:
+ * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * the lock internally.
+ */
+
 int tealet_switch(tealet_t *stub, void **parg) {
   tealet_sub_t *g_target = (tealet_sub_t *)stub;
+  tealet_sub_t *g_current;
+  int result;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
-  if (g_target == g_main->g_current) {
-    g_main->g_previous = g_main->g_current;
-    return 0; /* switch to self */
+
+  tealet_lock((tealet_t *)g_main);
+  g_current = g_main->g_current;
+  tealet_verify_current_matches_caller(g_current);
+  if (g_target == g_current) {
+    g_main->g_previous = g_current;
+    result = 0; /* switch to self */
+  } else {
+    result = tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
   }
-  return tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
+  tealet_unlock((tealet_t *)g_main);
+  return result;
 }
 
 static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
@@ -1570,6 +1671,9 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   tealet_sub_t *g_current = g_main->g_current;
   char *stack_far = g_target->stack_far;
   int result;
+
+  tealet_verify_current_matches_caller(g_current);
+
   assert(g_current != (tealet_sub_t *)g_main); /* mustn't exit main */
   if (g_target == g_current)
     return -2; /* invalid tealet */
@@ -1587,10 +1691,20 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   return result;
 }
 
+/* Exit current tealet and transfer control.
+ *
+ * Switching API lock policy:
+ * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * the lock internally.
+ */
+
 int tealet_exit(tealet_t *target, void *arg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)target;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   int result;
+
+  tealet_lock((tealet_t *)g_main);
   if (flags & TEALET_EXIT_DEFER) {
     /* setting up arg and flags for the run() return value */
     /* We temporarily borrow g_flags/g_arg storage on main until the
@@ -1599,7 +1713,8 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
     assert(g_main->g_flags == 0);
     g_main->g_arg = arg;
     g_main->g_flags = flags;
-    return 0;
+    tealet_unlock((tealet_t *)g_main);
+    return 0; /* deferred exit, we are done here */
   }
   if (g_main->g_flags & TEALET_EXIT_DEFER) {
     /* Called second time (e.g. from return of run())
@@ -1616,32 +1731,52 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
     g_main->g_flags |= TEALET_MFLAGS_PANIC;
   /* fallback: switch to main */
   result = tealet_exit_inner(target->main, arg, flags);
-  /* should never reach here */
-  assert(0);
-  return result;
+  (void)result;
+  /* Unreachable in normal operation: successful tealet_exit_inner() does not
+   * return to this frame. If control returns here, execution state is corrupt.
+   */
+  assert(0 && "unreachable tealet_exit return path");
+  abort();
 }
+
+/* Fork the active tealet.
+ *
+ * Switching API lock policy:
+ * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * the lock internally.
+ */
 
 int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  tealet_sub_t *g_current = g_main->g_current;
+  tealet_sub_t *g_current;
   tealet_sub_t *previous;
   tealet_sub_t *g_child;
   int result, is_parent;
+  int api_result;
+
+  tealet_lock((tealet_t *)g_main);
+  g_current = g_main->g_current;
+  tealet_verify_current_matches_caller(g_current);
 
   /* Current tealet must have a bounded stack (far boundary set).
    * Even the main tealet can fork if its far boundary has been set.
    */
-  if (TEALET_STACK_IS_UNBOUNDED(g_current))
-    return TEALET_ERR_UNFORKABLE;
+  if (TEALET_STACK_IS_UNBOUNDED(g_current)) {
+    api_result = TEALET_ERR_UNFORKABLE;
+    goto done;
+  }
 
   /* Active tealets have NULL stack (implied by the check above) */
   assert(g_current->stack == NULL);
 
   /* Allocate the child tealet */
   g_child = tealet_alloc(g_main);
-  if (g_child == NULL)
-    return TEALET_ERR_MEM;
+  if (g_child == NULL) {
+    api_result = TEALET_ERR_MEM;
+    goto done;
+  }
 
   /* Copy extra data if present */
   if (g_main->g_extrasize)
@@ -1680,18 +1815,28 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   if (result < 0) {
     /* Failed to save stack */
     tealet_free_tealet(g_main, g_child);
-    return TEALET_ERR_MEM;
+    api_result = TEALET_ERR_MEM;
+    goto done;
   }
 
   if (pother)
     *pother = (tealet_t *)(is_parent ? g_child : g_current);
-  return is_parent;
+  api_result = is_parent;
+
+done:
+  /* we are now back.  If successful, we are either conceptually the same stack as when we called,
+   * or we have been switched to (via tealet_switch or tealet_exit().  in either case,
+   * release the lock.
+   */
+  tealet_unlock((tealet_t *)g_main);
+  return api_result;
 }
 
 tealet_t *tealet_duplicate(tealet_t *tealet) {
   tealet_sub_t *g_tealet = (tealet_sub_t *)tealet;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_tealet);
   tealet_sub_t *g_copy;
+
   /* can't dup the current or the main tealet */
   assert(g_tealet != g_main->g_current && g_tealet != (tealet_sub_t *)g_main);
   g_copy = tealet_alloc(g_main);
@@ -1711,10 +1856,10 @@ void tealet_delete(tealet_t *target) {
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   assert(!TEALET_IS_MAIN(target));
   tealet_stack_decref(g_main, g_target->stack);
-  tealet_free_tealet(g_main, g_target);
 #if TEALET_WITH_STATS
   g_main->g_tealets--;
 #endif
+  tealet_free_tealet(g_main, g_target);
 }
 
 /* ----------------------------------------------------------------
@@ -1966,6 +2111,20 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config) {
   return 0;
 }
 
+int tealet_config_set_locking(tealet_t *_tealet, const tealet_lock_t *locking) {
+  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+
+  if (locking == NULL) {
+    g_main->g_locking.lock = NULL;
+    g_main->g_locking.unlock = NULL;
+    g_main->g_locking.arg = NULL;
+  } else {
+    g_main->g_locking = *locking;
+  }
+  return 0;
+}
+
 /* Convenience API to enable stack checking with practical defaults.
  *
  * - Enables integrity + guard + snapshot flags.
@@ -2010,6 +2169,18 @@ void *tealet_malloc(tealet_t *tealet, size_t s) {
 void tealet_free(tealet_t *tealet, void *p) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
   tealet_int_free(g_main, p);
+}
+
+void tealet_lock(tealet_t *tealet) {
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  if (g_main->g_locking.lock)
+    g_main->g_locking.lock(g_main->g_locking.arg);
+}
+
+void tealet_unlock(tealet_t *tealet) {
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  if (g_main->g_locking.unlock)
+    g_main->g_locking.unlock(g_main->g_locking.arg);
 }
 
 ptrdiff_t tealet_stack_diff(void *a, void *b) { return STACKMAN_SP_DIFF((ptrdiff_t)a, (ptrdiff_t)(b)); }

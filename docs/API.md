@@ -528,6 +528,12 @@ If the chosen exit target is defunct, this fallback path reroutes the exit to `m
 
 ## Status and Inspection
 
+Query APIs in this section are not internally synchronized.
+
+If they are used from foreign threads, or concurrently with switching/lifecycle
+operations, callers must provide external synchronization (for example
+`tealet_lock()`/`tealet_unlock()` around the access sequence).
+
 ### `tealet_previous()`
 
 ```c
@@ -543,6 +549,9 @@ Get the tealet that most recently switched to the current tealet.
 - Pointer to the previous tealet when available
 - `NULL` when no previous tealet is recorded
 - `NULL` when the previously recorded tealet has been destroyed
+
+**Note:** In a multithreaded setting, a previous tealet can be simultaneously
+deleted by a different thread, invalidating the returned pointer.
 
 **Usage:**
 ```c
@@ -664,6 +673,16 @@ Convenience macros are also available:
 
 - `TEALET_IS_MAIN_LINEAGE(t)`
 - `TEALET_IS_FORK(t)`
+
+---
+
+### `tealet_main_userpointer()`
+
+```c
+void **tealet_main_userpointer(tealet_t *tealet);
+```
+
+Get the address of the per-main user pointer slot.
 
 ---
 
@@ -862,6 +881,63 @@ This helper is intended as a simple one-way "enable checks" API; use `tealet_con
 
 ---
 
+### `tealet_config_set_locking()`
+
+```c
+int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+```
+
+Configure optional lock/unlock callbacks for a main-tealet domain.
+
+`tealet_lock_t` contains:
+- `void (*lock)(void *arg)`
+- `void (*unlock)(void *arg)`
+- `void *arg`
+
+The descriptor is copied into internal main-tealet state. Pass `NULL` to clear it.
+
+**Recommendation:** Call this immediately after `tealet_initialize()` and before sharing tealet handles across threads. This avoids races where foreign-thread delete operations run before lock callbacks are installed.
+
+When configured, libtealet automatically acquires/releases this lock only for the core switching APIs:
+- `tealet_new()`
+- `tealet_create()`
+- `tealet_switch()`
+- `tealet_exit()`
+- `tealet_fork()`
+
+Rationale: these paths are temporally asymmetric (execution may leave one call site and later continue from a different logical point, including entry/exit boundaries). Keeping lock ownership inside the library for these transitions avoids brittle cross-frame lock management in integrator code.
+
+Stub helpers in `tealet_extras.h` (`tealet_stub_new()`, `tealet_stub_run()`) are switching wrappers by inference, so they inherit this behavior through the core switching APIs.
+
+For other APIs, integrators should call `tealet_lock()`/`tealet_unlock()` explicitly when foreign-thread access is possible.
+
+**Allocator interaction contract:** libtealet may invoke allocator callbacks either with or without the configured tealet lock held, depending on internal call path. Integrators must not rely on the tealet lock as allocator protection, and allocator implementations must avoid deadlocking in either state.
+
+---
+
+### `tealet_lock()` / `tealet_unlock()`
+
+```c
+void tealet_lock(tealet_t *tealet);
+void tealet_unlock(tealet_t *tealet);
+```
+
+Invoke the configured locking callbacks for the tealet domain.
+
+**Behavior:**
+- If lock callbacks are configured, these forward to them with the configured `arg`.
+- If callbacks are not configured, both APIs are no-ops.
+
+These helpers are intended for synchronizing access to tealet structures for the primary multi-threaded use case: foreign-thread `tealet_delete()` of non-main tealets.
+
+Only the five core switching APIs are auto-locked by libtealet (`tealet_new()`, `tealet_create()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`). For other APIs (for example `tealet_delete()` and `tealet_duplicate()`), integrators are expected to apply explicit lock/unlock around calls if those operations may run from foreign threads.
+
+Switching itself remains thread-affine: switching between related tealets from different threads is unsupported, and cross-thread `tealet_switch()` usage is invalid.
+
+Use a real cross-thread mutex (or equivalent) for these callbacks if you share handles across threads. No-op or thread-local locks do not provide inter-thread safety.
+
+---
+
 ### `tealet_delete()`
 
 ```c
@@ -910,6 +986,8 @@ typedef struct tealet_alloc {
 ```
 
 Custom memory allocator interface.
+
+Allocator callbacks may be invoked either with or without the configured tealet lock held. Design allocators to be safe in both contexts and do not assume lock state.
 
 **Fields:**
 - `context`: User-defined allocator state (passed to malloc/free functions)

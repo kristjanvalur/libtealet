@@ -71,6 +71,36 @@ This abstraction allows the same algorithm to work regardless of platform stack 
 
 libtealet implements **symmetric coroutines** through stack-slicing: saving portions of the C execution stack to the heap and restoring them later. The innovation lies in **incremental stack saving** that minimizes memory usage.
 
+## Threading Model and Locking Rationale
+
+libtealet uses a **single-threaded switching model**: a switch operation must execute on exactly one thread within a main-tealet domain.
+
+At the same time, some lifecycle operations can be initiated from multiple threads in real integrations, especially:
+- Deleting tealet structures from a foreign thread
+
+This creates a mixed concurrency requirement:
+- **Configuration and switching remain thread-affine** in a main-tealet domain.
+- **Some non-switch lifecycle operations may still be invoked from foreign threads** in real integrations.
+
+For this reason, libtealet exposes **locking helpers** and applies automatic internal locking only to the five switching APIs:
+- `tealet_new()`
+- `tealet_create()`
+- `tealet_switch()`
+- `tealet_exit()`
+- `tealet_fork()`
+
+Rationale: these APIs are temporally asymmetric. Execution can enter through one call boundary and continue from a different logical point (including tealet entry/exit boundaries). Centralizing lock ownership for these transitions inside the library avoids difficult cross-frame lock bookkeeping in integrator code.
+
+Stub helpers in `tealet_extras.h` are switching wrappers by inference and inherit this behavior through the core switching APIs.
+
+In short: switching lock complexity is handled internally for the five switching APIs, while auxiliary structure operations need explicit integrator-managed locking when foreign-thread calls are possible.
+
+Current implementation strategy:
+- The switching APIs above acquire/release the configured lock around their transition work.
+- Non-switch APIs do not imply automatic synchronization.
+
+This means integrators should explicitly bracket calls such as `tealet_delete()` or `tealet_duplicate()` with `tealet_lock()`/`tealet_unlock()` when those calls may come from foreign threads.
+
 ## Core Data Structures
 
 ### tealet_chunk_t - Stack Segment
@@ -634,7 +664,7 @@ For a low-level C library, reference counting fits better.
 
 - [GETTING_STARTED.md](GETTING_STARTED.md) - Practical usage examples
 - [API.md](API.md) - Complete function reference
-- [INCEMENTAL_SAVE.md](INCEMENTAL_SAVE.md) - Partial-save algorithm and invariants
+- [INCREMENTAL_SAVE.md](INCREMENTAL_SAVE.md) - Partial-save algorithm and invariants
 - [stackman documentation](https://github.com/stackless-dev/stackman) - Low-level stack operations
 - [Stackless Python](https://github.com/stackless-dev/stackless) - Original inspiration
 - [Greenlet](https://greenlet.readthedocs.io/) - Related Python project

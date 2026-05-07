@@ -14,9 +14,16 @@
 #endif
 
 #include "tealet.h"
+#include "test_lock_helpers.h"
 
 static int test_count = 0;
 static int test_passed = 0;
+static tealet_test_lock_state_t g_lock_state;
+
+static void finalize_main_checked(tealet_t *main_tealet) {
+  tealet_test_lock_assert_balanced(&g_lock_state);
+  tealet_finalize(main_tealet);
+}
 
 /*
  * Runtime outcomes for alignment-sensitive mprotect split tests.
@@ -48,6 +55,7 @@ static tealet_t *new_main_plain(void) {
 
   main_tealet = tealet_initialize(&alloc, 0);
   assert(main_tealet != NULL);
+  tealet_test_lock_install(main_tealet, &g_lock_state);
   return main_tealet;
 }
 
@@ -92,6 +100,8 @@ static tealet_t *run_write_to_target(tealet_t *current, void *arg) {
   void *far;
   int switch_result;
 
+  tealet_test_lock_assert_unheld(&g_lock_state);
+
   if (command->write_inside) {
     far = tealet_get_far(current);
     assert(far != NULL);
@@ -126,6 +136,8 @@ static tealet_t *run_resize_snapshot_while_active(tealet_t *current, void *arg) 
 #if TEALET_WITH_STACK_SNAPSHOT
   resize_snapshot_command_t *command = (resize_snapshot_command_t *)arg;
   tealet_config_t cfg = TEALET_CONFIG_INIT;
+
+  tealet_test_lock_assert_unheld(&g_lock_state);
 
   cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
   cfg.stack_integrity_bytes = 4096;
@@ -177,6 +189,8 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg) {
   int snapshot_has_bytes;
   unsigned char sp_probe;
   uintptr_t current_sp;
+
+  tealet_test_lock_assert_unheld(&g_lock_state);
 
   page_size = (size_t)sysconf(_SC_PAGESIZE);
   assert(page_size > 0);
@@ -317,7 +331,7 @@ static int run_integrity_switch_case(int fail_policy, int write_inside, int *fir
   assert(result == 0);
   tealet_free(main_tealet, outside_target);
   tealet_free(main_tealet, command);
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
 
   if (first_result)
     *first_result = first_switch_result;
@@ -384,13 +398,13 @@ static int run_mprotect_split_case(int write_guard_page, int *first_result, int 
     if (recovery_result)
       *recovery_result = second_switch_result;
     tealet_free(main_tealet, command);
-    tealet_finalize(main_tealet);
+    finalize_main_checked(main_tealet);
     return result;
   }
 
   assert(result == 0);
   tealet_free(main_tealet, command);
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
 
   if (first_result)
     *first_result = first_switch_result;
@@ -426,7 +440,7 @@ static void test_get_defaults(void) {
   assert(cfg.stack_integrity_fail_policy == TEALET_STACK_INTEGRITY_FAIL_ASSERT);
   assert(cfg.stack_guard_limit == NULL);
 
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
   PASS();
 }
 
@@ -480,7 +494,7 @@ static void test_set_canonicalizes_unsupported(void) {
   assert(get_cfg.stack_guard_mode == set_cfg.stack_guard_mode);
   assert(get_cfg.stack_guard_limit == NULL);
 
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
   PASS();
 }
 
@@ -504,7 +518,7 @@ static void test_set_snapshot_supported_build(void) {
   assert((cfg.flags & TEALET_CONFIGF_STACK_INTEGRITY) != 0);
   assert(cfg.stack_integrity_bytes == 2048);
 
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
   PASS();
 #endif
 }
@@ -583,7 +597,7 @@ static void test_set_while_snapshot_active_resizes(void) {
   assert(get_cfg.stack_integrity_bytes == 4096);
 
   tealet_free(main_tealet, command);
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
   PASS();
 #endif
 }
@@ -787,7 +801,7 @@ static void test_set_invalid_version(void) {
   result = tealet_configure_set(main_tealet, &cfg);
   assert(result == TEALET_ERR_INVAL);
 
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
   PASS();
 }
 
@@ -809,7 +823,7 @@ static void test_header_size_validation(void) {
   result = tealet_configure_set(main_tealet, &cfg);
   assert(result == TEALET_ERR_INVAL);
 
-  tealet_finalize(main_tealet);
+  finalize_main_checked(main_tealet);
   PASS();
 }
 

@@ -6,9 +6,12 @@
 
 #include "tealet.h"
 #include "tealet_extras.h"
+#include "test_lock_helpers.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+static tealet_test_lock_state_t g_lock_state;
 
 /* This is the iterator function. It is entered on the first call to
  * swapcontext, and loops from 0 to 9. Each value is saved in i_from_iterator,
@@ -19,12 +22,15 @@
 tealet_t *loop_func(tealet_t *current, void *arg) {
   int i;
 
+  tealet_test_lock_assert_unheld(&g_lock_state);
+
   for (i = 0; i < (int)(intptr_t)arg; ++i) {
     /* Write the loop counter a variable used for passing between tealets. */
     void *value = (void *)(intptr_t)i;
 
     /* Switch to main tealet */
     tealet_switch(tealet_previous(current), &value);
+    tealet_test_lock_assert_unheld(&g_lock_state);
     /* after switch, any void* passed _to_ us is in 'value' */
   }
   /* exit, without deleting, so that the caller can query status */
@@ -43,8 +49,11 @@ int main(void) {
   if (tmain == NULL)
     return 1;
 
+  tealet_test_lock_install(tmain, &g_lock_state);
+
   configure_result = tealet_configure_check_stack(tmain, 0);
   if (configure_result != 0) {
+    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(tmain);
     return 1;
   }
@@ -62,6 +71,7 @@ int main(void) {
     tealet_switch(loop, &data);
   }
   tealet_delete(loop);
+  tealet_test_lock_assert_balanced(&g_lock_state);
   tealet_finalize(tmain);
   return 0;
 }
