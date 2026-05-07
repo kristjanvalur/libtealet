@@ -1868,6 +1868,7 @@ void tealet_delete(tealet_t *target) {
 
 tealet_t *tealet_current(tealet_t *tealet) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  tealet_verify_current_matches_caller(g_main->g_current);
   return (tealet_t *)g_main->g_current;
 }
 
