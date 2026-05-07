@@ -54,9 +54,9 @@ typedef struct tealet_alloc_t {
  * The callbacks are invoked by tealet_lock()/tealet_unlock() with @p arg.
  * If either callback is NULL, the corresponding API becomes a no-op.
  *
- * Primary multi-threaded use case: coordinating foreign-thread
- * tealet_delete() of non-main tealets. Configuration, switching, and
- * tealet_duplicate() are intended to remain on one owning thread.
+ * Primary multi-threaded use case: coordinating foreign-thread structure
+ * operations (for example tealet_delete() and tealet_duplicate()) on
+ * non-main tealets with explicit external synchronization.
  */
 typedef struct tealet_lock_t {
   void (*lock)(void *arg);
@@ -593,8 +593,8 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  *
  * This stores callback pointers and argument on the domain's main tealet.
  * It does not acquire or release locks itself.
- * Configuration, switching, and tealet_duplicate() remain single-thread
- * responsibilities.
+ * Configuration and non-switch structure APIs can be called from any thread
+ * when callers provide synchronization. Switching remains thread-affine.
  *
  * Locking/allocator interaction contract: libtealet may call allocator
  * callbacks with or without this lock held, depending on call path.
