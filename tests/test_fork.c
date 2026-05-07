@@ -1,6 +1,7 @@
 /* Test tealet_fork functionality */
 
 #include "tealet.h"
+#include "test_lock_helpers.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -8,6 +9,12 @@
 
 static int test_count = 0;
 static int test_passed = 0;
+static tealet_test_lock_state_t g_lock_state;
+
+static void finalize_main_checked(tealet_t *main) {
+  tealet_test_lock_assert_balanced(&g_lock_state);
+  tealet_finalize(main);
+}
 
 static void assert_origin_main(tealet_t *t) {
   unsigned int origin;
@@ -42,6 +49,7 @@ static tealet_t *new_main_checked(void) {
 
   main = tealet_initialize(&alloc, 0);
   assert(main != NULL);
+  tealet_test_lock_install(main, &g_lock_state);
   result = tealet_configure_check_stack(main, 0);
   assert(result == 0);
   return main;
@@ -91,11 +99,12 @@ static void test_basic_fork(void *far_marker) {
 
     /* Clean up */
     tealet_delete(other);
-    tealet_finalize(main);
+    finalize_main_checked(main);
 
     PASS();
   } else if (result == 0) {
     /* We are the child, other = parent */
+    tealet_test_lock_assert_unheld(&g_lock_state);
     assert_origin_main_fork(tealet_current(main));
     assert_origin_main(other);
     assert(testvalue == 0); /* Child should start with saved value */
@@ -150,6 +159,7 @@ static void test_fork_switch(void *far_marker) {
 
   if (result == 0) {
     /* We are the child */
+    tealet_test_lock_assert_unheld(&g_lock_state);
     assert_origin_main_fork(tealet_current(main));
     assert_origin_main(other);
     assert(testvalue == 0);    /* Child should start with saved value */
@@ -183,7 +193,7 @@ static void test_fork_switch(void *far_marker) {
     printf("  Parent: back from child, cleaning up\n");
   } /* Clean up - only parent gets here */
   tealet_delete(other);
-  tealet_finalize(main);
+  finalize_main_checked(main);
 
   PASS();
 }
@@ -247,7 +257,7 @@ static void test_multiple_forks(void *far_marker) {
   /* Clean up */
   tealet_delete(child1);
   tealet_delete(child2);
-  tealet_finalize(main);
+  finalize_main_checked(main);
 
   PASS();
 }
@@ -313,7 +323,7 @@ static void test_fork_switch_arg(void *far_marker) {
 
   /* Clean up - only parent gets here */
   tealet_delete(other);
-  tealet_finalize(main);
+  finalize_main_checked(main);
 
   PASS();
 }
@@ -358,7 +368,7 @@ static void test_fork_default_arg(void *far_marker) {
 
     /* Clean up */
     tealet_delete(child);
-    tealet_finalize(main);
+    finalize_main_checked(main);
 
     PASS();
   } else if (result == 0) {
@@ -434,7 +444,7 @@ static void test_ping_pong(void *far_marker) {
 
     /* Clean up */
     tealet_delete(child_saved);
-    tealet_finalize(main);
+    finalize_main_checked(main);
 
     PASS();
   } else {
@@ -497,7 +507,7 @@ static void test_new_previous(void *far_marker) {
   assert(tealet_current(main) == main);
   printf("  Main: returned from tealet_new(), tealet_previous() test passed\n");
 
-  tealet_finalize(main);
+  finalize_main_checked(main);
 
   PASS();
 }

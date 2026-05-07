@@ -76,17 +76,21 @@ libtealet implements **symmetric coroutines** through stack-slicing: saving port
 libtealet uses a **single-threaded switching model**: a switch operation must execute on exactly one thread within a main-tealet domain.
 
 At the same time, some lifecycle operations can be initiated from multiple threads in real integrations, especially:
-- Duplicating tealet structures
-- Deleting tealet structures
-- Inspecting and updating shared tealet metadata
+- Deleting tealet structures from a foreign thread
 
 This creates a mixed concurrency requirement:
-- **Context switching is not multi-threaded** and must remain serialized by design.
-- **Structure access and lifecycle management may be multi-threaded** and therefore require synchronization support.
+- **Configuration and context switching are single-threaded responsibilities** in a main-tealet domain.
+- **Multi-thread support is primarily for foreign-thread deletion of non-main tealets** (`tealet_delete()`).
 
-For this reason, libtealet should provide **locking helpers** around tealet structure access so library users can make metadata and lifecycle operations thread-safe without changing the core single-threaded switch semantics.
+For this reason, libtealet should provide **locking helpers** around tealet structure access so library users can safely coordinate foreign-thread delete operations without changing the core single-threaded switch semantics.
 
 In short: switching stays thread-affine, while auxiliary structure operations need explicit thread-safety support.
+
+Current implementation strategy:
+- A broad lock wraps the full switch transaction (save/restore plus switch bookkeeping).
+- Stack and tealet refcount/active-count updates that are relevant to delete races are performed under that same lock domain.
+
+This means foreign-thread `tealet_delete()` is serialized against active switching work, provided the configured lock callbacks implement real cross-thread mutual exclusion.
 
 ## Core Data Structures
 
