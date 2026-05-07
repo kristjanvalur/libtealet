@@ -399,10 +399,13 @@ tealet_t *tealet_current(tealet_t *tealet);
  * "tealet" can be any tealet derived from the
  * main tealet.
  *
+ * Query APIs in this section are not internally synchronized. If they are
+ * called from foreign threads, or concurrently with lifecycle/switching
+ * operations, callers must provide external synchronization (for example
+ * tealet_lock()/tealet_unlock() around the entire access sequence).
+ *
  * Note: in a multithreaded setting, a previous tealet can be simultaneously
  * deleted by a different thread, invalidating the returned pointer.
- * Query APIs are permitted from foreign threads, but they do not guarantee
- * a globally consistent snapshot of tealet state.
  */
 TEALET_API
 tealet_t *tealet_previous(tealet_t *tealet);

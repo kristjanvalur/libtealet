@@ -133,7 +133,11 @@ Effect summary:
 
 Under this algorithm, unsaved memory for partial stacks is naturally expressed
 as disjoint staircase bands in the descending case.  This means that it is not
-possible to share saved chunks between different stacks.  Each additionally
-saved chunk is unique to a particular suspended Tealet.
+possible to share newly grown chunks between different stack objects.  Each
+additionally saved chunk belongs to one suspended stack instance.
+
+Tealets duplicated with `tealet_duplicate()` can still share the same saved
+stack object via stack reference counting; this is object sharing, not overlap
+between independently grown partial stacks.
 
 

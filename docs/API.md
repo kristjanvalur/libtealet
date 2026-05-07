@@ -528,8 +528,11 @@ If the chosen exit target is defunct, this fallback path reroutes the exit to `m
 
 ## Status and Inspection
 
-Query APIs in this section may be called from foreign threads, but they do not
-guarantee a globally consistent snapshot of tealet state.
+Query APIs in this section are not internally synchronized.
+
+If they are used from foreign threads, or concurrently with switching/lifecycle
+operations, callers must provide external synchronization (for example
+`tealet_lock()`/`tealet_unlock()` around the access sequence).
 
 ### `tealet_previous()`
 

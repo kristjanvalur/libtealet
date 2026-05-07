@@ -171,7 +171,7 @@ main-lineage and/or fork-originated.
 - **[API Reference](docs/API.md)** - Complete function reference
 - **[Doxygen Workflow](docs/DOXYGEN.md)** - Local authored+generated API docs setup
 - **[Architecture](docs/ARCHITECTURE.md)** - Internals and stack-chaining design
-- **[Incremental Save Algorithm](docs/INCEMENTAL_SAVE.md)** - Partial-save model, invariants, and transition diagrams
+- **[Incremental Save Algorithm](docs/INCREMENTAL_SAVE.md)** - Partial-save model, invariants, and transition diagrams
 - **[Changelog](CHANGELOG.md)** - Version history
 
 ## Performance Characteristics
