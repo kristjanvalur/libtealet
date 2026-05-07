@@ -79,18 +79,27 @@ At the same time, some lifecycle operations can be initiated from multiple threa
 - Deleting tealet structures from a foreign thread
 
 This creates a mixed concurrency requirement:
-- **Configuration and context switching are single-threaded responsibilities** in a main-tealet domain.
-- **Multi-thread support is primarily for foreign-thread deletion of non-main tealets** (`tealet_delete()`).
+- **Configuration and switching remain thread-affine** in a main-tealet domain.
+- **Some non-switch lifecycle operations may still be invoked from foreign threads** in real integrations.
 
-For this reason, libtealet should provide **locking helpers** around tealet structure access so library users can safely coordinate foreign-thread delete operations without changing the core single-threaded switch semantics.
+For this reason, libtealet exposes **locking helpers** and applies automatic internal locking only to the five switching APIs:
+- `tealet_new()`
+- `tealet_create()`
+- `tealet_switch()`
+- `tealet_exit()`
+- `tealet_fork()`
 
-In short: switching stays thread-affine, while auxiliary structure operations need explicit thread-safety support.
+Rationale: these APIs are temporally asymmetric. Execution can enter through one call boundary and continue from a different logical point (including tealet entry/exit boundaries). Centralizing lock ownership for these transitions inside the library avoids difficult cross-frame lock bookkeeping in integrator code.
+
+Stub helpers in `tealet_extras.h` are switching wrappers by inference and inherit this behavior through the core switching APIs.
+
+In short: switching lock complexity is handled internally for the five switching APIs, while auxiliary structure operations need explicit integrator-managed locking when foreign-thread calls are possible.
 
 Current implementation strategy:
-- A broad lock wraps the full switch transaction (save/restore plus switch bookkeeping).
-- Stack and tealet refcount/active-count updates that are relevant to delete races are performed under that same lock domain.
+- The switching APIs above acquire/release the configured lock around their transition work.
+- Non-switch APIs do not imply automatic synchronization.
 
-This means foreign-thread `tealet_delete()` is serialized against active switching work, provided the configured lock callbacks implement real cross-thread mutual exclusion.
+This means integrators should explicitly bracket calls such as `tealet_delete()` or `tealet_duplicate()` with `tealet_lock()`/`tealet_unlock()` when those calls may come from foreign threads.
 
 ## Core Data Structures
 

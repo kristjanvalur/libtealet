@@ -895,7 +895,18 @@ The descriptor is copied into internal main-tealet state. Pass `NULL` to clear i
 
 **Recommendation:** Call this immediately after `tealet_initialize()` and before sharing tealet handles across threads. This avoids races where foreign-thread delete operations run before lock callbacks are installed.
 
-When configured, libtealet uses these callbacks to serialize internal structure mutations that can overlap with foreign-thread lifecycle operations. In particular, switching and delete paths coordinate through the same lock domain so delete does not race active switch bookkeeping.
+When configured, libtealet automatically acquires/releases this lock only for the core switching APIs:
+- `tealet_new()`
+- `tealet_create()`
+- `tealet_switch()`
+- `tealet_exit()`
+- `tealet_fork()`
+
+Rationale: these paths are temporally asymmetric (execution may leave one call site and later continue from a different logical point, including entry/exit boundaries). Keeping lock ownership inside the library for these transitions avoids brittle cross-frame lock management in integrator code.
+
+Stub helpers in `tealet_extras.h` (`tealet_stub_new()`, `tealet_stub_run()`) are switching wrappers by inference, so they inherit this behavior through the core switching APIs.
+
+For other APIs, integrators should call `tealet_lock()`/`tealet_unlock()` explicitly when foreign-thread access is possible.
 
 **Allocator interaction contract:** libtealet may invoke allocator callbacks either with or without the configured tealet lock held, depending on internal call path. Integrators must not rely on the tealet lock as allocator protection, and allocator implementations must avoid deadlocking in either state.
 
@@ -916,7 +927,9 @@ Invoke the configured locking callbacks for the tealet domain.
 
 These helpers are intended for synchronizing access to tealet structures for the primary multi-threaded use case: foreign-thread `tealet_delete()` of non-main tealets.
 
-Configuration, `tealet_duplicate()`, and context switching remain single-thread responsibilities. In particular, switching between related tealets from different threads is unsupported: a tealet domain must be switched by one thread at a time, and cross-thread `tealet_switch()` usage is invalid.
+Only the five core switching APIs are auto-locked by libtealet (`tealet_new()`, `tealet_create()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`). For other APIs (for example `tealet_delete()` and `tealet_duplicate()`), integrators are expected to apply explicit lock/unlock around calls if those operations may run from foreign threads.
+
+Switching itself remains thread-affine: switching between related tealets from different threads is unsupported, and cross-thread `tealet_switch()` usage is invalid.
 
 Use a real cross-thread mutex (or equivalent) for these callbacks if you share handles across threads. No-op or thread-local locks do not provide inter-thread safety.
 
