@@ -54,6 +54,10 @@ typedef struct tealet_alloc_t {
  * The callbacks are invoked by tealet_lock()/tealet_unlock() with @p arg.
  * If either callback is NULL, the corresponding API becomes a no-op.
  *
+ * When configured, libtealet automatically acquires/releases this lock for
+ * the switching APIs only: tealet_new(), tealet_create(), tealet_switch(),
+ * tealet_exit(), and tealet_fork().
+ *
  * Primary multi-threaded use case: coordinating foreign-thread structure
  * operations (for example tealet_delete() and tealet_duplicate()) on
  * non-main tealets with explicit external synchronization.
@@ -595,6 +599,17 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * It does not acquire or release locks itself.
  * Configuration and non-switch structure APIs can be called from any thread
  * when callers provide synchronization. Switching remains thread-affine.
+ *
+ * With callbacks installed, the lock is owned internally by the switching
+ * APIs only: tealet_new(), tealet_create(), tealet_switch(), tealet_exit(),
+ * and tealet_fork().
+ *
+ * Non-switch APIs (for example tealet_delete(), tealet_duplicate(), and
+ * query/status helpers) remain caller-synchronized when foreign-thread access
+ * is possible.
+ *
+ * For compatibility with the switching APIs' internal lock ownership, prefer
+ * using tealet_lock()/tealet_unlock() for this external synchronization.
  *
  * Locking/allocator interaction contract: libtealet may call allocator
  * callbacks with or without this lock held, depending on call path.
