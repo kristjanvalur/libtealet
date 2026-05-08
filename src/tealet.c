@@ -1070,11 +1070,12 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
 
   exiting = ((g_current->flags & TEALET_TFLAGS_EXITING) != 0);
   force = ((g_current->flags & TEALET_TFLAGS_EXITFORCE) != 0);
-  /* Force mode is used by tealet_exit() to request non-failable save
-   * behavior under memory pressure. A stack that cannot be saved may be
-   * marked defunct so the switch can proceed.
+  /* Force mode requests non-failable save behavior under memory pressure.
+   * A stack that cannot be saved may be marked defunct so the switch can
+   * proceed. The main tealet is never marked defunct; forced saves from main
+   * must still fail with MEM.
    */
-  fail_ok = !force;
+  fail_ok = (!force || TEALET_IS_MAIN((tealet_t *)g_current));
 
   /* save and unlink older stacks on demand */
   /* when coming from unbounded stack, there should be no list of unsaved stacks
@@ -1452,12 +1453,16 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     } else if (result == TEALET_ERR_MEM) {
       retry_flags = exit_flags | TEALET_EXIT_FORCE;
       result = tealet_exit((tealet_t *)g_exit_target, exit_arg, retry_flags);
-      if (result == TEALET_ERR_DEFUNCT || result == TEALET_ERR_MEM) {
+      if (result < 0) {
         retry_flags = exit_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
         result = tealet_exit((tealet_t *)g_main, exit_arg, retry_flags);
       }
+    } else if (result < 0) {
+      retry_flags = exit_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
+      result = tealet_exit((tealet_t *)g_main, exit_arg, retry_flags);
     }
     assert(!"Implicit return transfer failed");
+    abort();
   } else {
     /* Either just a create, with no run, or a switch back
      * into the tealet_new()

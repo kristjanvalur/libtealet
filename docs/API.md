@@ -1151,16 +1151,19 @@ Initialize a wrapper allocator that tracks active allocation count and total byt
 ### tealet_stub_new()
 
 ```c
-tealet_t *tealet_stub_new(tealet_t *tealet, void *stack_far);
+int tealet_stub_new(tealet_t *tealet, tealet_t **pstub, void *stack_far);
 ```
 
 Create a paused stub tealet that can later run arbitrary functions via `tealet_stub_run()`.
 
 **Parameters:**
 - `tealet`: Main/owner tealet context
+- `pstub`: Output pointer receiving the created stub tealet on success
 - `stack_far`: Optional far-boundary requirement for the initial stub stack snapshot (`NULL` uses default). This behaves like `tealet_create()`/`tealet_new()`: it can only extend capture range, never shrink it.
 
-**Returns:** New stub tealet, or `NULL` on allocation failure.
+**Returns:**
+- `0` on success
+- Negative `TEALET_ERR_*` on failure
 
 ### tealet_stub_run()
 
@@ -1500,9 +1503,9 @@ tealet_t *worker_run(tealet_t *current, void *arg) {
     return current->main;
 }
 
-tealet_t *stub = tealet_stub_new(main, NULL);
-if (stub == NULL) {
-    /* allocation failure */
+tealet_t *stub = NULL;
+if (tealet_stub_new(main, &stub, NULL) != 0) {
+    /* allocation/setup failure */
 }
 
 tealet_t *clone = tealet_duplicate(stub);

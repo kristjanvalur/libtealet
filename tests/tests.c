@@ -1198,6 +1198,36 @@ void test_oom_force_marks_source_defunct(void) {
   fini_test();
 }
 
+static tealet_t *oom_main_probe_run(tealet_t *current, void *arg) {
+  (void)arg;
+  return current->main;
+}
+
+void test_oom_force_main_not_defunct(void) {
+  tealet_t *worker;
+  int result;
+
+  /* Purpose: when FORCE is requested from main and save fails under OOM,
+   * main must not be marked defunct; the operation returns TEALET_ERR_MEM.
+   */
+  init_test_extra(NULL, 0);
+
+  worker = NULL;
+  assert(tealet_create(g_main, &worker, oom_main_probe_run, NULL) == 0);
+  assert(worker != NULL);
+
+  talloc_fail = 1;
+  result = tealet_switch(worker, NULL, TEALET_SWITCH_FORCE);
+  assert(result == TEALET_ERR_MEM);
+
+  talloc_fail = 0;
+  assert(tealet_status(g_main) == TEALET_STATUS_ACTIVE);
+  assert(tealet_status(worker) != TEALET_STATUS_DEFUNCT);
+
+  tealet_delete(worker);
+  fini_test();
+}
+
 static tealet_t *oom_w2 = NULL;
 
 static tealet_t *oom_force_peer_to_main_panic_run(tealet_t *current, void *arg) {
@@ -1451,6 +1481,7 @@ static test_entry_t test_list[] = {
     {"test_stats", test_stats},
     {"test_mem_error", test_mem_error},
     {"test_oom_force_marks_source_defunct", test_oom_force_marks_source_defunct},
+    {"test_oom_force_main_not_defunct", test_oom_force_main_not_defunct},
     {"test_oom_force_peer_then_panic_main", test_oom_force_peer_then_panic_main},
     {"test_exit_self_invalid", test_exit_self_invalid},
 #if TEALET_WITH_TESTING
