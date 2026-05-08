@@ -801,6 +801,9 @@ void test_switch_self_panic(void) {
   tealet_t *runner;
   int result;
 
+  /* Purpose: self-switch with PANIC should return TEALET_ERR_PANIC
+   * immediately and must not leak panic state into later switches.
+   */
   init_test();
 
   /* Self-switch with PANIC should consume panic immediately. */
@@ -1154,6 +1157,107 @@ void test_mem_error(void) {
   fini_test();
 }
 
+static tealet_t *oom_force_to_main_run(tealet_t *current, void *arg) {
+  int result;
+  (void)arg;
+
+  /* First attempt without FORCE fails in-place with MEM. */
+  talloc_fail = 1;
+  result = tealet_switch(current->main, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == TEALET_ERR_MEM);
+
+  /* FORCE should continue by defuncting current and transferring out. */
+  result = tealet_switch(current->main, NULL, TEALET_SWITCH_FORCE);
+  assert(0);
+  assert(result == 0);
+  return NULL;
+}
+
+void test_oom_force_marks_source_defunct(void) {
+  tealet_t *worker;
+  int result;
+
+  /* Purpose: under OOM, FORCE switch-to-main should succeed by marking the
+   * source worker defunct. The defunct worker must reject future switches.
+   */
+  init_test_extra(NULL, 0);
+
+  worker = NULL;
+  assert(tealet_create(g_main, &worker, oom_force_to_main_run, NULL) == 0);
+  assert(worker != NULL);
+
+  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == 0);
+
+  talloc_fail = 0;
+  assert(tealet_status(worker) == TEALET_STATUS_DEFUNCT);
+  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == TEALET_ERR_DEFUNCT);
+
+  tealet_delete(worker);
+  fini_test();
+}
+
+static tealet_t *oom_w2 = NULL;
+
+static tealet_t *oom_force_peer_to_main_panic_run(tealet_t *current, void *arg) {
+  int result;
+  (void)arg;
+
+  /* Clear allocator fault so this switch-out can complete. */
+  talloc_fail = 0;
+  result = tealet_switch(current->main, NULL, TEALET_SWITCH_PANIC);
+  assert(0);
+  assert(result == TEALET_ERR_PANIC);
+  return NULL;
+}
+
+static tealet_t *oom_force_to_peer_run(tealet_t *current, void *arg) {
+  int result;
+  (void)arg;
+
+  assert(oom_w2 != NULL);
+
+  talloc_fail = 1;
+  result = tealet_switch(oom_w2, NULL, TEALET_SWITCH_FORCE);
+  assert(0);
+  assert(result == 0);
+  (void)current;
+  return NULL;
+}
+
+void test_oom_force_peer_then_panic_main(void) {
+  tealet_t *w1;
+  int result;
+
+  /* Purpose: with two workers, OOM during w1->w2 with FORCE should defunct w1,
+   * continue to w2, and then panic-tagged switch to main should surface as
+   * TEALET_ERR_PANIC on main.
+   */
+  init_test_extra(NULL, 0);
+
+  oom_w2 = NULL;
+  assert(tealet_create(g_main, &oom_w2, oom_force_peer_to_main_panic_run, NULL) == 0);
+  assert(oom_w2 != NULL);
+
+  w1 = NULL;
+  assert(tealet_create(g_main, &w1, oom_force_to_peer_run, NULL) == 0);
+  assert(w1 != NULL);
+
+  result = tealet_switch(w1, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == TEALET_ERR_PANIC);
+
+  assert(tealet_status(w1) == TEALET_STATUS_DEFUNCT);
+  result = tealet_switch(w1, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == TEALET_ERR_DEFUNCT);
+
+  tealet_delete(w1);
+  tealet_delete(oom_w2);
+  oom_w2 = NULL;
+  talloc_fail = 0;
+  fini_test();
+}
+
 static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
   int result;
   (void)arg;
@@ -1169,6 +1273,9 @@ static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
 void test_exit_self_invalid(void) {
   tealet_t *runner;
 
+  /* Purpose: exiting to self is invalid and must report TEALET_ERR_INVAL
+   * (not TEALET_ERR_DEFUNCT).
+   */
   init_test();
 
   runner = NULL;
@@ -1343,6 +1450,8 @@ static test_entry_t test_list[] = {
     {"test_memstats", test_memstats},
     {"test_stats", test_stats},
     {"test_mem_error", test_mem_error},
+    {"test_oom_force_marks_source_defunct", test_oom_force_marks_source_defunct},
+    {"test_oom_force_peer_then_panic_main", test_oom_force_peer_then_panic_main},
     {"test_exit_self_invalid", test_exit_self_invalid},
 #if TEALET_WITH_TESTING
     {"test_exit_defunct_target_returns_error", test_exit_defunct_target_returns_error},
