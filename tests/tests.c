@@ -486,7 +486,7 @@ tealet_t *test_simple_run(tealet_t *t1, void *arg) {
 void test_simple(void) {
   tealet_t *t;
   init_test();
-  t = tealet_new(g_main, test_simple_run, NULL, NULL);
+  t = tealet_new_native_call(g_main, test_simple_run, NULL, NULL);
   assert(t != NULL);
   assert(status == 1);
   fini_test();
@@ -779,7 +779,7 @@ tealet_t *test_switch_1(tealet_t *t1, void *arg) {
   assert(status == 0);
   status = 1;
   assert(tealet_current(g_main) == t1);
-  tealet_new(g_main, test_switch_2, NULL, NULL);
+  assert(tealet_new_native_call(g_main, test_switch_2, NULL, NULL) != NULL);
   assert(status == 2);
   status = 3;
   assert(tealet_current(g_main) == t1);
@@ -792,7 +792,7 @@ tealet_t *test_switch_1(tealet_t *t1, void *arg) {
 
 void test_switch(void) {
   init_test();
-  tealet_new(g_main, test_switch_1, NULL, NULL);
+  assert(tealet_new_native_call(g_main, test_switch_1, NULL, NULL) != NULL);
   assert(status == 7);
   fini_test();
 }
@@ -828,7 +828,7 @@ void test_switch_new(void) {
   void *arg;
   init_test();
   arg = (void *)tealet_current(g_main);
-  tealet1 = tealet_new(g_main, test_switch_new_1, &arg, NULL);
+  tealet1 = tealet_new_native_call(g_main, test_switch_new_1, &arg, NULL);
   /* the tealet is now running */
   arg = (void *)tealet1;
   tealet2 = tealet_new_descend(g_main, 4, test_switch_new_2, &arg);
@@ -857,7 +857,7 @@ void test_arg(void) {
   tealet_t *t1;
   init_test();
   myarg = (void *)g_main;
-  t1 = tealet_new(g_main, test_arg_1, &myarg, NULL);
+  t1 = tealet_new_native_call(g_main, test_arg_1, &myarg, NULL);
   assert(myarg == (void *)1);
   myarg = (void *)2;
   tealet_switch(t1, &myarg, TEALET_SWITCH_DEFAULT);
@@ -896,7 +896,7 @@ static void random_run(int index) {
       if (status >= MAX_STATUS)
         break;
       arg = (void *)(intptr_t)i;
-      tealet_new(g_main, random_new_tealet, &arg, NULL);
+      assert(tealet_new_native_call(g_main, random_new_tealet, &arg, NULL) != NULL);
     } else {
       tealet_switch(tealetarray[i], NULL, TEALET_SWITCH_DEFAULT);
     }
@@ -968,7 +968,7 @@ tealet_t *random2_tealet(tealet_t *cur, void *arg) {
 }
 void random2_new(int index) {
   void *arg = (void *)(intptr_t)index;
-  tealet_new(g_main, random2_tealet, &arg, NULL);
+  assert(tealet_new_native_call(g_main, random2_tealet, &arg, NULL) != NULL);
 }
 
 int random2_descend(int index, int level) {
@@ -1130,7 +1130,7 @@ void test_mem_error(void) {
   tealet_t *t1;
   init_test_extra(NULL, 0);
   myarg = (void *)g_main;
-  t1 = tealet_new(g_main, mem_error_tealet, &myarg, NULL);
+  t1 = tealet_new_native_call(g_main, mem_error_tealet, &myarg, NULL);
   assert(t1);
   talloc_fail = 0;
   fini_test();
@@ -1264,7 +1264,7 @@ void test_debug_swap_far_invalid_caller_check_child(void) {
    */
   init_test();
 
-  runner = tealet_new(g_main, test_invalid_caller_check_child_run, NULL, NULL);
+  runner = tealet_new_native_call(g_main, test_invalid_caller_check_child_run, NULL, NULL);
   assert(runner != NULL);
 
   fini_test();
