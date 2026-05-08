@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Switch-scoped lock mode configuration**
+  - Added explicit lock mode selection in `tealet_lock_t.mode`:
+    - `TEALET_LOCK_OFF`
+    - `TEALET_LOCK_SWITCH`
+
+### Changed
+- **Locking behavior is now mode-driven**
+  - `TEALET_LOCK_SWITCH` enables internal auto-locking for switching APIs only (`tealet_new()`, `tealet_create()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`).
+  - `TEALET_LOCK_OFF` leaves lock ownership fully to integrator-managed scopes.
+  - Updated tests/helpers to configure lock mode explicitly where lock-callback behavior is validated.
+
+### Documentation
+- **Locking model and API docs refresh**
+  - Expanded and reorganized `docs/API.md` to clarify lock-mode semantics and switching-vs-manual locking expectations.
+  - Refined README/API split: README remains concise and points to `docs/API.md` as the canonical behavioral reference.
+  - Added release-version synchronization guidance and tooling notes (`make sync-version`, `make check-version-sync`) to reduce metadata drift.
+
 ## [0.5.0] - 2026-05-07
 
 ### Added
