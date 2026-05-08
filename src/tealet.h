@@ -241,16 +241,29 @@ int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **p
  * @brief Suspend current tealet and resume @p target.
  * @param target Tealet to switch to; must share the same main tealet and thread.
  * @param parg In/out argument pointer passed across switches; may be NULL.
+ * @param flags Switch behavior bits: #TEALET_SWITCH_DEFAULT, #TEALET_SWITCH_FORCE,
+ * #TEALET_SWITCH_PANIC.
  * @retval 0 Success.
  * @retval TEALET_ERR_MEM Save/restore failed due to memory pressure.
  * @retval TEALET_ERR_DEFUNCT Target tealet/stack is defunct.
- * @retval TEALET_ERR_PANIC Resumed due to panic-tagged tealet_exit() transfer.
+ * @retval TEALET_ERR_PANIC Resumed due to panic-tagged transfer.
  * @retval TEALET_ERR_INVAL Invalid state/target.
+ *
+ * With #TEALET_SWITCH_FORCE, save-time memory failures may defunct
+ * intermediate non-main saved stacks to complete the requested transfer.
+ *
+ * #TEALET_SWITCH_PANIC requests panic delivery to the receiving tealet as
+ * #TEALET_ERR_PANIC on its resumed switch return path.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
  */
 TEALET_API
-int tealet_switch(tealet_t *target, void **parg);
+int tealet_switch(tealet_t *target, void **parg, int flags);
+
+/* Switch flags */
+#define TEALET_SWITCH_DEFAULT 0 /* default switch behavior */
+#define TEALET_SWITCH_FORCE 4   /* force switch despite save-time memory failures */
+#define TEALET_SWITCH_PANIC 8   /* mark the receiving tealet as panic-resumed */
 
 /* Exit flags */
 #define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
@@ -363,7 +376,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  *   } else if (result > 0) {
  *       // This is the parent tealet
  *       // ... parent-specific code ...
- *       tealet_switch(child, &arg); // Switch to child when ready
+ *       tealet_switch(child, &arg, TEALET_SWITCH_DEFAULT); // Switch to child when ready
  *   } else {
  *       // Error occurred (result < 0)
  *   }

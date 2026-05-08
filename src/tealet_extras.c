@@ -83,7 +83,7 @@ int tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg) {
   psarg->run = run;
   psarg->runarg = parg ? *parg : NULL;
   myarg = (void *)psarg;
-  result = tealet_switch(stub, &myarg);
+  result = tealet_switch(stub, &myarg, TEALET_SWITCH_DEFAULT);
   if (result) {
     /* failure */
     tealet_free(stub, psarg);

@@ -1712,21 +1712,41 @@ done:
  * the lock internally.
  */
 
-int tealet_switch(tealet_t *stub, void **parg) {
+int tealet_switch(tealet_t *stub, void **parg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)stub;
   tealet_sub_t *g_current;
+  int force_requested;
+  int panic_requested;
   int result;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
+
+  if ((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC)) != 0)
+    return TEALET_ERR_INVAL;
+
+  force_requested = ((flags & TEALET_SWITCH_FORCE) != 0);
+  panic_requested = ((flags & TEALET_SWITCH_PANIC) != 0);
 
   tealet_lock_switch(g_main);
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
+
+  if (force_requested)
+    g_current->flags |= TEALET_TFLAGS_EXITFORCE;
+  if (panic_requested)
+    g_main->g_flags |= TEALET_MFLAGS_PANIC;
+
   if (g_target == g_current) {
     g_main->g_previous = g_current;
     result = 0; /* switch to self */
   } else {
     result = tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
   }
+
+  if (panic_requested && result < 0)
+    g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
+  if (force_requested)
+    g_current->flags &= ~TEALET_TFLAGS_EXITFORCE;
+
   tealet_unlock_switch(g_main);
   return result;
 }

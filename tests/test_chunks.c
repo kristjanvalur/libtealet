@@ -43,7 +43,7 @@ static tealet_t *worker_run(tealet_t *t, void *arg) {
     consume_stack(depth, buffer);
 
   /* Yield back to main */
-  tealet_switch(g_main, NULL);
+  tealet_switch(g_main, NULL, TEALET_SWITCH_DEFAULT);
 
   tealet_test_lock_assert_unheld(&g_lock_state);
 
@@ -83,9 +83,9 @@ int main(void) {
   }
 
   /* Switch to it a few times to build up stack */
-  tealet_switch(t1, NULL);
-  tealet_switch(t1, NULL);
-  tealet_switch(t1, NULL);
+  tealet_switch(t1, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t1, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t1, NULL, TEALET_SWITCH_DEFAULT);
 
   /* Now t1 has a saved stack with multiple chunks */
   tealet_get_stats(g_main, &stats);
