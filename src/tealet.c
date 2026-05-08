@@ -1442,16 +1442,22 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
      * 1) Try requested target in fail-fast mode.
      * 2) If target is defunct, panic to main explicitly.
      * 3) If memory blocked the transfer, retry requested target with FORCE.
+     * 4) If FORCE still cannot complete (for example main-stack growth would
+     *    be required and main cannot be marked defunct), panic+force to main.
      */
     result = tealet_exit((tealet_t *)g_exit_target, exit_arg, exit_flags);
     if (result == TEALET_ERR_DEFUNCT) {
       retry_flags = exit_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
-      (void)tealet_exit((tealet_t *)g_main, exit_arg, retry_flags);
+      result = tealet_exit((tealet_t *)g_main, exit_arg, retry_flags);
     } else if (result == TEALET_ERR_MEM) {
       retry_flags = exit_flags | TEALET_EXIT_FORCE;
-      (void)tealet_exit((tealet_t *)g_exit_target, exit_arg, retry_flags);
+      result = tealet_exit((tealet_t *)g_exit_target, exit_arg, retry_flags);
+      if (result == TEALET_ERR_DEFUNCT || result == TEALET_ERR_MEM) {
+        retry_flags = exit_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
+        result = tealet_exit((tealet_t *)g_main, exit_arg, retry_flags);
+      }
     }
-    assert(!"This point should not be reached");
+    assert(!"Implicit return transfer failed");
   } else {
     /* Either just a create, with no run, or a switch back
      * into the tealet_new()

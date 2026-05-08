@@ -424,8 +424,17 @@ Suspend current tealet and resume target tealet.
 - Negative error code on failure
 
 `TEALET_SWITCH_FORCE` applies the same non-failable save behavior as
-`TEALET_EXIT_FORCE`: on low-memory save pressure, affected non-main saved
-stacks may be marked defunct so the requested transfer can proceed.
+`TEALET_EXIT_FORCE`:
+- without FORCE, save-time memory failures are returned (`TEALET_ERR_MEM`)
+- with FORCE, save-time memory failures are ignored so the requested transfer can proceed
+    by marking affected non-main saved stacks/tealets defunct.
+
+`TEALET_SWITCH_FORCE` can still return `TEALET_ERR_MEM` when the only way to
+continue would require main-stack growth that fails under memory pressure.
+Main is never marked defunct, so this edge case remains a hard memory failure.
+
+This means a successful forced switch can make other tealets become defunct as
+the trade-off for forward progress under memory pressure.
 
 **Usage:**
 ```c
@@ -531,10 +540,54 @@ This function does not return on successful transfer.
 
 `tealet_exit()` does not implicitly reroute to another target.
 
-With `TEALET_EXIT_FORCE`, low-memory save failures are handled in non-failable mode
-by marking affected non-main stacks/tealets defunct so the requested transfer can proceed.
+`TEALET_EXIT_FORCE` mirrors `TEALET_SWITCH_FORCE` behavior:
+- without FORCE, save-time memory failures are returned (`TEALET_ERR_MEM`)
+- with FORCE, save-time memory failures are ignored so the requested transfer can proceed
+    by marking affected non-main saved stacks/tealets defunct.
 
-**Note:** Returning from the run function automatically deletes the tealet. Use `tealet_exit()` when you need explicit control over deletion or want to exit from nested calls within the run function.
+`TEALET_EXIT_FORCE` can still return `TEALET_ERR_MEM` when the only way to
+continue would require main-stack growth that fails under memory pressure.
+Main is never marked defunct, so this edge case remains a hard memory failure.
+
+This means a successful forced exit can make other tealets become defunct as
+the trade-off for forward progress under memory pressure.
+
+**Note:** Returning from the run function automatically deletes the tealet using
+an implicit `tealet_exit()` policy: try requested target, panic+force to main
+if target is defunct, retry requested target with FORCE on memory failure, and
+if FORCE still fails (including the main-stack edge above), panic+force to main.
+Use `tealet_exit()` when you need explicit control over deletion or want to
+exit from nested calls within the run function.
+
+**Manual robust `tealet_exit()` pattern (equivalent intent):**
+```c
+/* Non-returning helper. abort() documents unreachable return. */
+static void robust_exit(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
+    int r;
+
+    /* 1) Fast path: requested target, caller policy flags. */
+    r = tealet_exit(target, arg, base_flags);
+
+    /* 2) Defunct target: panic+force fallback to main. */
+    if (r == TEALET_ERR_DEFUNCT) {
+        (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
+        abort();
+    }
+
+    /* 3) Memory pressure: retry requested target with FORCE. */
+    if (r == TEALET_ERR_MEM) {
+        r = tealet_exit(target, arg, base_flags | TEALET_EXIT_FORCE);
+
+        /* 4) FORCE may still fail in main-stack growth edge case. */
+        if (r == TEALET_ERR_MEM || r == TEALET_ERR_DEFUNCT) {
+            (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
+            abort();
+        }
+    }
+
+    abort();
+}
+```
 
 ---
 
@@ -970,7 +1023,10 @@ Explicitly delete a tealet and free its resources.
 
 **Usage:**
 ```c
-tealet_t *t = tealet_create(main, my_run, NULL);
+tealet_t *t = NULL;
+if (tealet_create(main, &t, my_run, NULL) != 0) {
+    /* Handle create failure */
+}
 /* Use t... */
 tealet_delete(t);
 ```
@@ -1199,23 +1255,27 @@ For `tealet_switch()`:
 - On `TEALET_ERR_PANIC`: treat as explicit panic resume signal from
     `tealet_exit(..., TEALET_EXIT_PANIC)` or `tealet_switch(..., TEALET_SWITCH_PANIC)`.
 
+Forced transfer note (`tealet_switch(..., TEALET_SWITCH_FORCE)` and
+`tealet_exit(..., TEALET_EXIT_FORCE)`):
+- these APIs can succeed while ignoring save-time memory errors
+- in that success path, affected non-main saved stacks/tealets may be marked defunct.
+
 For `tealet_new()`:
 - `TEALET_ERR_MEM` is the creation/start failure case.
 - `TEALET_ERR_PANIC` is not a memory failure; it signals an unexpected panic-tagged switch-back during create-and-start.
 
-Practical note for `tealet_switch()` failures (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`):
+Practical note for switch/exit failures:
 - In non-main tealets, the usual recovery path is to perform local cleanup and then exit to `main`.
 - In the main tealet, the usual recovery path is to report the error and terminate the thread/process cleanly.
 
-For `tealet_exit()`:
-- Without `TEALET_EXIT_FORCE`, failures (including `TEALET_ERR_MEM` and `TEALET_ERR_DEFUNCT`) are returned directly.
-- With `TEALET_EXIT_FORCE`, low-memory save failures may defunct affected non-main saved stacks/tealets so the requested transfer can proceed.
+For `tealet_exit()` specifically:
 - The requested target is never implicitly replaced by `main`; panic reroute must be explicit.
 - The main tealet itself is never marked defunct.
 
 ### Note
 
-`TEALET_ERR_PANIC` is the explicit panic-resume signal produced by `tealet_exit(..., TEALET_EXIT_PANIC)`.
+`TEALET_ERR_PANIC` is the explicit panic-resume signal produced by
+`tealet_exit(..., TEALET_EXIT_PANIC)` or `tealet_switch(..., TEALET_SWITCH_PANIC)`.
 
 ---
 
@@ -1236,8 +1296,8 @@ Memory allocation failed.
 
 **Example:**
 ```c
-tealet_t *t = tealet_create(main, my_run, NULL);
-if (t == NULL) {
+tealet_t *t = NULL;
+if (tealet_create(main, &t, my_run, NULL) != 0) {
     fprintf(stderr, "Out of memory\n");
     return TEALET_ERR_MEM;
 }
@@ -1254,6 +1314,9 @@ if (t == NULL) {
 Target tealet is defunct (invalid for switching).
 
 **Causes:**
+- Successful forced transfer under memory pressure (`TEALET_SWITCH_FORCE` or
+    `TEALET_EXIT_FORCE`) can ignore save-time memory errors and mark affected
+    non-main saved stacks/tealets defunct.
 - Saved stack became invalid (for example due to a non-recoverable save/grow failure path)
 - Tealet was left in an unusable state by an internal failure path
 - Caller attempted to switch to a non-switchable tealet handle
@@ -1341,15 +1404,18 @@ Used with `tealet_exit()`.
 **Example Comparison:**
 ```c
 /* Pattern 1: Create then switch (more control) */
-tealet_t *t1 = tealet_create(main, func1, NULL);
-tealet_t *t2 = tealet_create(main, func2, NULL);
+tealet_t *t1 = NULL;
+tealet_t *t2 = NULL;
+tealet_create(main, &t1, func1, NULL);
+tealet_create(main, &t2, func2, NULL);
 setup_relationship(t1, t2);  /* Both exist but not started */
 void *arg = t2;
 tealet_switch(t1, &arg, TEALET_SWITCH_DEFAULT);  /* Now start t1 */
 
 /* Pattern 2: Create and start (more concise) */
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_func, &arg, NULL);
+tealet_t *t = NULL;
+tealet_new(main, &t, my_func, &arg, NULL);
 /* Already started, arg contains first return value */
 ```
 

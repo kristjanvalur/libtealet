@@ -251,6 +251,8 @@ int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **p
  *
  * With #TEALET_SWITCH_FORCE, save-time memory failures may defunct
  * intermediate non-main saved stacks to complete the requested transfer.
+ * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
+ * growth would allow progress, because main is never marked defunct.
  *
  * #TEALET_SWITCH_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path.
@@ -283,13 +285,16 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
  * Without #TEALET_EXIT_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
  * With #TEALET_EXIT_FORCE, save-time memory failures may defunct intermediate stacks
  * to complete the requested transfer.
+ * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
+ * growth would allow progress, because main is never marked defunct.
  *
  * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
  * #TEALET_EXIT_DEFER.
  *
- * `return p;` from run() uses libtealet's implicit exit policy rooted in
- * `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`.
+ * `return p;` from run() uses an implicit policy rooted in
+ * `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`, with retries for memory/defunct
+ * failures and a panic+force fallback to main.
  */
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);
