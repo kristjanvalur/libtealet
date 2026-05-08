@@ -185,7 +185,7 @@ static int worker_recursive(tealet_t *current, int depth) {
     } else if (choice == 3 && g_tealet_count < MAX_TEALETS) {
       /* Create new tealet at current stack depth */
       void *arg = NULL;
-      tealet_new(current, worker_entry, &arg, NULL);
+      (void)tealet_new(current, NULL, worker_entry, &arg, NULL);
       continue;
 
     } else if (choice == 4 && current != g_main && g_tealet_count >= MAX_TEALETS) {

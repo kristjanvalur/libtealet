@@ -60,7 +60,12 @@ int main(void) {
 
   /* how many rounds? */
   data = (void *)10;
-  loop = tealet_new(tmain, loop_func, &data, NULL);
+  loop = NULL;
+  if (tealet_new(tmain, &loop, loop_func, &data, NULL) != 0) {
+    tealet_test_lock_assert_balanced(&g_lock_state);
+    tealet_finalize(tmain);
+    return 1;
+  }
 
   /* loop until the tealet has exited */
   while (tealet_status(loop) == TEALET_STATUS_ACTIVE) {

@@ -315,7 +315,9 @@ static int run_integrity_switch_case(int fail_policy, int write_inside, int *fir
   assert((cfg.flags & TEALET_CONFIGF_STACK_INTEGRITY) != 0);
   assert((cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
 
-  writer = tealet_create(main_tealet, run_write_to_target, NULL);
+  writer = NULL;
+  result = tealet_create(main_tealet, &writer, run_write_to_target, NULL);
+  assert(result == 0);
   assert(writer != NULL);
 
   first_switch_result = 0;
@@ -379,7 +381,9 @@ static int run_mprotect_split_case(int write_guard_page, int *first_result, int 
   assert((cfg.flags & TEALET_CONFIGF_STACK_SNAPSHOT) != 0);
   assert((cfg.flags & TEALET_CONFIGF_STACK_GUARD) != 0);
 
-  writer = tealet_create(main_tealet, run_write_with_mprotect_split, NULL);
+  writer = NULL;
+  result = tealet_create(main_tealet, &writer, run_write_with_mprotect_split, NULL);
+  assert(result == 0);
   assert(writer != NULL);
 
   first_switch_result = 0;
@@ -583,7 +587,9 @@ static void test_set_while_snapshot_active_resizes(void) {
   command->return_to = main_tealet;
   command->configure_result = TEALET_ERR_MEM;
 
-  worker = tealet_create(main_tealet, run_resize_snapshot_while_active, NULL);
+  worker = NULL;
+  result = tealet_create(main_tealet, &worker, run_resize_snapshot_while_active, NULL);
+  assert(result == 0);
   assert(worker != NULL);
 
   arg = command;

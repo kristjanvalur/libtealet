@@ -222,20 +222,35 @@ void fini_test() {
 static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg) {
   static int counter = 0;
   int i;
+  int rc;
   tealet_t *r;
 
   counter += 1;
-  if (counter % 2)
-    return tealet_new(m, run, parg, NULL);
-
-  r = tealet_create(m, run, NULL);
-  if (!r)
+  if (counter % 2) {
+    r = NULL;
+    rc = tealet_new(m, &r, run, parg, NULL);
+    if (rc != 0)
+      return NULL;
     return r;
+  }
+
+  r = NULL;
+  rc = tealet_create(m, &r, run, NULL);
+  if (rc != 0)
+    return NULL;
   i = tealet_switch(r, parg);
   if (i != 0) {
     tealet_delete(r);
     return 0;
   }
+  return r;
+}
+
+static tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far) {
+  tealet_t *r = NULL;
+  int rc = tealet_new(m, &r, run, parg, stack_far);
+  if (rc != 0)
+    return NULL;
   return r;
 }
 
@@ -335,7 +350,7 @@ static tealet_t *stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *sta
 
 typedef tealet_t *(*t_new)(tealet_t *, tealet_run_t, void **, void *);
 static t_new newarray[] = {tealet_new_rnd, stub_new, stub_new2, stub_new3};
-static tealet_t *(*tealet_new_native)(tealet_t *, tealet_run_t, void **, void *) = tealet_new;
+static tealet_t *(*tealet_new_native)(tealet_t *, tealet_run_t, void **, void *) = tealet_new_native_call;
 
 static t_new get_new() {
   if (newmode >= 0)
@@ -613,7 +628,8 @@ void test_lock_transitions_fork(void) {
 void test_simple_create(void) {
   tealet_t *t;
   init_test();
-  t = tealet_create(g_main, test_simple_run, NULL);
+  t = NULL;
+  assert(tealet_create(g_main, &t, test_simple_run, NULL) == 0);
   assert(status == 0);
   tealet_delete(t);
   fini_test();
@@ -622,7 +638,8 @@ void test_simple_create(void) {
 void test_simple_create_and_run(void) {
   tealet_t *t;
   init_test();
-  t = tealet_create(g_main, test_simple_run, NULL);
+  t = NULL;
+  assert(tealet_create(g_main, &t, test_simple_run, NULL) == 0);
   tealet_switch(t, NULL);
   assert(status == 1);
   assert(tealet_previous(g_main) == NULL);
@@ -642,7 +659,8 @@ void test_create_previous(void) {
   tealet_t *t;
   init_test();
   /* Create tealet without running it */
-  t = tealet_create(g_main, test_create_previous_run, NULL);
+  t = NULL;
+  assert(tealet_create(g_main, &t, test_create_previous_run, NULL) == 0);
   assert(status == 0);
   /* Now switch to it - it should see main as previous */
   tealet_switch(t, NULL);
@@ -661,7 +679,8 @@ void test_previous_cleared_on_manual_delete(void) {
   tealet_t *t;
 
   init_test();
-  t = tealet_create(g_main, test_previous_manual_delete_run, NULL);
+  t = NULL;
+  assert(tealet_create(g_main, &t, test_previous_manual_delete_run, NULL) == 0);
   assert(t != NULL);
 
   tealet_switch(t, NULL);
@@ -1144,7 +1163,8 @@ void test_exit_defunct_target_returns_error(void) {
   result = tealet_debug_force_defunct(victim);
   assert(result == 0);
 
-  exiter = tealet_create(g_main, test_exit_defunct_fail_run, NULL);
+  exiter = NULL;
+  assert(tealet_create(g_main, &exiter, test_exit_defunct_fail_run, NULL) == 0);
   assert(exiter != NULL);
   arg = (void *)victim;
   result = tealet_switch(exiter, &arg);
@@ -1170,7 +1190,8 @@ void test_exit_explicit_panic(void) {
 
   init_test();
 
-  exiter = tealet_create(g_main, test_explicit_panic_exit_run, NULL);
+  exiter = NULL;
+  assert(tealet_create(g_main, &exiter, test_explicit_panic_exit_run, NULL) == 0);
   assert(exiter != NULL);
   arg = (void *)g_main;
   result = tealet_switch(exiter, &arg);

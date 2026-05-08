@@ -499,7 +499,7 @@ static void test_new_previous(void *far_marker) {
 
   /* Test tealet_new() from main */
   arg = main;
-  tealet_new(main, test_new_previous_run, &arg, NULL);
+  assert(tealet_new(main, NULL, test_new_previous_run, &arg, NULL) == 0);
 
   /* Verify tealet_previous() after return from tealet_new() */
   /* Note: the tealet has already been freed at this point, so we just verify
