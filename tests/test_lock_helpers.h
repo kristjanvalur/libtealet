@@ -48,6 +48,7 @@ static void tealet_test_lock_install(tealet_t *main_tealet, tealet_test_lock_sta
   assert(main_tealet != NULL);
   tealet_test_lock_init(state);
 
+  locking.mode = TEALET_LOCK_SWITCH;
   locking.lock = tealet_test_lock_cb;
   locking.unlock = tealet_test_unlock_cb;
   locking.arg = (void *)state;

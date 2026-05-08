@@ -113,6 +113,23 @@ heap, and not via stack-local variables.
 
 No form of scheduler is implemented.
 
+## Thread safety
+
+libtealet uses a mixed model:
+
+- Switching is thread-affine for a main-tealet domain.
+- Structure access can be synchronized across threads when integrations provide locking.
+
+This enables safe foreign-thread operations such as deleting or duplicating
+tealets, while keeping stack-switch execution semantics bound to one owning
+thread.
+
+For full guidance (automatic switching-lock behavior, manual locking scopes,
+entry-function locking discipline, and multi-call consistency patterns), see:
+
+- [API thread-safety and locking model](docs/API.md#thread-safety-and-locking-model)
+- [Architecture threading model](docs/ARCHITECTURE.md#threading-model-and-locking)
+
 ## Optional stack checks
 
 libtealet includes optional runtime stack-integrity checks that combine page protection and snapshot verification.

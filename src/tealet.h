@@ -54,15 +54,30 @@ typedef struct tealet_alloc_t {
  * The callbacks are invoked by tealet_lock()/tealet_unlock() with @p arg.
  * If either callback is NULL, the corresponding API becomes a no-op.
  *
- * When configured, libtealet automatically acquires/releases this lock for
- * the switching APIs only: tealet_new(), tealet_create(), tealet_switch(),
- * tealet_exit(), and tealet_fork().
+ * Automatic lock behavior is controlled by @ref tealet_lock_mode_t.
+ *
+ * In #TEALET_LOCK_SWITCH mode, libtealet automatically acquires/releases this
+ * lock for switching APIs only: tealet_new(), tealet_create(),
+ * tealet_switch(), tealet_exit(), and tealet_fork().
+ *
+ * In #TEALET_LOCK_OFF mode, libtealet never auto-locks; callers are fully
+ * responsible for lock scopes.
+ *
+ * Automatic lock behavior does not require recursive lock primitives.
+ * Integrators may intentionally assert non-recursion in lock callbacks to
+ * enforce correct API usage.
  *
  * Primary multi-threaded use case: coordinating foreign-thread structure
  * operations (for example tealet_delete() and tealet_duplicate()) on
  * non-main tealets with explicit external synchronization.
  */
+typedef enum tealet_lock_mode_t {
+  TEALET_LOCK_OFF = 0,
+  TEALET_LOCK_SWITCH = 1,
+} tealet_lock_mode_t;
+
 typedef struct tealet_lock_t {
+  tealet_lock_mode_t mode;
   void (*lock)(void *arg);
   void (*unlock)(void *arg);
   void *arg;
@@ -600,9 +615,9 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * Configuration and non-switch structure APIs can be called from any thread
  * when callers provide synchronization. Switching remains thread-affine.
  *
- * With callbacks installed, the lock is owned internally by the switching
- * APIs only: tealet_new(), tealet_create(), tealet_switch(), tealet_exit(),
- * and tealet_fork().
+ * Automatic locking mode is selected by locking->mode:
+ * - #TEALET_LOCK_OFF: no internal auto-locking,
+ * - #TEALET_LOCK_SWITCH: auto-locking for the five switching APIs only.
  *
  * Non-switch APIs (for example tealet_delete(), tealet_duplicate(), and
  * query/status helpers) remain caller-synchronized when foreign-thread access

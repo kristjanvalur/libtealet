@@ -1334,6 +1334,24 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
   return switch_result;
 }
 
+/* Internal helpers used by switching APIs only.
+ * Public tealet_lock()/tealet_unlock() remain manual wrappers that always
+ * forward configured callbacks regardless of mode.
+ */
+static void tealet_lock_switch(tealet_main_t *g_main) {
+  if (g_main->g_locking.mode != TEALET_LOCK_SWITCH)
+    return;
+  if (g_main->g_locking.lock)
+    g_main->g_locking.lock(g_main->g_locking.arg);
+}
+
+static void tealet_unlock_switch(tealet_main_t *g_main) {
+  if (g_main->g_locking.mode != TEALET_LOCK_SWITCH)
+    return;
+  if (g_main->g_locking.unlock)
+    g_main->g_locking.unlock(g_main->g_locking.arg);
+}
+
 /** We are initializing a new tealet, either switching to it and
  * running it, or switching from it (saving its virgin stack) back
  * to the caller, in order to switch to it later and run it.
@@ -1398,8 +1416,8 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     }
     assert(g_main->g_current->stack == NULL); /* running */
 
-    /* release the lock and run the tealet */
-    tealet_unlock((tealet_t *)g_main);
+    /* release switching lock (if enabled) and run the tealet */
+    tealet_unlock_switch(g_main);
     g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, run_arg));
 
     tealet_exit((tealet_t *)g_exit_target, NULL, TEALET_EXIT_DELETE);
@@ -1498,6 +1516,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g_main->g_target = NULL;
   g_main->g_arg = NULL;
   g_main->g_alloc = *alloc;
+  g_main->g_locking.mode = TEALET_LOCK_OFF;
   g_main->g_locking.lock = NULL;
   g_main->g_locking.unlock = NULL;
   g_main->g_locking.arg = NULL;
@@ -1569,7 +1588,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stac
   void *default_far;
   void *stack_far_used;
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  tealet_lock((tealet_t *)g_main);
+  tealet_lock_switch(g_main);
   assert(!g_main->g_target);
   result = tealet_alloc(g_main);
   if (result == NULL) {
@@ -1584,7 +1603,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stac
     result = NULL;
   }
 done:
-  tealet_unlock((tealet_t *)g_main);
+  tealet_unlock_switch(g_main);
   return (tealet_t *)result;
 }
 
@@ -1606,7 +1625,7 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far) {
   tealet_sub_t *previous;
   tealet_sub_t *current;
 
-  tealet_lock((tealet_t *)g_main);
+  tealet_lock_switch(g_main);
   previous = g_main->g_previous;
   current = g_main->g_current;
   tealet_verify_current_matches_caller(current);
@@ -1634,7 +1653,7 @@ tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far) {
     g_main->g_previous = previous;
   }
 done:
-  tealet_unlock((tealet_t *)g_main);
+  tealet_unlock_switch(g_main);
   return (tealet_t *)result;
 }
 
@@ -1652,7 +1671,7 @@ int tealet_switch(tealet_t *stub, void **parg) {
   int result;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
 
-  tealet_lock((tealet_t *)g_main);
+  tealet_lock_switch(g_main);
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
   if (g_target == g_current) {
@@ -1661,7 +1680,7 @@ int tealet_switch(tealet_t *stub, void **parg) {
   } else {
     result = tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
   }
-  tealet_unlock((tealet_t *)g_main);
+  tealet_unlock_switch(g_main);
   return result;
 }
 
@@ -1704,7 +1723,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   int result;
 
-  tealet_lock((tealet_t *)g_main);
+  tealet_lock_switch(g_main);
   if (flags & TEALET_EXIT_DEFER) {
     /* setting up arg and flags for the run() return value */
     /* We temporarily borrow g_flags/g_arg storage on main until the
@@ -1713,7 +1732,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
     assert(g_main->g_flags == 0);
     g_main->g_arg = arg;
     g_main->g_flags = flags;
-    tealet_unlock((tealet_t *)g_main);
+    tealet_unlock_switch(g_main);
     return 0; /* deferred exit, we are done here */
   }
   if (g_main->g_flags & TEALET_EXIT_DEFER) {
@@ -1756,7 +1775,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   int result, is_parent;
   int api_result;
 
-  tealet_lock((tealet_t *)g_main);
+  tealet_lock_switch(g_main);
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
 
@@ -1828,7 +1847,7 @@ done:
    * or we have been switched to (via tealet_switch or tealet_exit().  in either case,
    * release the lock.
    */
-  tealet_unlock((tealet_t *)g_main);
+  tealet_unlock_switch(g_main);
   return api_result;
 }
 
@@ -2116,10 +2135,13 @@ int tealet_config_set_locking(tealet_t *_tealet, const tealet_lock_t *locking) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
 
   if (locking == NULL) {
+    g_main->g_locking.mode = TEALET_LOCK_OFF;
     g_main->g_locking.lock = NULL;
     g_main->g_locking.unlock = NULL;
     g_main->g_locking.arg = NULL;
   } else {
+    if (locking->mode != TEALET_LOCK_OFF && locking->mode != TEALET_LOCK_SWITCH)
+      return TEALET_ERR_INVAL;
     g_main->g_locking = *locking;
   }
   return 0;
