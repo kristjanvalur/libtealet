@@ -797,6 +797,24 @@ void test_switch(void) {
   fini_test();
 }
 
+void test_switch_self_panic(void) {
+  tealet_t *runner;
+  int result;
+
+  init_test();
+
+  /* Self-switch with PANIC should consume panic immediately. */
+  result = tealet_switch(g_main, NULL, TEALET_SWITCH_PANIC);
+  assert(result == TEALET_ERR_PANIC);
+
+  /* Ensure panic flag is not left armed for a later unrelated switch. */
+  runner = tealet_new_native_call(g_main, test_simple_run, NULL, NULL);
+  assert(runner != NULL);
+  assert(status == 1);
+
+  fini_test();
+}
+
 /************************************************************/
 
 /* 1 is high on the stack.  We then create 2 lower on the stack */
@@ -1136,6 +1154,31 @@ void test_mem_error(void) {
   fini_test();
 }
 
+static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
+  int result;
+  (void)arg;
+
+  result = tealet_exit((tealet_t *)current, NULL, TEALET_EXIT_DELETE);
+  assert(result == TEALET_ERR_INVAL);
+
+  tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
+  assert(0);
+  return NULL;
+}
+
+void test_exit_self_invalid(void) {
+  tealet_t *runner;
+
+  init_test();
+
+  runner = NULL;
+  assert(tealet_create(g_main, &runner, test_exit_self_invalid_run, NULL) == 0);
+  assert(runner != NULL);
+  assert(tealet_switch(runner, NULL, TEALET_SWITCH_DEFAULT) == 0);
+
+  fini_test();
+}
+
 #if TEALET_WITH_TESTING
 static tealet_t *test_exit_defunct_fail_run(tealet_t *current, void *arg) {
   tealet_t *target = (tealet_t *)arg;
@@ -1291,6 +1334,7 @@ static test_entry_t test_list[] = {
     {"test_status", test_status},
     {"test_exit", test_exit},
     {"test_switch", test_switch},
+    {"test_switch_self_panic", test_switch_self_panic},
     {"test_switch_new", test_switch_new},
     {"test_arg", test_arg},
     {"test_random", test_random},
@@ -1299,6 +1343,7 @@ static test_entry_t test_list[] = {
     {"test_memstats", test_memstats},
     {"test_stats", test_stats},
     {"test_mem_error", test_mem_error},
+    {"test_exit_self_invalid", test_exit_self_invalid},
 #if TEALET_WITH_TESTING
     {"test_exit_defunct_target_returns_error", test_exit_defunct_target_returns_error},
     {"test_exit_explicit_panic", test_exit_explicit_panic},

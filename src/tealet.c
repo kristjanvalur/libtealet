@@ -1743,7 +1743,7 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
 
   if (g_target == g_current) {
     g_main->g_previous = g_current;
-    result = 0; /* switch to self */
+    result = panic_requested ? TEALET_ERR_PANIC : 0; /* switch to self */
   } else {
     result = tealet_switchstack(g_main, g_target, parg ? *parg : NULL, parg);
   }
@@ -1768,7 +1768,7 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
 
   assert(g_current != (tealet_sub_t *)g_main); /* mustn't exit main */
   if (g_target == g_current)
-    return -2; /* invalid tealet */
+    return TEALET_ERR_INVAL; /* invalid tealet */
 
   g_current->flags |= TEALET_TFLAGS_EXITING;
   if (flags & TEALET_EXIT_FORCE)
