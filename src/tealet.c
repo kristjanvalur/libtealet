@@ -50,6 +50,7 @@
 #define TEALET_TFLAGS_EXITED (1u << 3)
 #define TEALET_TFLAGS_MAIN_LINEAGE (1u << 4)
 #define TEALET_TFLAGS_FORK (1u << 5)
+#define TEALET_TFLAGS_EXITFORCE (1u << 6)
 
 /* Internal per-stack flags (stored in tealet_stack_t::flags). */
 #define TEALET_SFLAGS_DEFUNCT (1u << 0)
@@ -1060,7 +1061,7 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
   tealet_sub_t *g_target = g_main->g_target;
   tealet_sub_t *g_current = g_main->g_current;
   char *target_stop = g_target->stack_far;
-  int exiting, fail, fail_ok, auto_delete;
+  int exiting, force, fail, fail_ok, auto_delete;
 
   tealet_verify_current_matches_caller(g_current);
 
@@ -1068,12 +1069,12 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
   assert(g_current != g_target);
 
   exiting = ((g_current->flags & TEALET_TFLAGS_EXITING) != 0);
-  /* if task is exiting, failure cannot be signalled. the switch
-   * must proceed. A stack failing to get saved (due to memory shortage)
-   * with this flag set will be set as invalid, so that it cannot
-   * be switched back to again.
+  force = ((g_current->flags & TEALET_TFLAGS_EXITFORCE) != 0);
+  /* Force mode is used by tealet_exit() to request non-failable save
+   * behavior under memory pressure. A stack that cannot be saved may be
+   * marked defunct so the switch can proceed.
    */
-  fail_ok = !exiting;
+  fail_ok = !force;
 
   /* save and unlink older stacks on demand */
   /* when coming from unbounded stack, there should be no list of unsaved stacks
@@ -1094,7 +1095,7 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
     /* tealet is exiting. We don't save its stack. */
     assert(!TEALET_IS_MAIN((tealet_t *)g_current));
     auto_delete = ((g_current->flags & TEALET_TFLAGS_AUTODELETE) != 0);
-    g_current->flags &= ~(TEALET_TFLAGS_EXITING | TEALET_TFLAGS_AUTODELETE);
+    g_current->flags &= ~(TEALET_TFLAGS_EXITING | TEALET_TFLAGS_AUTODELETE | TEALET_TFLAGS_EXITFORCE);
     g_current->flags |= TEALET_TFLAGS_EXITED;
     if (auto_delete) {
       /* auto-delete the tealet */
@@ -1326,7 +1327,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
 #endif
 
   switch_result = (g_main->g_sw == SW_RESTORE ? 0 : 1);
-  if (g_main->g_current == (tealet_sub_t *)g_main && (g_main->g_flags & TEALET_MFLAGS_PANIC)) {
+  if (g_main->g_flags & TEALET_MFLAGS_PANIC) {
     g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
     return TEALET_ERR_PANIC;
   }
@@ -1364,6 +1365,9 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
                               void **parg, void *stack_far) {
   int result;
   tealet_sub_t *g_exit_target;
+  int exit_flags;
+  void *exit_arg;
+  int retry_flags;
   int run_on_create = g_new == g_target; /* true for tealet_new(), we are switching to the new tealet */
   void *run_arg, *switch_arg;
   void *initial_run_arg;
@@ -1420,7 +1424,33 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     tealet_unlock_switch(g_main);
     g_exit_target = (tealet_sub_t *)(run((tealet_t *)g_main->g_current, run_arg));
 
-    tealet_exit((tealet_t *)g_exit_target, NULL, TEALET_EXIT_DELETE);
+    /* Resolve any deferred-exit state explicitly so retries below use a
+     * single consistent (target,arg,flags) policy.
+     * Note: DEFER+FORCE is redundant in this implicit return path because a
+     * TEALET_ERR_MEM retry always adds FORCE anyway.
+     */
+    exit_flags = TEALET_EXIT_DELETE;
+    exit_arg = NULL;
+    if (g_main->g_flags & TEALET_EXIT_DEFER) {
+      exit_flags = g_main->g_flags & (~TEALET_EXIT_DEFER);
+      exit_arg = g_main->g_arg;
+      g_main->g_flags = 0;
+      g_main->g_arg = NULL;
+    }
+
+    /* Implicit return policy from run():
+     * 1) Try requested target in fail-fast mode.
+     * 2) If target is defunct, panic to main explicitly.
+     * 3) If memory blocked the transfer, retry requested target with FORCE.
+     */
+    result = tealet_exit((tealet_t *)g_exit_target, exit_arg, exit_flags);
+    if (result == TEALET_ERR_DEFUNCT) {
+      retry_flags = exit_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
+      (void)tealet_exit((tealet_t *)g_main, exit_arg, retry_flags);
+    } else if (result == TEALET_ERR_MEM) {
+      retry_flags = exit_flags | TEALET_EXIT_FORCE;
+      (void)tealet_exit((tealet_t *)g_exit_target, exit_arg, retry_flags);
+    }
     assert(!"This point should not be reached");
   } else {
     /* Either just a create, with no run, or a switch back
@@ -1698,6 +1728,8 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
     return -2; /* invalid tealet */
 
   g_current->flags |= TEALET_TFLAGS_EXITING;
+  if (flags & TEALET_EXIT_FORCE)
+    g_current->flags |= TEALET_TFLAGS_EXITFORCE;
   assert(g_current->stack == NULL);
   assert((g_current->flags & TEALET_TFLAGS_AUTODELETE) == 0);
   if (flags & TEALET_EXIT_DELETE)
@@ -1706,11 +1738,11 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   assert(result < 0); /* only return here if there was failure */
   g_target->stack_far = stack_far;
   g_current->stack = NULL;
-  g_current->flags &= ~TEALET_TFLAGS_AUTODELETE;
+  g_current->flags &= ~(TEALET_TFLAGS_EXITING | TEALET_TFLAGS_AUTODELETE | TEALET_TFLAGS_EXITFORCE);
   return result;
 }
 
-/* Exit current tealet and transfer control.
+/* Exit current tealet and transfer control to requested target.
  *
  * Switching API lock policy:
  * all five switching APIs (`tealet_new()`, `tealet_create()`,
@@ -1721,7 +1753,16 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
 int tealet_exit(tealet_t *target, void *arg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)target;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
+  int flags_used;
+  int panic_requested;
   int result;
+
+  if ((flags & ~(TEALET_EXIT_DELETE | TEALET_EXIT_DEFER | TEALET_EXIT_FORCE | TEALET_EXIT_PANIC)) != 0) {
+    return TEALET_ERR_INVAL;
+  }
+  if ((flags & TEALET_EXIT_DEFER) && (flags & TEALET_EXIT_PANIC)) {
+    return TEALET_ERR_INVAL;
+  }
 
   tealet_lock_switch(g_main);
   if (flags & TEALET_EXIT_DEFER) {
@@ -1744,18 +1785,19 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
     g_main->g_flags = 0;
     g_main->g_arg = 0;
   }
-  result = tealet_exit_inner(target, arg, flags);
-  assert(result < 0);
-  if (result == TEALET_ERR_DEFUNCT && !TEALET_IS_MAIN(target))
+  flags_used = flags;
+  panic_requested = ((flags_used & TEALET_EXIT_PANIC) != 0);
+  if (panic_requested)
     g_main->g_flags |= TEALET_MFLAGS_PANIC;
-  /* fallback: switch to main */
-  result = tealet_exit_inner(target->main, arg, flags);
-  (void)result;
-  /* Unreachable in normal operation: successful tealet_exit_inner() does not
-   * return to this frame. If control returns here, execution state is corrupt.
-   */
-  assert(0 && "unreachable tealet_exit return path");
-  abort();
+
+  result = tealet_exit_inner(target, arg, flags_used);
+  assert(result < 0);
+
+  if (panic_requested)
+    g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
+
+  tealet_unlock_switch(g_main);
+  return result;
 }
 
 /* Fork the active tealet.

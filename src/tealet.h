@@ -125,7 +125,7 @@ typedef tealet_t *(*tealet_run_t)(tealet_t *current, void *arg);
                                  */
 #define TEALET_ERR_INVAL -4     /* invalid argument */
 #define TEALET_ERR_INTEGRITY -5 /* current tealet violated stack-integrity boundary */
-#define TEALET_ERR_PANIC -6     /* switched to main due to panic reroute from tealet_exit() */
+#define TEALET_ERR_PANIC -6     /* receiver resumed with explicit panic exit signal */
 
 /* configuration API structure versioning */
 #define TEALET_CONFIG_VERSION_1 1
@@ -242,7 +242,7 @@ tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stac
  * @retval 0 Success.
  * @retval TEALET_ERR_MEM Save/restore failed due to memory pressure.
  * @retval TEALET_ERR_DEFUNCT Target tealet/stack is defunct.
- * @retval TEALET_ERR_PANIC Returned to main after panic reroute from tealet_exit().
+ * @retval TEALET_ERR_PANIC Resumed due to panic-tagged tealet_exit() transfer.
  * @retval TEALET_ERR_INVAL Invalid state/target.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
@@ -254,16 +254,27 @@ int tealet_switch(tealet_t *target, void **parg);
 #define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
 #define TEALET_EXIT_DELETE 1  /* Auto-delete on exit */
 #define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
+#define TEALET_EXIT_FORCE 4   /* Force exit switch despite save-time memory failures */
+#define TEALET_EXIT_PANIC 8   /* Mark the receiving tealet as panic-resumed */
 
 /**
  * @brief Exit current tealet and transfer control to @p target.
  * @param target Requested target tealet.
  * @param arg Optional argument to deliver to @p target.
- * @param flags Exit behavior bits: #TEALET_EXIT_DEFAULT, #TEALET_EXIT_DELETE, #TEALET_EXIT_DEFER.
- * @return 0 only for deferred setup path; otherwise this call is non-returning on success.
+ * @param flags Exit behavior bits: #TEALET_EXIT_DEFAULT, #TEALET_EXIT_DELETE,
+ * #TEALET_EXIT_DEFER, #TEALET_EXIT_FORCE, #TEALET_EXIT_PANIC.
+ * @return 0 only for deferred setup path; otherwise returns a negative error code if transfer cannot start.
  *
- * If the requested target is defunct, control is rerouted to main as panic fallback.
- * `return p;` from run() is equivalent to `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`.
+ * Without #TEALET_EXIT_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
+ * With #TEALET_EXIT_FORCE, save-time memory failures may defunct intermediate stacks
+ * to complete the requested transfer.
+ *
+ * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
+ * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
+ * #TEALET_EXIT_DEFER.
+ *
+ * `return p;` from run() uses libtealet's implicit exit policy rooted in
+ * `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`.
  */
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);

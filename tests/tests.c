@@ -1115,16 +1115,20 @@ void test_mem_error(void) {
 }
 
 #if TEALET_WITH_TESTING
-static tealet_t *test_panic_exit_run(tealet_t *current, void *arg) {
+static tealet_t *test_exit_defunct_fail_run(tealet_t *current, void *arg) {
   tealet_t *target = (tealet_t *)arg;
+  int result;
 
   assert(current != g_main);
-  tealet_exit(target, NULL, TEALET_EXIT_DELETE);
+  result = tealet_exit(target, NULL, TEALET_EXIT_DELETE);
+  assert(result == TEALET_ERR_DEFUNCT);
+
+  tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
   assert(0);
   return NULL;
 }
 
-void test_exit_reroute_panic(void) {
+void test_exit_defunct_target_returns_error(void) {
   tealet_t *victim;
   tealet_t *exiter;
   int result;
@@ -1137,13 +1141,38 @@ void test_exit_reroute_panic(void) {
   result = tealet_debug_force_defunct(victim);
   assert(result == 0);
 
-  exiter = tealet_create(g_main, test_panic_exit_run, NULL);
+  exiter = tealet_create(g_main, test_exit_defunct_fail_run, NULL);
   assert(exiter != NULL);
   arg = (void *)victim;
   result = tealet_switch(exiter, &arg);
-  assert(result == TEALET_ERR_PANIC);
+  assert(result == 0);
 
   tealet_delete(victim);
+  fini_test();
+}
+
+static tealet_t *test_explicit_panic_exit_run(tealet_t *current, void *arg) {
+  tealet_t *target = (tealet_t *)arg;
+
+  assert(current != g_main);
+  tealet_exit(target, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_PANIC);
+  assert(0);
+  return NULL;
+}
+
+void test_exit_explicit_panic(void) {
+  tealet_t *exiter;
+  int result;
+  void *arg;
+
+  init_test();
+
+  exiter = tealet_create(g_main, test_explicit_panic_exit_run, NULL);
+  assert(exiter != NULL);
+  arg = (void *)g_main;
+  result = tealet_switch(exiter, &arg);
+  assert(result == TEALET_ERR_PANIC);
+
   fini_test();
 }
 
@@ -1247,7 +1276,8 @@ static test_entry_t test_list[] = {
     {"test_stats", test_stats},
     {"test_mem_error", test_mem_error},
 #if TEALET_WITH_TESTING
-    {"test_exit_reroute_panic", test_exit_reroute_panic},
+  {"test_exit_defunct_target_returns_error", test_exit_defunct_target_returns_error},
+  {"test_exit_explicit_panic", test_exit_explicit_panic},
     {"test_debug_swap_far_invalid_caller_check_main", test_debug_swap_far_invalid_caller_check_main},
     {"test_debug_swap_far_invalid_caller_check_child", test_debug_swap_far_invalid_caller_check_child},
 #endif
