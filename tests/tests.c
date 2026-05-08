@@ -1300,8 +1300,8 @@ static test_entry_t test_list[] = {
     {"test_stats", test_stats},
     {"test_mem_error", test_mem_error},
 #if TEALET_WITH_TESTING
-  {"test_exit_defunct_target_returns_error", test_exit_defunct_target_returns_error},
-  {"test_exit_explicit_panic", test_exit_explicit_panic},
+    {"test_exit_defunct_target_returns_error", test_exit_defunct_target_returns_error},
+    {"test_exit_explicit_panic", test_exit_explicit_panic},
     {"test_debug_swap_far_invalid_caller_check_main", test_debug_swap_far_invalid_caller_check_main},
     {"test_debug_swap_far_invalid_caller_check_child", test_debug_swap_far_invalid_caller_check_child},
 #endif
