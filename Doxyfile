@@ -32,6 +32,7 @@ WARN_LOGFILE           = docs/_build/doxygen/warnings.log
 INPUT                  = src/tealet.h \
                          src/tealet_extras.h \
                          README.md \
+                         docs/API.md \
                          docs/GETTING_STARTED.md \
                          docs/ARCHITECTURE.md \
                          docs/INCREMENTAL_SAVE.md \
