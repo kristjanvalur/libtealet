@@ -113,70 +113,8 @@ heap, and not via stack-local variables.
 
 No form of scheduler is implemented.
 
-## Thread safety
-
-libtealet uses a mixed model:
-
-- Switching is thread-affine for a main-tealet domain.
-- Structure access can be synchronized across threads when integrations provide locking.
-
-This enables safe foreign-thread operations such as deleting or duplicating
-tealets, while keeping stack-switch execution semantics bound to one owning
-thread.
-
-For full guidance (automatic switching-lock behavior, manual locking scopes,
-entry-function locking discipline, and multi-call consistency patterns), see:
-
-- [API thread-safety and locking model](docs/API.md#thread-safety-and-locking-model)
-- [Architecture threading model](docs/ARCHITECTURE.md#threading-model-and-locking)
-
-## Optional stack checks
-
-libtealet includes optional runtime stack-integrity checks that combine page protection and snapshot verification.
-These checks help verify the promise that each tealet does not access stack areas outside its allowed bounds. They are especially useful during application development and integration to catch boundary-violation bugs early.
-They come with runtime overhead and are generally intended for development/testing builds, not production deployments.
-
-- **Stack guard** (`TEALET_CONFIGF_STACK_GUARD`) protects full pages (typically via `mprotect()` where available).
-- **Stack snapshot** (`TEALET_CONFIGF_STACK_SNAPSHOT`) verifies byte-level regions, including sub-page areas guard mode cannot represent exactly.
-- Together they are used to catch out-of-bounds stack access across both page-aligned and non-page-aligned regions.
-
-- Use `tealet_configure_check_stack()` to enable a sensible default check profile (ideally from a program top-level function, since it derives `stack_guard_limit` from its own stack frame).
-- Use `tealet_configure_get()` / `tealet_configure_set()` for explicit control.
-
-By default, the project build enables both backends:
-
-- `TEALET_WITH_STACK_GUARD=1`
-- `TEALET_WITH_STACK_SNAPSHOT=1`
-
-You can compile them out when needed, for example:
-
-```bash
-make TEALET_WITH_STACK_GUARD=0 TEALET_WITH_STACK_SNAPSHOT=0
-```
-
-When compiled out, configuration calls are canonicalized to the supported subset on the current build/platform.
-
-## Advanced: Fork-like Semantics
-
-In addition to the traditional approach where each tealet exists within the execution scope of a function (created via `tealet_new()` or `tealet_create()`), libtealet now supports **Unix-like fork semantics** through `tealet_fork()`.
-
-This functionality was available in Stackless Python but has historically been omitted from this library to maintain the clean discipline of function-scoped coroutines. `tealet_fork()` breaks out of this restriction, enabling more dynamic coroutine creation patterns.
-
-**Important responsibilities when using fork:**
-- **When forking main-lineage execution** (main tealet or a clone of main):
-    call `tealet_set_far()` first to bound the stack; otherwise `tealet_fork()` can fail with `TEALET_ERR_UNFORKABLE`.
-- **Boundary inheritance:** A forked tealet inherits the parent's current far
-    boundary at fork time. For main-lineage forks, this means the configured
-    main boundary is carried into the child clone.
-- **When forking main-lineage execution**: exit explicitly using `tealet_exit()` (without `TEALET_EXIT_DEFER`).
-- **When forking a regular function-scoped tealet**: no extra far-boundary setup is needed for the fork itself, and the forked tealet can generally return through the same run-function path as the original.
-- **Scope discipline**: For boundary-based fork flows, all switching must occur within the bounded stack region defined by the `far` boundary
-
-This feature enables advanced use cases like coroutine cloning and continuation capture, but requires careful management of stack boundaries and explicit lifetime control.
-
-If your code needs to branch behavior at runtime, use `tealet_get_origin()` (or
-`TEALET_IS_MAIN_LINEAGE()` / `TEALET_IS_FORK()`) to detect whether a tealet is
-main-lineage and/or fork-originated.
+Detailed behavioral guidance is documented in [docs/API.md](docs/API.md),
+which is the canonical reference for semantics and integration details.
 
 ## Documentation
 
@@ -185,7 +123,7 @@ main-lineage and/or fork-originated.
     - [Global API symbols](globals.html)
     - [Data structures](annotated.html)
 - **[Getting Started](docs/GETTING_STARTED.md)** - Installation, examples, common patterns
-- **[API Reference](docs/API.md)** - Complete function reference
+- **[API Reference](docs/API.md)** - Canonical detailed behavior and complete function reference
 - **[Doxygen Workflow](docs/DOXYGEN.md)** - Local authored+generated API docs setup
 - **[Architecture](docs/ARCHITECTURE.md)** - Internals and stack-chaining design
 - **[Incremental Save Algorithm](docs/INCREMENTAL_SAVE.md)** - Partial-save model, invariants, and transition diagrams
