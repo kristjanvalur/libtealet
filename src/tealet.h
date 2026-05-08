@@ -210,30 +210,32 @@ void tealet_finalize(tealet_t *tealet);
 /**
  * @brief Create a new tealet without starting it.
  * @param tealet Main/related tealet context used for allocation and ownership.
+ * @param pcreated Output pointer receiving the created tealet on success (must be non-NULL).
  * @param run Entry function for the created tealet.
  * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
- * @return New tealet pointer, or NULL on allocation/setup failure.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
  *
  * The new tealet enters execution when tealet_switch() first targets it.
  * If @p stack_far is non-NULL, capture range is only extended (never shrunk)
  * relative to the default internally selected boundary.
  */
 TEALET_API
-tealet_t *tealet_create(tealet_t *tealet, tealet_run_t run, void *stack_far);
+int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far);
 
 /**
  * @brief Create and immediately start a new tealet.
  * @param tealet Main/related tealet context.
+ * @param pcreated Optional output pointer receiving the created tealet on success; may be NULL.
  * @param run Entry function.
  * @param parg In/out switch argument pointer (same semantics as tealet_switch()).
  * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
- * @return New tealet pointer on success; NULL on allocation/switch failure.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
  *
  * Semantically equivalent to tealet_create() followed by tealet_switch(),
  * but performed as one operation.
  */
 TEALET_API
-tealet_t *tealet_new(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far);
+int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
 
 /**
  * @brief Suspend current tealet and resume @p target.
@@ -753,14 +755,15 @@ void *tealet_stack_further(void *a, void *b);
  * @param dummy1 Matches tealet_new() signature; ignored.
  * @param dummy2 Matches tealet_new() signature; ignored.
  * @param dummy3 Matches tealet_new() signature; ignored.
- * @param dummy4 Optional requested boundary (as in tealet_new()).
+ * @param dummy4 Matches tealet_new() signature; ignored.
+ * @param dummy5 Optional requested boundary (as in tealet_new()).
  * @return Effective far boundary that tealet_new() would use at this stack depth.
  *
  * this is used to get the "far" address if a tealet were initialized here.
  * The arguments must match tealet_new(); they are only dummies.
  */
 TEALET_API
-void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4);
+void *tealet_new_probe(tealet_t *dummy1, tealet_t **dummy2, tealet_run_t dummy3, void **dummy4, void *dummy5);
 
 /* Convenience macros */
 #define TEALET_MAIN(t) ((t)->main)

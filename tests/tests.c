@@ -241,6 +241,7 @@ static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg) {
 
 /* create a tealet or stub low on the stack */
 static tealet_t *tealet_new_descend(tealet_t *t, int level, tealet_run_t run, void **parg) {
+  tealet_t *stub;
   int boo[10];
   boo[9] = 0;
   (void)boo;
@@ -248,8 +249,9 @@ static tealet_t *tealet_new_descend(tealet_t *t, int level, tealet_run_t run, vo
     return tealet_new_descend(t, level - 1, run, parg);
   if (run)
     return tealet_new_x(t, run, parg);
-  else
-    return tealet_stub_new(t, NULL);
+  if (tealet_stub_new(t, &stub, NULL) != 0)
+    return NULL;
+  return stub;
 }
 
 /***************************************
@@ -563,7 +565,8 @@ void test_lock_transitions_stub(void) {
   init_test();
 
   lock_snapshot_take(&g_lock_stub_new_before);
-  stub = tealet_stub_new(g_main, NULL);
+  result = tealet_stub_new(g_main, &stub, NULL);
+  assert(result == 0);
   assert(stub != NULL);
   lock_snapshot_assert_delta_one(&g_lock_stub_new_before);
 

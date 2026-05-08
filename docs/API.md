@@ -62,31 +62,37 @@ There is no supported way to decouple this deletion order: tealet API operations
 ### tealet_create()
 
 ```c
-tealet_t *tealet_create(tealet_t *main, tealet_run_t run, void *stack_far);
+int tealet_create(tealet_t *main, tealet_t **pcreated, tealet_run_t run, void *stack_far);
 ```
 
 Create a new tealet without starting it.
 
 **Parameters:**
 - `main`: The main tealet (from `tealet_initialize()`)
+- `pcreated`: Output pointer for the created tealet (must be non-NULL)
 - `run`: Function to execute in the tealet's context
 - `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
-**Returns:** New tealet in `TEALET_STATUS_INITIAL` state, or `NULL` on allocation failure.
+**Returns:**
+- `0` on success
+- negative `TEALET_ERR_*` on failure (`TEALET_ERR_MEM`, `TEALET_ERR_INVAL`, etc.)
 
 **Usage:**
 ```c
-tealet_t *t = tealet_create(main, my_run_function, NULL);
-if (t == NULL) {
-    /* Out of memory */
+tealet_t *t = NULL;
+int rc = tealet_create(main, &t, my_run_function, NULL);
+if (rc != 0) {
+    /* Handle failure */
 }
 ```
 
 The tealet is created but not yet running. Use `tealet_switch()` to start execution. This pattern is useful when setting up multiple coroutines before starting any:
 
 ```c
-tealet_t *t1 = tealet_create(main, func1, NULL);
-tealet_t *t2 = tealet_create(main, func2, NULL);
+tealet_t *t1 = NULL;
+tealet_t *t2 = NULL;
+tealet_create(main, &t1, func1, NULL);
+tealet_create(main, &t2, func2, NULL);
 /* Both created but not running yet */
 
 void *arg1 = data1;
@@ -100,35 +106,48 @@ tealet_switch(t1, &arg1);  /* Start t1 */
 ### tealet_new()
 
 ```c
-tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far);
+int tealet_new(tealet_t *main, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
 ```
 
 Create a new tealet and immediately start executing it.
 
 **Parameters:**
 - `main`: The main tealet
+- `pcreated`: Optional output pointer for the created tealet (may be `NULL`)
 - `run`: Function to execute
 - `parg`: Pointer to argument pointer (passed to run function, updated with return value)
 - `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
-**Returns:** New tealet (may be `NULL` if run function deleted it), or `NULL` on failure.
+**Returns:**
+- `0` on success
+- `TEALET_ERR_MEM` on failure to create/start due to memory pressure
+- `TEALET_ERR_PANIC` when startup resumes via unexpected panic-tagged switch-back
+
+`tealet_new()` now reports status via its integer return value; it does not use
+`NULL` as an error carrier.
 
 Conceptually, `tealet_new()` is `tealet_create()` followed by `tealet_switch()` (create-and-start in one call).
 
-`tealet_new()` performs an internal switch as part of create-and-start. The same switch failure conditions as `tealet_switch()` apply (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`), but `tealet_new()` reports them as `NULL` rather than returning an error code.
+`tealet_new()` performs an internal switch as part of create-and-start.
+In practice, it fails with `TEALET_ERR_MEM`, or it can return
+`TEALET_ERR_PANIC` to signal an unexpected panic-tagged switch-back.
 
 **Usage:**
 ```c
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_run, &arg, NULL);
+tealet_t *t = NULL;
+int rc = tealet_new(main, &t, my_run, &arg, NULL);
+if (rc != 0) {
+    /* Handle failure */
+}
 /* Run function has executed until first switch back */
 /* arg now contains value from first switch */
 ```
 
 Equivalent to:
 ```c
-tealet_t *t = tealet_create(main, run, NULL);
-if (t != NULL) {
+tealet_t *t = NULL;
+if (tealet_create(main, &t, run, NULL) == 0) {
     tealet_switch(t, parg);
 }
 ```
@@ -162,7 +181,7 @@ void bar(tealet_t *main) {
     arg = &local_state;
     stack_far = tealet_stack_further(&local_state, &local_state + 1);
 
-    worker = tealet_new(main, my_run, &arg, stack_far);
+    tealet_new(main, &worker, my_run, &arg, stack_far);
     (void)worker;
 }
 ```
@@ -735,21 +754,22 @@ Use this to combine boundary requirements from different stack references.
 ### tealet_new_probe()
 
 ```c
-void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4);
+void *tealet_new_probe(tealet_t *dummy1, tealet_t **dummy2, tealet_run_t dummy3,
+                       void **dummy4, void *dummy5);
 ```
 
 A function to test what stack boundary would be used for a new tealet without creating one. This is mostly informative.
 
 **Parameters:**
-- `dummy1`, `dummy2`, `dummy3`: Unused placeholders to match the `tealet_new()` call shape
-- `dummy4`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
+- `dummy1`, `dummy2`, `dummy3`, `dummy4`: Unused placeholders to match the `tealet_new()` call shape
+- `dummy5`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
 
 **Returns:** The probed stack-boundary marker.
 
 **Usage:**
 ```c
 void *arg = NULL;
-void *probe = tealet_new_probe(main, my_run, &arg, NULL);
+void *probe = tealet_new_probe(main, NULL, my_run, &arg, NULL);
 printf("new tealet boundary probe: %p\n", probe);
 ```
 
@@ -1174,7 +1194,8 @@ For `tealet_switch()`:
 - On `TEALET_ERR_PANIC`: treat as explicit panic resume signal from `tealet_exit(..., TEALET_EXIT_PANIC)`.
 
 For `tealet_new()`:
-- The same underlying switch failure conditions apply (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`), but the API surface is pointer-based, so these failures are observed as `NULL`.
+- `TEALET_ERR_MEM` is the creation/start failure case.
+- `TEALET_ERR_PANIC` is not a memory failure; it signals an unexpected panic-tagged switch-back during create-and-start.
 
 Practical note for `tealet_switch()` failures (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`):
 - In non-main tealets, the usual recovery path is to perform local cleanup and then exit to `main`.
