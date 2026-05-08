@@ -189,6 +189,12 @@ Use the built-in helpers:
 - `make sync-version` to copy `TEALET_VERSION` from `src/tealet.h` into the other version fields.
 - `make check-version-sync` to validate all version fields match.
 
+For changelog release rollups:
+
+- `make check-changelog-roll` validates that `CHANGELOG.md` has the required `Unreleased` section and compare-link format.
+- `make roll-changelog ROLL_VERSION=x.y.z ROLL_DATE=YYYY-MM-DD` inserts a release header from `Unreleased` and updates footer compare links.
+- `make rollup ROLL_VERSION=x.y.z ROLL_DATE=YYYY-MM-DD` runs both metadata sync and changelog rollup in one step.
+
 ## Examples
 
 See `tests/setcontext.c` for a practical example implementing `longjmp()`-like functionality using tealets.

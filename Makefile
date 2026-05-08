@@ -92,7 +92,8 @@ ifeq ($(shell uname -s),Darwin)
 	STATIC_FLAG :=
 endif
 
-.PHONY: test tests format check-format docs docs-clean docs-check sync-version check-version-sync
+.PHONY: test tests format check-format docs docs-clean docs-check sync-version check-version-sync \
+	roll-changelog check-changelog-roll rollup
 
 # Version metadata synchronization
 # Authoritative source: src/tealet.h (TEALET_VERSION)
@@ -141,6 +142,101 @@ sync-version:
 	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^PROJECT_NUMBER[[:space:]]*=/) { print "PROJECT_NUMBER         = " v; done=1; next } print }' Doxyfile > Doxyfile.new; \
 	mv Doxyfile.new Doxyfile; \
 	$(MAKE) check-version-sync
+
+# Proposed changelog rolling helpers
+# Usage:
+#   make roll-changelog ROLL_VERSION=0.5.2 ROLL_DATE=2026-05-08
+# Defaults:
+#   ROLL_VERSION defaults to VERSION from this Makefile
+#   ROLL_DATE defaults to today's date (YYYY-MM-DD)
+#
+# Expected changelog conventions:
+# - "## [Unreleased]" section exists at top.
+# - Footer link exists as: [Unreleased]: .../compare/vX.Y.Z...HEAD
+#
+# Behavior:
+# - Inserts "## [ROLL_VERSION] - ROLL_DATE" immediately after Unreleased.
+# - Repoints [Unreleased] link to compare/vROLL_VERSION...HEAD.
+# - Adds [ROLL_VERSION] compare link from previous unreleased base to ROLL_VERSION.
+ROLL_VERSION ?= $(VERSION)
+ROLL_DATE ?= $(shell date +%F)
+
+check-changelog-roll:
+	@set -e; \
+	if ! grep -q '^## \[Unreleased\]$$' CHANGELOG.md; then \
+		echo "ERROR: CHANGELOG.md missing '## [Unreleased]' section"; \
+		exit 1; \
+	fi; \
+	if ! grep -q '^\[Unreleased\]: .*compare/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.\.\.HEAD$$' CHANGELOG.md; then \
+		echo "ERROR: CHANGELOG.md missing canonical [Unreleased] compare footer link"; \
+		exit 1; \
+	fi; \
+	echo "*** Changelog roll prerequisites OK ***"
+
+roll-changelog: check-changelog-roll
+	@set -e; \
+	v="$(ROLL_VERSION)"; \
+	d="$(ROLL_DATE)"; \
+	if ! echo "$$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "ERROR: ROLL_VERSION must be x.y.z, got '$$v'"; \
+		exit 1; \
+	fi; \
+	if ! echo "$$d" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$$'; then \
+		echo "ERROR: ROLL_DATE must be YYYY-MM-DD, got '$$d'"; \
+		exit 1; \
+	fi; \
+	if grep -q "^## \[$$v\]" CHANGELOG.md; then \
+		echo "ERROR: CHANGELOG.md already has section for $$v"; \
+		exit 1; \
+	fi; \
+	if grep -q "^\[$$v\]: " CHANGELOG.md; then \
+		echo "ERROR: CHANGELOG.md already has footer link for $$v"; \
+		exit 1; \
+	fi; \
+	prev=$$(sed -n 's@^\[Unreleased\]: .*compare/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\.\.\.HEAD$$@\1@p' CHANGELOG.md | head -n 1); \
+	if [ -z "$$prev" ]; then \
+		echo "ERROR: Could not parse previous release version from [Unreleased] footer link"; \
+		exit 1; \
+	fi; \
+	awk -v v="$$v" -v d="$$d" -v p="$$prev" '\
+	BEGIN { inserted = 0; links = 0 } \
+	{ \
+	  if (!inserted && $$0 == "## [Unreleased]") { \
+	    print $$0; \
+	    print ""; \
+	    print "## [" v "] - " d; \
+	    inserted = 1; \
+	    next; \
+	  } \
+	  if ($$0 ~ /^\[Unreleased\]: /) { \
+	    print "[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v" v "...HEAD"; \
+	    print "[" v "]: https://github.com/kristjanvalur/libtealet/compare/v" p "...v" v; \
+	    links = 1; \
+	    next; \
+	  } \
+	  print $$0; \
+	} \
+	END { \
+	  if (!inserted) { \
+	    print "ERROR: Unreleased section insertion point not found" > "/dev/stderr"; \
+	    exit 1; \
+	  } \
+	  if (!links) { \
+	    print "ERROR: Unreleased footer link insertion point not found" > "/dev/stderr"; \
+	    exit 1; \
+	  } \
+	}' CHANGELOG.md > CHANGELOG.md.new; \
+	mv CHANGELOG.md.new CHANGELOG.md; \
+	echo "*** Rolled CHANGELOG.md to $$v ($$d), previous base $$prev ***"
+
+# Release metadata rollup helper:
+# - validates/syncs version metadata from src/tealet.h
+# - rolls CHANGELOG.md using ROLL_VERSION/ROLL_DATE
+#
+# Example:
+#   make rollup ROLL_VERSION=0.5.2 ROLL_DATE=2026-05-08
+rollup: sync-version roll-changelog
+	@echo "*** Rollup complete for $(ROLL_VERSION) ($(ROLL_DATE)) ***"
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork bin/test-config
