@@ -92,7 +92,55 @@ ifeq ($(shell uname -s),Darwin)
 	STATIC_FLAG :=
 endif
 
-.PHONY: test tests format check-format docs docs-clean docs-check
+.PHONY: test tests format check-format docs docs-clean docs-check sync-version check-version-sync
+
+# Version metadata synchronization
+# Authoritative source: src/tealet.h (TEALET_VERSION)
+# Mirrored fields that must match:
+#   - Makefile: VERSION = ...
+#   - README.md: **Version x.y.z**
+#   - Doxyfile: PROJECT_NUMBER = ...
+# Use `make sync-version` after updating TEALET_VERSION in src/tealet.h.
+# Use `make check-version-sync` in CI/release checks to prevent drift.
+
+check-version-sync:
+	@set -e; \
+	header_version=$$(awk -F'"' '/^#define TEALET_VERSION "[0-9]+\.[0-9]+\.[0-9]+"/ {print $$2; exit}' src/tealet.h); \
+	if [ -z "$$header_version" ]; then \
+		echo "ERROR: Could not parse TEALET_VERSION from src/tealet.h"; \
+		exit 1; \
+	fi; \
+	make_version=$$(awk -F'[[:space:]]*=[[:space:]]*' '/^VERSION[[:space:]]*=/ {print $$2; exit}' Makefile); \
+	readme_version=$$(sed -n 's/^\*\*Version \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\*\*$$/\1/p' README.md | head -n 1); \
+	doxy_version=$$(awk -F'[[:space:]]*=[[:space:]]*' '/^PROJECT_NUMBER[[:space:]]*=/ {print $$2; exit}' Doxyfile); \
+	if [ "$$make_version" != "$$header_version" ]; then \
+		echo "ERROR: Makefile VERSION ($$make_version) != src/tealet.h TEALET_VERSION ($$header_version)"; \
+		exit 1; \
+	fi; \
+	if [ "$$readme_version" != "$$header_version" ]; then \
+		echo "ERROR: README.md version ($$readme_version) != src/tealet.h TEALET_VERSION ($$header_version)"; \
+		exit 1; \
+	fi; \
+	if [ "$$doxy_version" != "$$header_version" ]; then \
+		echo "ERROR: Doxyfile PROJECT_NUMBER ($$doxy_version) != src/tealet.h TEALET_VERSION ($$header_version)"; \
+		exit 1; \
+	fi; \
+	echo "*** Version sync OK: $$header_version ***"
+
+sync-version:
+	@set -e; \
+	version=$$(awk -F'"' '/^#define TEALET_VERSION "[0-9]+\.[0-9]+\.[0-9]+"/ {print $$2; exit}' src/tealet.h); \
+	if [ -z "$$version" ]; then \
+		echo "ERROR: Could not parse TEALET_VERSION from src/tealet.h"; \
+		exit 1; \
+	fi; \
+	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^VERSION[[:space:]]*=/) { print "VERSION = " v; done=1; next } print }' Makefile > Makefile.new; \
+	mv Makefile.new Makefile; \
+	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^\*\*Version [0-9]+\.[0-9]+\.[0-9]+\*\*$$/) { print "**Version " v "**"; done=1; next } print }' README.md > README.md.new; \
+	mv README.md.new README.md; \
+	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^PROJECT_NUMBER[[:space:]]*=/) { print "PROJECT_NUMBER         = " v; done=1; next } print }' Doxyfile > Doxyfile.new; \
+	mv Doxyfile.new Doxyfile; \
+	$(MAKE) check-version-sync
 
 tests: bin/test-static bin/test-dynamic
 tests: bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork bin/test-config

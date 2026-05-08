@@ -173,6 +173,22 @@ CFLAGS="-O3 -flto" LDFLAGS="-O3 -flto" make test  # Optimized build
 - `-Wall`: Enable warnings
 - `-Isrc -Istackman/stackman`: Include paths
 
+## Release version sync
+
+`src/tealet.h` is the single authoritative source of release version information.
+
+When bumping versions, update `TEALET_VERSION_*` / `TEALET_VERSION` there first, then keep all other public/versioned metadata synchronized:
+
+- `src/tealet.h` (`TEALET_VERSION_*` and `TEALET_VERSION`)
+- `Makefile` (`VERSION = ...`)
+- `README.md` (`**Version x.y.z**` near the top)
+- `Doxyfile` (`PROJECT_NUMBER = ...`)
+
+Use the built-in helpers:
+
+- `make sync-version` to copy `TEALET_VERSION` from `src/tealet.h` into the other version fields.
+- `make check-version-sync` to validate all version fields match.
+
 ## Examples
 
 See `tests/setcontext.c` for a practical example implementing `longjmp()`-like functionality using tealets.

@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
+    - name: check version metadata sync
+      run: make check-version-sync
+
     - name: refresh apt package index
       run: sudo apt-get update
 
