@@ -2,28 +2,9 @@
 
 Complete reference for the libtealet API. Core functions are declared in `tealet.h`; helper extensions are declared in `tealet_extras.h`.
 
-## Table of Contents
-
-- [Lifecycle Management](#lifecycle-management)
-- [Coroutine Creation](#coroutine-creation)
-- [Advanced: Fork-like Semantics](#advanced-fork-like-semantics)
-- [Context Switching](#context-switching)
-- [Status and Inspection](#status-and-inspection)
-- [Stack Utilities](#stack-utilities)
-- [Memory Management](#memory-management)
-- [Custom Allocators](#custom-allocators)
-- [Helper Extensions (`tealet_extras.h`)](#helper-extensions-tealet_extrash)
-- [Thread Safety and Locking Model](#thread-safety-and-locking-model)
-- [Error handling](#error-handling)
-- [Error Codes](#error-codes)
-- [Constants and Macros](#constants-and-macros)
-- [Decision Trees](#decision-trees)
-- [Stub Pattern](#stub-pattern)
-- [Complete Example](#complete-example)
-
 ## Lifecycle Management
 
-### `tealet_initialize()`
+### tealet_initialize()
 
 ```c
 tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize);
@@ -52,7 +33,7 @@ Call once per thread before creating any tealets. The main tealet represents the
 
 ---
 
-### `tealet_finalize()`
+### tealet_finalize()
 
 ```c
 void tealet_finalize(tealet_t *main);
@@ -78,7 +59,7 @@ There is no supported way to decouple this deletion order: tealet API operations
 
 ## Coroutine Creation
 
-### `tealet_create()`
+### tealet_create()
 
 ```c
 tealet_t *tealet_create(tealet_t *main, tealet_run_t run, void *stack_far);
@@ -116,7 +97,7 @@ tealet_switch(t1, &arg1);  /* Start t1 */
 
 ---
 
-### `tealet_new()`
+### tealet_new()
 
 ```c
 tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far);
@@ -238,7 +219,7 @@ The run function executes until it returns or calls `tealet_exit()`. Upon return
 
 ⚠️ **Advanced Feature:** Fork-like semantics break the traditional function-scope discipline. Use with caution.
 
-### `tealet_set_far()`
+### tealet_set_far()
 
 ```c
 int tealet_set_far(tealet_t *tealet, void *far_boundary);
@@ -304,7 +285,7 @@ You can also obtain a call-site boundary marker with `tealet_new_probe()` when y
 
 ---
 
-### `tealet_fork()`
+### tealet_fork()
 
 ```c
 int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags);
@@ -403,7 +384,7 @@ This feature mirrors functionality from Stackless Python but was historically om
 
 ## Context Switching
 
-### `tealet_switch()`
+### tealet_switch()
 
 ```c
 int tealet_switch(tealet_t *target, void **parg);
@@ -464,7 +445,7 @@ tealet_t *pong(tealet_t *current, void *arg) {
 
 ---
 
-### `tealet_exit()`
+### tealet_exit()
 
 ```c
 int tealet_exit(tealet_t *target, void *arg, int flags);
@@ -526,7 +507,7 @@ If the chosen exit target is defunct, this fallback path reroutes the exit to `m
 
 **Note:** Returning from the run function automatically deletes the tealet. Use `tealet_exit()` when you need explicit control over deletion or want to exit from nested calls within the run function.
 
-> Future direction: a dedicated panic API may be added (for example, `tealet_panic()`), either forcing switch-to-main with a panic flag or returning a dedicated panic error code for corrupt stack-state scenarios.
+Future direction: a dedicated panic API may be added (for example, `tealet_panic()`), either forcing switch-to-main with a panic flag or returning a dedicated panic error code for corrupt stack-state scenarios.
 
 ---
 
@@ -538,7 +519,7 @@ If they are used from foreign threads, or concurrently with switching/lifecycle
 operations, callers must provide external synchronization (for example
 `tealet_lock()`/`tealet_unlock()` around the access sequence).
 
-### `tealet_previous()`
+### tealet_previous()
 
 ```c
 tealet_t *tealet_previous(tealet_t *tealet);
@@ -567,7 +548,7 @@ if (prev == NULL) {
 
 ---
 
-### `tealet_status()`
+### tealet_status()
 
 ```c
 int tealet_status(tealet_t *t);
@@ -610,7 +591,7 @@ while (tealet_status(gen) == TEALET_STATUS_ACTIVE) {
 
 ---
 
-### `TEALET_IS_MAIN()`
+### TEALET_IS_MAIN()
 
 ```c
 int TEALET_IS_MAIN(tealet_t *t);
@@ -629,7 +610,7 @@ if (TEALET_IS_MAIN(current)) {
 
 ---
 
-### `TEALET_MAIN()`
+### TEALET_MAIN()
 
 ```c
 tealet_t *TEALET_MAIN(tealet_t *t);
@@ -648,7 +629,7 @@ Equivalent to `t->main` but works correctly for both main and non-main tealets.
 
 ---
 
-### `tealet_get_origin()`
+### tealet_get_origin()
 
 ```c
 unsigned int tealet_get_origin(tealet_t *tealet);
@@ -680,7 +661,7 @@ Convenience macros are also available:
 
 ---
 
-### `tealet_main_userpointer()`
+### tealet_main_userpointer()
 
 ```c
 void **tealet_main_userpointer(tealet_t *tealet);
@@ -690,7 +671,7 @@ Get the address of the per-main user pointer slot.
 
 ---
 
-### `TEALET_EXTRA()`
+### TEALET_EXTRA()
 
 ```c
 void *TEALET_EXTRA(tealet_t *t);
@@ -720,7 +701,7 @@ The extra data is allocated with the tealet and freed when the tealet is deleted
 
 ## Stack Utilities
 
-### `tealet_stack_diff()`
+### tealet_stack_diff()
 
 ```c
 ptrdiff_t tealet_stack_diff(void *a, void *b);
@@ -732,7 +713,7 @@ Compute stack-relative distance between two addresses in a direction-aware way.
 
 ---
 
-### `tealet_stack_further()`
+### tealet_stack_further()
 
 ```c
 void *tealet_stack_further(void *a, void *b);
@@ -748,7 +729,7 @@ Use this to combine boundary requirements from different stack references.
 
 ---
 
-### `tealet_new_probe()`
+### tealet_new_probe()
 
 ```c
 void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4);
@@ -807,7 +788,7 @@ In typical protected builds, libtealet combines both:
 
 This combined mode gives broad coverage of out-of-bounds stack access while keeping behavior configurable by fail policy.
 
-### `tealet_configure_get()`
+### tealet_configure_get()
 
 ```c
 int tealet_configure_get(tealet_t *tealet, tealet_config_t *config);
@@ -822,7 +803,7 @@ Read current effective runtime configuration from a main tealet.
 
 ---
 
-### `tealet_configure_set()`
+### tealet_configure_set()
 
 ```c
 int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
@@ -853,7 +834,7 @@ The caller stack-distance check is measured relative to a stack probe captured f
 
 ---
 
-### `tealet_configure_check_stack()`
+### tealet_configure_check_stack()
 
 ```c
 int tealet_configure_check_stack(tealet_t *tealet, size_t stack_integrity_bytes);
@@ -885,7 +866,7 @@ This helper is intended as a simple one-way "enable checks" API; use `tealet_con
 
 ---
 
-### `tealet_config_set_locking()`
+### tealet_config_set_locking()
 
 ```c
 int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
@@ -925,7 +906,7 @@ Automatic locking in `TEALET_LOCK_SWITCH` mode does not require recursive lock p
 
 ---
 
-### `tealet_lock()` / `tealet_unlock()`
+### tealet_lock() / tealet_unlock()
 
 ```c
 void tealet_lock(tealet_t *tealet);
@@ -948,7 +929,7 @@ Use a real cross-thread mutex (or equivalent) for these callbacks if you share h
 
 ---
 
-### `tealet_delete()`
+### tealet_delete()
 
 ```c
 void tealet_delete(tealet_t *t);
@@ -985,7 +966,7 @@ tealet_delete(t);
 
 ## Custom Allocators
 
-### `tealet_alloc_t`
+### tealet_alloc_t
 
 ```c
 typedef struct tealet_alloc {
@@ -1044,7 +1025,7 @@ All internal allocations (tealet structures, stack storage) use this interface. 
 
 ---
 
-### `TEALET_ALLOC_INIT_MALLOC`
+### TEALET_ALLOC_INIT_MALLOC
 
 ```c
 #define TEALET_ALLOC_INIT_MALLOC { NULL, tealet_malloc_malloc, tealet_free_free }
@@ -1059,7 +1040,7 @@ tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
 
 ---
 
-## Helper Extensions (`tealet_extras.h`)
+## Helper Extensions (tealet_extras.h)
 
 These APIs are convenience helpers built on top of the core tealet primitives (`tealet_create`, `tealet_switch`, `tealet_malloc`, and `tealet_duplicate`).
 
@@ -1067,7 +1048,7 @@ For backward compatibility, `tools.h` remains as an alias header that includes `
 
 They are optional extensions intended for common patterns (stats-collecting allocator and copyable stubs). For low-level behavior details, you can inspect the implementation in `src/tealet_extras.c`.
 
-### `tealet_statsalloc_init()`
+### tealet_statsalloc_init()
 
 ```c
 void tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
@@ -1083,7 +1064,7 @@ Initialize a wrapper allocator that tracks active allocation count and total byt
 - `alloc->alloc` becomes a valid `tealet_alloc_t` for `tealet_initialize()`.
 - Counters are maintained in `n_allocs` and `s_allocs`.
 
-### `tealet_stub_new()`
+### tealet_stub_new()
 
 ```c
 tealet_t *tealet_stub_new(tealet_t *tealet, void *stack_far);
@@ -1097,7 +1078,7 @@ Create a paused stub tealet that can later run arbitrary functions via `tealet_s
 
 **Returns:** New stub tealet, or `NULL` on allocation failure.
 
-### `tealet_stub_run()`
+### tealet_stub_run()
 
 ```c
 int tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg);
@@ -1210,7 +1191,7 @@ For `tealet_exit()`:
 
 ## Error Codes
 
-### `TEALET_ERR_MEM`
+### TEALET_ERR_MEM
 
 ```c
 #define TEALET_ERR_MEM (-1)
@@ -1234,7 +1215,7 @@ if (t == NULL) {
 
 ---
 
-### `TEALET_ERR_DEFUNCT`
+### TEALET_ERR_DEFUNCT
 
 ```c
 #define TEALET_ERR_DEFUNCT (-2)
@@ -1265,7 +1246,7 @@ if (result == TEALET_ERR_DEFUNCT) {
 
 ---
 
-### `TEALET_ERR_PANIC`
+### TEALET_ERR_PANIC
 
 ```c
 #define TEALET_ERR_PANIC (-6)
@@ -1309,7 +1290,7 @@ Used with `tealet_exit()`.
 
 ## Decision Trees
 
-### When to Use `tealet_create()` vs `tealet_new()`
+### When to Use tealet_create() vs tealet_new()
 
 **Use `tealet_create()`:**
 - Setting up multiple coroutines before starting any
@@ -1338,7 +1319,7 @@ tealet_t *t = tealet_new(main, my_func, &arg, NULL);
 
 ---
 
-### When to Use `tealet_exit()` vs Returning
+### When to Use tealet_exit() vs Returning
 
 **Return from run function:**
 - Normal completion
