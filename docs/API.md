@@ -5,7 +5,6 @@ Complete reference for the libtealet API. Core functions are declared in `tealet
 ## Table of Contents
 
 - [Lifecycle Management](#lifecycle-management)
-- [Thread Safety and Locking Model](#thread-safety-and-locking-model)
 - [Coroutine Creation](#coroutine-creation)
 - [Advanced: Fork-like Semantics](#advanced-fork-like-semantics)
 - [Context Switching](#context-switching)
@@ -14,9 +13,13 @@ Complete reference for the libtealet API. Core functions are declared in `tealet
 - [Memory Management](#memory-management)
 - [Custom Allocators](#custom-allocators)
 - [Helper Extensions (`tealet_extras.h`)](#helper-extensions-tealet_extrash)
+- [Thread Safety and Locking Model](#thread-safety-and-locking-model)
 - [Error handling](#error-handling)
 - [Error Codes](#error-codes)
 - [Constants and Macros](#constants-and-macros)
+- [Decision Trees](#decision-trees)
+- [Stub Pattern](#stub-pattern)
+- [Complete Example](#complete-example)
 
 ## Lifecycle Management
 
@@ -70,60 +73,6 @@ Call when done with all tealets in the current thread. This destroys the main te
 ⚠️ **Warning:** `tealet_finalize()` does **not** walk and delete child tealets. Delete non-main tealets before finalizing. After finalize returns, all tealet handles from that main tealet are invalid and must not be used (including `tealet_delete()` and `tealet_free()`).
 
 There is no supported way to decouple this deletion order: tealet API operations rely on allocator/context state stored in the main tealet, and that state is destroyed by `tealet_finalize()`.
-
----
-
-## Thread Safety and Locking Model
-
-libtealet uses a mixed thread model:
-
-- Switching behavior is thread-affine for a main-tealet domain.
-- Structure operations may be synchronized across threads.
-
-In practice, this means you may safely coordinate foreign-thread operations
-such as `tealet_delete()` / `tealet_duplicate()` when synchronization is
-correctly applied, while still treating switching itself as an owning-thread
-operation.
-
-### Automatic vs manual locking
-
-Locking mode is configured via `tealet_config_set_locking()` and
-`tealet_lock_t.mode`:
-
-- `TEALET_LOCK_SWITCH`: libtealet automatically acquires/releases the lock for
-    switching APIs (`tealet_new()`, `tealet_create()`, `tealet_switch()`,
-    `tealet_exit()`, `tealet_fork()`).
-- `TEALET_LOCK_OFF`: no internal auto-locking; integrator fully controls lock
-    scopes.
-
-### Manual synchronization rules
-
-Use manual synchronization when:
-
-- non-switch APIs may be called from foreign threads,
-- you need consistency across multiple API calls (for example, read
-    `tealet_previous()` or `tealet_current()`, then use that pointer in a later
-    API call).
-
-Preferred practice is to use `tealet_lock()` / `tealet_unlock()` around the
-entire sequence so lock scopes stay compatible with switching auto-lock mode.
-
-Automatic locking in `TEALET_LOCK_SWITCH` mode does not require recursive lock
-primitives. Integrators may intentionally assert non-recursion in callbacks to
-enforce correct API usage.
-
-### Entry-function discipline (manual locking mode)
-
-This discipline is required when using manual lock scopes (`TEALET_LOCK_OFF` or
-equivalent integration-managed locking):
-
-1. On entry to a tealet run function, release the lock.
-2. Execute run-body logic unlocked.
-3. Reacquire before returning.
-4. Reacquire before any `tealet_exit()` call from the run body.
-
-In `TEALET_LOCK_SWITCH` mode, libtealet maintains this entry/exit discipline
-internally for switching transitions.
 
 ---
 
@@ -285,7 +234,7 @@ The run function executes until it returns or calls `tealet_exit()`. Upon return
 
 ---
 
-## Advanced: Fork-like Semantics
+### Advanced: Fork-like Semantics
 
 ⚠️ **Advanced Feature:** Fork-like semantics break the traditional function-scope discipline. Use with caution.
 
@@ -1169,6 +1118,60 @@ Run a previously created stub as if it were a freshly created tealet.
 
 ---
 
+## Thread Safety and Locking Model
+
+libtealet uses a mixed thread model:
+
+- Switching behavior is thread-affine for a main-tealet domain.
+- Structure operations may be synchronized across threads.
+
+In practice, this means you may safely coordinate foreign-thread operations
+such as `tealet_delete()` / `tealet_duplicate()` when synchronization is
+correctly applied, while still treating switching itself as an owning-thread
+operation.
+
+### Automatic vs manual locking
+
+Locking mode is configured via `tealet_config_set_locking()` and
+`tealet_lock_t.mode`:
+
+- `TEALET_LOCK_SWITCH`: libtealet automatically acquires/releases the lock for
+    switching APIs (`tealet_new()`, `tealet_create()`, `tealet_switch()`,
+    `tealet_exit()`, `tealet_fork()`).
+- `TEALET_LOCK_OFF`: no internal auto-locking; integrator fully controls lock
+    scopes.
+
+### Manual synchronization rules
+
+Use manual synchronization when:
+
+- non-switch APIs may be called from foreign threads,
+- you need consistency across multiple API calls (for example, read
+    `tealet_previous()` or `tealet_current()`, then use that pointer in a later
+    API call).
+
+Preferred practice is to use `tealet_lock()` / `tealet_unlock()` around the
+entire sequence so lock scopes stay compatible with switching auto-lock mode.
+
+Automatic locking in `TEALET_LOCK_SWITCH` mode does not require recursive lock
+primitives. Integrators may intentionally assert non-recursion in callbacks to
+enforce correct API usage.
+
+### Entry-function discipline (manual locking mode)
+
+This discipline is required when using manual lock scopes (`TEALET_LOCK_OFF` or
+equivalent integration-managed locking):
+
+1. On entry to a tealet run function, release the lock.
+2. Execute run-body logic unlocked.
+3. Reacquire before returning.
+4. Reacquire before any `tealet_exit()` call from the run body.
+
+In `TEALET_LOCK_SWITCH` mode, libtealet maintains this entry/exit discipline
+internally for switching transitions.
+
+---
+
 ## Error handling
 
 Error handling in libtealet is intentionally narrow:
@@ -1393,19 +1396,48 @@ tealet_t *cleanup_run(tealet_t *current, void *arg) {
 
 ## Stub Pattern
 
-For tealets that act as targets without their own run logic:
+Use stubs when you want to pre-capture a stack position once, then launch one or
+many tealets from that same baseline.
+
+The helper API is in `tealet_extras.h`:
+- `tealet_stub_new()` creates a paused trampoline tealet.
+- `tealet_duplicate()` can clone that paused stub cheaply.
+- `tealet_stub_run()` starts a specific run function on the stub or clone.
+
+This is useful for:
+- launching a family of similar tealets from the same captured stack depth,
+- reducing repeated setup work for create-and-start flows,
+- generating reproducible starting contexts in tests.
+
+Example:
 
 ```c
-tealet_t *stub_run(tealet_t *current, void *arg) {
-    /* This tealet is just a target, it never actively runs */
+tealet_t *worker_run(tealet_t *current, void *arg) {
+    /* Worker body */
     return current->main;
 }
 
-tealet_t *stub = tealet_create(main, stub_run, NULL);
-/* Use stub as a target for tealet_switch() from other tealets */
+tealet_t *stub = tealet_stub_new(main, NULL);
+if (stub == NULL) {
+    /* allocation failure */
+}
+
+tealet_t *clone = tealet_duplicate(stub);
+if (clone == NULL) {
+    tealet_delete(stub);
+    /* allocation failure */
+}
+
+void *arg = NULL;
+tealet_stub_run(clone, worker_run, &arg);
+
+tealet_delete(clone);
+tealet_delete(stub);
 ```
 
-Useful for synchronization points or placeholders in complex coroutine networks.
+Repository references:
+- `tests/tests.c` uses stub flows in `stub_new()`, `stub_new2()`, `stub_new3()`.
+- `src/tealet_extras.c` contains the trampoline implementation (`_tealet_stub_main`).
 
 ---
 
