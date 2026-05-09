@@ -63,7 +63,9 @@ static tealet_t *_tealet_stub_main(tealet_t *current, void *arg) {
 }
 
 /* create a stub and return it */
-tealet_t *tealet_stub_new(tealet_t *t, void *stack_far) { return tealet_create(t, _tealet_stub_main, stack_far); }
+int tealet_stub_new(tealet_t *t, tealet_t **pstub, void *stack_far) {
+  return tealet_create(t, pstub, _tealet_stub_main, stack_far);
+}
 
 /*
  * Run a stub.
@@ -81,7 +83,7 @@ int tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg) {
   psarg->run = run;
   psarg->runarg = parg ? *parg : NULL;
   myarg = (void *)psarg;
-  result = tealet_switch(stub, &myarg);
+  result = tealet_switch(stub, &myarg, TEALET_SWITCH_DEFAULT);
   if (result) {
     /* failure */
     tealet_free(stub, psarg);

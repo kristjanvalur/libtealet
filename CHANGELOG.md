@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Switch/exit behavior is now explicit via flags**
+  - `tealet_switch()` now takes a `flags` parameter and supports:
+    - `TEALET_SWITCH_DEFAULT`
+    - `TEALET_SWITCH_FORCE`
+    - `TEALET_SWITCH_PANIC`
+  - `TEALET_SWITCH_FORCE` / `TEALET_EXIT_FORCE` semantics are now documented explicitly, including the main-stack edge case where `TEALET_ERR_MEM` can still occur under FORCE.
+
+- **Creation APIs now return status codes with out-parameters**
+  - `tealet_new()` and `tealet_create()` now return `int` status and report created tealets via out-pointers.
+  - `tealet_stub_new()` in extras/helpers follows the same status-return pattern.
+  - Call sites and examples were migrated to the status-first style.
+
+- **Implicit run-return exit policy hardened and documented**
+  - Automatic exit on run-function return now uses an explicit retry/fallback policy:
+    - requested target (default)
+    - panic+force to main on defunct target
+    - requested target with FORCE on memory failure
+    - panic+force to main if FORCE still cannot complete transfer
+  - API docs now include a concise robust manual `tealet_exit()` pattern for implementors.
+
+### Documentation
+- Updated `README.md`, `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/GETTING_STARTED.md` to reflect the new signatures and behavioral semantics.
+
 ## [0.5.1] - 2026-05-08
 
 ### Added

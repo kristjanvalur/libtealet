@@ -447,7 +447,7 @@ In the current implementation, this sharing is introduced by duplication paths (
 ### High-Level Flow
 
 ```c
-int tealet_switch(tealet_t *target, void **parg) {
+int tealet_switch(tealet_t *target, void **parg, int flags) {
     g_main->g_target = target;
     g_main->g_arg = *parg;
     

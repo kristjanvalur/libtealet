@@ -29,7 +29,7 @@ tealet_t *loop_func(tealet_t *current, void *arg) {
     void *value = (void *)(intptr_t)i;
 
     /* Switch to main tealet */
-    tealet_switch(tealet_previous(current), &value);
+    tealet_switch(tealet_previous(current), &value, TEALET_SWITCH_DEFAULT);
     tealet_test_lock_assert_unheld(&g_lock_state);
     /* after switch, any void* passed _to_ us is in 'value' */
   }
@@ -60,7 +60,12 @@ int main(void) {
 
   /* how many rounds? */
   data = (void *)10;
-  loop = tealet_new(tmain, loop_func, &data, NULL);
+  loop = NULL;
+  if (tealet_new(tmain, &loop, loop_func, &data, NULL) != 0) {
+    tealet_test_lock_assert_balanced(&g_lock_state);
+    tealet_finalize(tmain);
+    return 1;
+  }
 
   /* loop until the tealet has exited */
   while (tealet_status(loop) == TEALET_STATUS_ACTIVE) {
@@ -68,7 +73,7 @@ int main(void) {
      * only retrieve the result
      */
     printf("%d\n", (int)(intptr_t)data);
-    tealet_switch(loop, &data);
+    tealet_switch(loop, &data, TEALET_SWITCH_DEFAULT);
   }
   tealet_delete(loop);
   tealet_test_lock_assert_balanced(&g_lock_state);

@@ -52,6 +52,7 @@ CLANG_FORMAT ?= clang-format
 DOXYGEN ?= doxygen
 DOXYFILE ?= Doxyfile
 DOC_OUTPUT_DIR ?= docs/_build/doxygen
+SCRIPT_DIR ?= scripts
 
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tealet_extras.o
@@ -105,45 +106,12 @@ endif
 # Use `make check-version-sync` in CI/release checks to prevent drift.
 
 check-version-sync:
-	@set -e; \
-	header_version=$$(awk -F'"' '/^#define TEALET_VERSION "[0-9]+\.[0-9]+\.[0-9]+"/ {print $$2; exit}' src/tealet.h); \
-	if [ -z "$$header_version" ]; then \
-		echo "ERROR: Could not parse TEALET_VERSION from src/tealet.h"; \
-		exit 1; \
-	fi; \
-	make_version=$$(awk -F'[[:space:]]*=[[:space:]]*' '/^VERSION[[:space:]]*=/ {print $$2; exit}' Makefile); \
-	readme_version=$$(sed -n 's/^\*\*Version \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\*\*$$/\1/p' README.md | head -n 1); \
-	doxy_version=$$(awk -F'[[:space:]]*=[[:space:]]*' '/^PROJECT_NUMBER[[:space:]]*=/ {print $$2; exit}' Doxyfile); \
-	if [ "$$make_version" != "$$header_version" ]; then \
-		echo "ERROR: Makefile VERSION ($$make_version) != src/tealet.h TEALET_VERSION ($$header_version)"; \
-		exit 1; \
-	fi; \
-	if [ "$$readme_version" != "$$header_version" ]; then \
-		echo "ERROR: README.md version ($$readme_version) != src/tealet.h TEALET_VERSION ($$header_version)"; \
-		exit 1; \
-	fi; \
-	if [ "$$doxy_version" != "$$header_version" ]; then \
-		echo "ERROR: Doxyfile PROJECT_NUMBER ($$doxy_version) != src/tealet.h TEALET_VERSION ($$header_version)"; \
-		exit 1; \
-	fi; \
-	echo "*** Version sync OK: $$header_version ***"
+	@$(SCRIPT_DIR)/sync-version.sh -check
 
 sync-version:
-	@set -e; \
-	version=$$(awk -F'"' '/^#define TEALET_VERSION "[0-9]+\.[0-9]+\.[0-9]+"/ {print $$2; exit}' src/tealet.h); \
-	if [ -z "$$version" ]; then \
-		echo "ERROR: Could not parse TEALET_VERSION from src/tealet.h"; \
-		exit 1; \
-	fi; \
-	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^VERSION[[:space:]]*=/) { print "VERSION = " v; done=1; next } print }' Makefile > Makefile.new; \
-	mv Makefile.new Makefile; \
-	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^\*\*Version [0-9]+\.[0-9]+\.[0-9]+\*\*$$/) { print "**Version " v "**"; done=1; next } print }' README.md > README.md.new; \
-	mv README.md.new README.md; \
-	awk -v v="$$version" 'BEGIN{done=0} { if (!done && $$0 ~ /^PROJECT_NUMBER[[:space:]]*=/) { print "PROJECT_NUMBER         = " v; done=1; next } print }' Doxyfile > Doxyfile.new; \
-	mv Doxyfile.new Doxyfile; \
-	$(MAKE) check-version-sync
+	@$(SCRIPT_DIR)/sync-version.sh
 
-# Proposed changelog rolling helpers
+# Changelog rolling helpers
 # Usage:
 #   make roll-changelog ROLL_VERSION=0.5.2 ROLL_DATE=2026-05-08
 # Defaults:
@@ -162,72 +130,10 @@ ROLL_VERSION ?= $(VERSION)
 ROLL_DATE ?= $(shell date +%F)
 
 check-changelog-roll:
-	@set -e; \
-	if ! grep -q '^## \[Unreleased\]$$' CHANGELOG.md; then \
-		echo "ERROR: CHANGELOG.md missing '## [Unreleased]' section"; \
-		exit 1; \
-	fi; \
-	if ! grep -q '^\[Unreleased\]: .*compare/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.\.\.HEAD$$' CHANGELOG.md; then \
-		echo "ERROR: CHANGELOG.md missing canonical [Unreleased] compare footer link"; \
-		exit 1; \
-	fi; \
-	echo "*** Changelog roll prerequisites OK ***"
+	@$(SCRIPT_DIR)/roll-changelog.sh -check
 
 roll-changelog: check-changelog-roll
-	@set -e; \
-	v="$(ROLL_VERSION)"; \
-	d="$(ROLL_DATE)"; \
-	if ! echo "$$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
-		echo "ERROR: ROLL_VERSION must be x.y.z, got '$$v'"; \
-		exit 1; \
-	fi; \
-	if ! echo "$$d" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$$'; then \
-		echo "ERROR: ROLL_DATE must be YYYY-MM-DD, got '$$d'"; \
-		exit 1; \
-	fi; \
-	if grep -q "^## \[$$v\]" CHANGELOG.md; then \
-		echo "ERROR: CHANGELOG.md already has section for $$v"; \
-		exit 1; \
-	fi; \
-	if grep -q "^\[$$v\]: " CHANGELOG.md; then \
-		echo "ERROR: CHANGELOG.md already has footer link for $$v"; \
-		exit 1; \
-	fi; \
-	prev=$$(sed -n 's@^\[Unreleased\]: .*compare/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\.\.\.HEAD$$@\1@p' CHANGELOG.md | head -n 1); \
-	if [ -z "$$prev" ]; then \
-		echo "ERROR: Could not parse previous release version from [Unreleased] footer link"; \
-		exit 1; \
-	fi; \
-	awk -v v="$$v" -v d="$$d" -v p="$$prev" '\
-	BEGIN { inserted = 0; links = 0 } \
-	{ \
-	  if (!inserted && $$0 == "## [Unreleased]") { \
-	    print $$0; \
-	    print ""; \
-	    print "## [" v "] - " d; \
-	    inserted = 1; \
-	    next; \
-	  } \
-	  if ($$0 ~ /^\[Unreleased\]: /) { \
-	    print "[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v" v "...HEAD"; \
-	    print "[" v "]: https://github.com/kristjanvalur/libtealet/compare/v" p "...v" v; \
-	    links = 1; \
-	    next; \
-	  } \
-	  print $$0; \
-	} \
-	END { \
-	  if (!inserted) { \
-	    print "ERROR: Unreleased section insertion point not found" > "/dev/stderr"; \
-	    exit 1; \
-	  } \
-	  if (!links) { \
-	    print "ERROR: Unreleased footer link insertion point not found" > "/dev/stderr"; \
-	    exit 1; \
-	  } \
-	}' CHANGELOG.md > CHANGELOG.md.new; \
-	mv CHANGELOG.md.new CHANGELOG.md; \
-	echo "*** Rolled CHANGELOG.md to $$v ($$d), previous base $$prev ***"
+	@$(SCRIPT_DIR)/roll-changelog.sh "$(ROLL_VERSION)" "$(ROLL_DATE)"
 
 # Release metadata rollup helper:
 # - validates/syncs version metadata from src/tealet.h

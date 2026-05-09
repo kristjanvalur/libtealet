@@ -151,7 +151,7 @@ static int worker_recursive(tealet_t *current, int depth) {
       } else {
         /* Immediate exit: child tealets switch to main, main unwinds */
         if (current != g_main) {
-          tealet_switch(g_main, NULL);
+          tealet_switch(g_main, NULL, TEALET_SWITCH_DEFAULT);
           /* we should not resume this */
           assert(0);
         }
@@ -178,14 +178,14 @@ static int worker_recursive(tealet_t *current, int depth) {
       /* Switch to another tealet */
       target = pick_random_tealet(current);
       if (target) {
-        tealet_switch(target, NULL);
+        tealet_switch(target, NULL, TEALET_SWITCH_DEFAULT);
       }
       continue;
 
     } else if (choice == 3 && g_tealet_count < MAX_TEALETS) {
       /* Create new tealet at current stack depth */
       void *arg = NULL;
-      tealet_new(current, worker_entry, &arg, NULL);
+      (void)tealet_new(current, NULL, worker_entry, &arg, NULL);
       continue;
 
     } else if (choice == 4 && current != g_main && g_tealet_count >= MAX_TEALETS) {
@@ -207,7 +207,7 @@ static int worker_recursive(tealet_t *current, int depth) {
         /* Switch to a random tealet */
         target = pick_random_tealet(current);
         if (target) {
-          tealet_switch(target, NULL);
+          tealet_switch(target, NULL, TEALET_SWITCH_DEFAULT);
         }
         /* We shouldn't resume here - we've exited */
         assert(0);
@@ -351,7 +351,7 @@ int main(int argc, char *argv[]) {
           if (g_verbose) {
             printf("  Switching to tealet %d to unwind\n", i);
           }
-          tealet_switch(g_tealets[i], NULL);
+          tealet_switch(g_tealets[i], NULL, TEALET_SWITCH_DEFAULT);
         }
       }
     }

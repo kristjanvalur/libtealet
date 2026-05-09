@@ -62,35 +62,41 @@ There is no supported way to decouple this deletion order: tealet API operations
 ### tealet_create()
 
 ```c
-tealet_t *tealet_create(tealet_t *main, tealet_run_t run, void *stack_far);
+int tealet_create(tealet_t *main, tealet_t **pcreated, tealet_run_t run, void *stack_far);
 ```
 
 Create a new tealet without starting it.
 
 **Parameters:**
 - `main`: The main tealet (from `tealet_initialize()`)
+- `pcreated`: Output pointer for the created tealet (must be non-NULL)
 - `run`: Function to execute in the tealet's context
 - `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
-**Returns:** New tealet in `TEALET_STATUS_INITIAL` state, or `NULL` on allocation failure.
+**Returns:**
+- `0` on success
+- negative `TEALET_ERR_*` on failure (`TEALET_ERR_MEM`, `TEALET_ERR_INVAL`, etc.)
 
 **Usage:**
 ```c
-tealet_t *t = tealet_create(main, my_run_function, NULL);
-if (t == NULL) {
-    /* Out of memory */
+tealet_t *t = NULL;
+int rc = tealet_create(main, &t, my_run_function, NULL);
+if (rc != 0) {
+    /* Handle failure */
 }
 ```
 
 The tealet is created but not yet running. Use `tealet_switch()` to start execution. This pattern is useful when setting up multiple coroutines before starting any:
 
 ```c
-tealet_t *t1 = tealet_create(main, func1, NULL);
-tealet_t *t2 = tealet_create(main, func2, NULL);
+tealet_t *t1 = NULL;
+tealet_t *t2 = NULL;
+tealet_create(main, &t1, func1, NULL);
+tealet_create(main, &t2, func2, NULL);
 /* Both created but not running yet */
 
 void *arg1 = data1;
-tealet_switch(t1, &arg1);  /* Start t1 */
+tealet_switch(t1, &arg1, TEALET_SWITCH_DEFAULT);  /* Start t1 */
 ```
 
 **See Also:** `tealet_new()` for create-and-start in one call.
@@ -100,36 +106,54 @@ tealet_switch(t1, &arg1);  /* Start t1 */
 ### tealet_new()
 
 ```c
-tealet_t *tealet_new(tealet_t *main, tealet_run_t run, void **parg, void *stack_far);
+int tealet_new(tealet_t *main, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
 ```
 
 Create a new tealet and immediately start executing it.
 
 **Parameters:**
 - `main`: The main tealet
+- `pcreated`: Optional output pointer for the created tealet (may be `NULL`)
 - `run`: Function to execute
 - `parg`: Pointer to argument pointer (passed to run function, updated with return value)
 - `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default). This acts as a minimum boundary: it can only extend capture range, never shrink it.
 
-**Returns:** New tealet (may be `NULL` if run function deleted it), or `NULL` on failure.
+**Returns:**
+- `0` on success
+- `TEALET_ERR_MEM` on failure to create/start due to memory pressure
+- `TEALET_ERR_PANIC` when startup resumes via unexpected panic-tagged switch-back
+
+`tealet_new()` now reports status via its integer return value; it does not use
+`NULL` as an error carrier.
 
 Conceptually, `tealet_new()` is `tealet_create()` followed by `tealet_switch()` (create-and-start in one call).
 
-`tealet_new()` performs an internal switch as part of create-and-start. The same switch failure conditions as `tealet_switch()` apply (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`), but `tealet_new()` reports them as `NULL` rather than returning an error code.
+`tealet_new()` performs an internal switch as part of create-and-start.
+In practice, it fails with `TEALET_ERR_MEM`, or it can return
+`TEALET_ERR_PANIC` to signal an unexpected panic-tagged switch-back.
+
+Even when `tealet_new()` returns `0`, the value stored in `pcreated` may
+already be invalid: the created tealet may have run and been deleted before
+returning (for example by returning from `run`, via
+`tealet_exit(..., TEALET_EXIT_DELETE)`, or any other deletion path).
 
 **Usage:**
 ```c
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_run, &arg, NULL);
+tealet_t *t = NULL;
+int rc = tealet_new(main, &t, my_run, &arg, NULL);
+if (rc != 0) {
+    /* Handle failure */
+}
 /* Run function has executed until first switch back */
 /* arg now contains value from first switch */
 ```
 
 Equivalent to:
 ```c
-tealet_t *t = tealet_create(main, run, NULL);
-if (t != NULL) {
-    tealet_switch(t, parg);
+tealet_t *t = NULL;
+if (tealet_create(main, &t, run, NULL) == 0) {
+    tealet_switch(t, parg, TEALET_SWITCH_DEFAULT);
 }
 ```
 
@@ -162,7 +186,7 @@ void bar(tealet_t *main) {
     arg = &local_state;
     stack_far = tealet_stack_further(&local_state, &local_state + 1);
 
-    worker = tealet_new(main, my_run, &arg, stack_far);
+    tealet_new(main, &worker, my_run, &arg, stack_far);
     (void)worker;
 }
 ```
@@ -202,7 +226,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     
     /* Do work, possibly switching to other tealets */
     void *data = process(arg);
-    tealet_switch(current->main, &data);
+    tealet_switch(current->main, &data, TEALET_SWITCH_DEFAULT);
     
     /* More work */
     
@@ -344,7 +368,7 @@ int main(void) {
         
         /* Switch to child with an argument */
         arg = (void*)0x5678;
-        tealet_switch(other, &arg);
+        tealet_switch(other, &arg, TEALET_SWITCH_DEFAULT);
         printf("Parent: child returned with arg=%p\n", arg);
         
         /* Clean up */
@@ -387,7 +411,7 @@ This feature mirrors functionality from Stackless Python but was historically om
 ### tealet_switch()
 
 ```c
-int tealet_switch(tealet_t *target, void **parg);
+int tealet_switch(tealet_t *target, void **parg, int flags);
 ```
 
 Suspend current tealet and resume target tealet.
@@ -395,18 +419,32 @@ Suspend current tealet and resume target tealet.
 **Parameters:**
 - `target`: Tealet to switch to
 - `parg`: Pointer to argument pointer (passed to target, updated with return value)
+- `flags`: Switch control flags (`TEALET_SWITCH_DEFAULT`, `TEALET_SWITCH_FORCE`, `TEALET_SWITCH_PANIC`)
 
 **Returns:** 
 - `0` on success
 - `TEALET_ERR_MEM` on memory allocation failure while saving/restoring state
 - `TEALET_ERR_DEFUNCT` if target is defunct
-- `TEALET_ERR_PANIC` on main when control was rerouted to main from `tealet_exit()` because the requested exit target was defunct
+- `TEALET_ERR_PANIC` when resumed due to an explicit panic-tagged transfer (`tealet_exit()` or `tealet_switch()` with panic)
 - Negative error code on failure
+
+`TEALET_SWITCH_FORCE` applies the same non-failable save behavior as
+`TEALET_EXIT_FORCE`:
+- without FORCE, save-time memory failures are returned (`TEALET_ERR_MEM`)
+- with FORCE, save-time memory failures are ignored so the requested transfer can proceed
+    by marking affected non-main saved stacks/tealets defunct.
+
+`TEALET_SWITCH_FORCE` can still return `TEALET_ERR_MEM` when the only way to
+continue would require main-stack growth that fails under memory pressure.
+Main is never marked defunct, so this edge case remains a hard memory failure.
+
+This means a successful forced switch can make other tealets become defunct as
+the trade-off for forward progress under memory pressure.
 
 **Usage:**
 ```c
 void *arg = my_data;
-int result = tealet_switch(target, &arg);
+int result = tealet_switch(target, &arg, TEALET_SWITCH_DEFAULT);
 if (result == 0) {
     /* arg now contains value passed back from target */
 } else {
@@ -426,7 +464,7 @@ tealet_t *ping(tealet_t *current, void *arg) {
     tealet_t *pong = (tealet_t*)arg;
     
     void *data = "ping";
-    tealet_switch(pong, &data);
+    tealet_switch(pong, &data, TEALET_SWITCH_DEFAULT);
     /* data now contains "pong" */
     
     return current->main;
@@ -434,7 +472,7 @@ tealet_t *ping(tealet_t *current, void *arg) {
 
 tealet_t *pong(tealet_t *current, void *arg) {
     void *data = "pong";
-    tealet_switch(arg, &data);  /* Switch back to ping */
+    tealet_switch(arg, &data, TEALET_SWITCH_DEFAULT);  /* Switch back to ping */
     return current->main;
 }
 ```
@@ -463,6 +501,8 @@ Exit current tealet and transfer control to target.
 - `TEALET_EXIT_DELETE`: Auto-delete tealet on exit (same as return behavior)
 - `TEALET_EXIT_DEFER`:  Store flags and argument, return to caller.  Will be used when
   tealet exits later.
+- `TEALET_EXIT_FORCE`: Force the requested transfer despite save-time memory pressure by defuncting affected non-main stacks as needed
+- `TEALET_EXIT_PANIC`: Tag the receiving tealet's resumed switch return as `TEALET_ERR_PANIC`
 
 **Usage:**
 ```c
@@ -494,20 +534,65 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 }
 ```
 
-This function does not return unless `TEALET_EXIT_DEFER` is set.
+This function does not return on successful transfer.
 
 **Returns:**
 - `0` only when `TEALET_EXIT_DEFER` is used (deferred exit setup succeeds)
 - Negative error code on failure
-    - May include `TEALET_ERR_MEM` and `TEALET_ERR_DEFUNCT`
+    - `TEALET_ERR_MEM` when save/restore cannot complete and `TEALET_EXIT_FORCE` is not set
+    - `TEALET_ERR_DEFUNCT` when the requested target is defunct
+    - `TEALET_ERR_INVAL` for invalid flag combinations (for example `TEALET_EXIT_DEFER | TEALET_EXIT_PANIC`)
 
-When exit to a non-main target fails, the implementation falls back to exiting to `main`.
+`tealet_exit()` does not implicitly reroute to another target.
 
-If the chosen exit target is defunct, this fallback path reroutes the exit to `main`.
+`TEALET_EXIT_FORCE` mirrors `TEALET_SWITCH_FORCE` behavior:
+- without FORCE, save-time memory failures are returned (`TEALET_ERR_MEM`)
+- with FORCE, save-time memory failures are ignored so the requested transfer can proceed
+    by marking affected non-main saved stacks/tealets defunct.
 
-**Note:** Returning from the run function automatically deletes the tealet. Use `tealet_exit()` when you need explicit control over deletion or want to exit from nested calls within the run function.
+`TEALET_EXIT_FORCE` can still return `TEALET_ERR_MEM` when the only way to
+continue would require main-stack growth that fails under memory pressure.
+Main is never marked defunct, so this edge case remains a hard memory failure.
 
-Future direction: a dedicated panic API may be added (for example, `tealet_panic()`), either forcing switch-to-main with a panic flag or returning a dedicated panic error code for corrupt stack-state scenarios.
+This means a successful forced exit can make other tealets become defunct as
+the trade-off for forward progress under memory pressure.
+
+**Note:** Returning from the run function automatically deletes the tealet using
+an implicit `tealet_exit()` policy: try requested target, panic+force to main
+if target is defunct, retry requested target with FORCE on memory failure, and
+if FORCE still fails (including the main-stack edge above), panic+force to main.
+Use `tealet_exit()` when you need explicit control over deletion or want to
+exit from nested calls within the run function.
+
+**Manual robust `tealet_exit()` pattern (equivalent intent):**
+```c
+/* Non-returning helper. abort() documents unreachable return. */
+static void robust_exit(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
+    int r;
+
+    /* 1) Fast path: requested target, caller policy flags. */
+    r = tealet_exit(target, arg, base_flags);
+
+    /* 2) Defunct target: panic+force fallback to main. */
+    if (r == TEALET_ERR_DEFUNCT) {
+        (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
+        abort();
+    }
+
+    /* 3) Memory pressure: retry requested target with FORCE. */
+    if (r == TEALET_ERR_MEM) {
+        r = tealet_exit(target, arg, base_flags | TEALET_EXIT_FORCE);
+
+        /* 4) FORCE may still fail in main-stack growth edge case. */
+        if (r == TEALET_ERR_MEM || r == TEALET_ERR_DEFUNCT) {
+            (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
+            abort();
+        }
+    }
+
+    abort();
+}
+```
 
 ---
 
@@ -585,7 +670,7 @@ switch (status) {
 ```c
 while (tealet_status(gen) == TEALET_STATUS_ACTIVE) {
     process(value);
-    tealet_switch(gen, &value);  /* Get next value */
+    tealet_switch(gen, &value, TEALET_SWITCH_DEFAULT);  /* Get next value */
 }
 ```
 
@@ -732,21 +817,22 @@ Use this to combine boundary requirements from different stack references.
 ### tealet_new_probe()
 
 ```c
-void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4);
+void *tealet_new_probe(tealet_t *dummy1, tealet_t **dummy2, tealet_run_t dummy3,
+                       void **dummy4, void *dummy5);
 ```
 
 A function to test what stack boundary would be used for a new tealet without creating one. This is mostly informative.
 
 **Parameters:**
-- `dummy1`, `dummy2`, `dummy3`: Unused placeholders to match the `tealet_new()` call shape
-- `dummy4`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
+- `dummy1`, `dummy2`, `dummy3`, `dummy4`: Unused placeholders to match the `tealet_new()` call shape
+- `dummy5`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
 
 **Returns:** The probed stack-boundary marker.
 
 **Usage:**
 ```c
 void *arg = NULL;
-void *probe = tealet_new_probe(main, my_run, &arg, NULL);
+void *probe = tealet_new_probe(main, NULL, my_run, &arg, NULL);
 printf("new tealet boundary probe: %p\n", probe);
 ```
 
@@ -942,7 +1028,10 @@ Explicitly delete a tealet and free its resources.
 
 **Usage:**
 ```c
-tealet_t *t = tealet_create(main, my_run, NULL);
+tealet_t *t = NULL;
+if (tealet_create(main, &t, my_run, NULL) != 0) {
+    /* Handle create failure */
+}
 /* Use t... */
 tealet_delete(t);
 ```
@@ -1067,16 +1156,19 @@ Initialize a wrapper allocator that tracks active allocation count and total byt
 ### tealet_stub_new()
 
 ```c
-tealet_t *tealet_stub_new(tealet_t *tealet, void *stack_far);
+int tealet_stub_new(tealet_t *tealet, tealet_t **pstub, void *stack_far);
 ```
 
 Create a paused stub tealet that can later run arbitrary functions via `tealet_stub_run()`.
 
 **Parameters:**
 - `tealet`: Main/owner tealet context
+- `pstub`: Output pointer receiving the created stub tealet on success
 - `stack_far`: Optional far-boundary requirement for the initial stub stack snapshot (`NULL` uses default). This behaves like `tealet_create()`/`tealet_new()`: it can only extend capture range, never shrink it.
 
-**Returns:** New stub tealet, or `NULL` on allocation failure.
+**Returns:**
+- `0` on success
+- Negative `TEALET_ERR_*` on failure
 
 ### tealet_stub_run()
 
@@ -1160,7 +1252,7 @@ Error handling in libtealet is intentionally narrow:
 - **Runtime/resource errors out of user control:**
     - `TEALET_ERR_MEM`
     - `TEALET_ERR_DEFUNCT`
-    - `TEALET_ERR_PANIC` (main-only switch outcome)
+    - `TEALET_ERR_PANIC` (explicit panic-tagged resume)
 - **Other negative returns** are generally caused by incorrect API usage (invalid context, invalid switching flow, integrity/caller sanity violations) and should be treated as effectively fatal programming errors.
 
 ### Practical handling guide
@@ -1168,24 +1260,30 @@ Error handling in libtealet is intentionally narrow:
 For `tealet_switch()`:
 - On `TEALET_ERR_MEM`: treat as transient resource failure; free optional resources and either retry later or abort the coroutine workflow cleanly.
 - On `TEALET_ERR_DEFUNCT`: treat target as unusable, inspect status, and delete/replace that tealet.
-- On `TEALET_ERR_PANIC` (main only): treat as emergency reroute signal from `tealet_exit()`; report and terminate cleanly.
+- On `TEALET_ERR_PANIC`: treat as explicit panic resume signal from
+    `tealet_exit(..., TEALET_EXIT_PANIC)` or `tealet_switch(..., TEALET_SWITCH_PANIC)`.
+
+Forced transfer note (`tealet_switch(..., TEALET_SWITCH_FORCE)` and
+`tealet_exit(..., TEALET_EXIT_FORCE)`):
+- these APIs can succeed while ignoring save-time memory errors
+- in that success path, affected non-main saved stacks/tealets may be marked defunct.
 
 For `tealet_new()`:
-- The same underlying switch failure conditions apply (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`), but the API surface is pointer-based, so these failures are observed as `NULL`.
+- `TEALET_ERR_MEM` is the creation/start failure case.
+- `TEALET_ERR_PANIC` is not a memory failure; it signals an unexpected panic-tagged switch-back during create-and-start.
 
-Practical note for `tealet_switch()` failures (`TEALET_ERR_MEM`, `TEALET_ERR_DEFUNCT`, `TEALET_ERR_PANIC`):
+Practical note for switch/exit failures:
 - In non-main tealets, the usual recovery path is to perform local cleanup and then exit to `main`.
 - In the main tealet, the usual recovery path is to report the error and terminate the thread/process cleanly.
 
-For `tealet_exit()`:
-- In normal (non-`TEALET_EXIT_DEFER`) use, `tealet_exit()` is the panic path: it first attempts the requested target and then attempts fallback to `main`.
-- To preserve forward progress during low-memory exit paths, the implementation may accept degraded state and mark affected saved stacks/tealets as defunct.
-- If the requested target is defunct, exit is rerouted to `main`.
+For `tealet_exit()` specifically:
+- The requested target is never implicitly replaced by `main`; panic reroute must be explicit.
 - The main tealet itself is never marked defunct.
 
 ### Note
 
-`TEALET_ERR_PANIC` is currently the dedicated signal for reroute-to-main panic conditions after `tealet_exit()` target failure.
+`TEALET_ERR_PANIC` is the explicit panic-resume signal produced by
+`tealet_exit(..., TEALET_EXIT_PANIC)` or `tealet_switch(..., TEALET_SWITCH_PANIC)`.
 
 ---
 
@@ -1206,8 +1304,8 @@ Memory allocation failed.
 
 **Example:**
 ```c
-tealet_t *t = tealet_create(main, my_run, NULL);
-if (t == NULL) {
+tealet_t *t = NULL;
+if (tealet_create(main, &t, my_run, NULL) != 0) {
     fprintf(stderr, "Out of memory\n");
     return TEALET_ERR_MEM;
 }
@@ -1224,6 +1322,9 @@ if (t == NULL) {
 Target tealet is defunct (invalid for switching).
 
 **Causes:**
+- Successful forced transfer under memory pressure (`TEALET_SWITCH_FORCE` or
+    `TEALET_EXIT_FORCE`) can ignore save-time memory errors and mark affected
+    non-main saved stacks/tealets defunct.
 - Saved stack became invalid (for example due to a non-recoverable save/grow failure path)
 - Tealet was left in an unusable state by an internal failure path
 - Caller attempted to switch to a non-switchable tealet handle
@@ -1236,7 +1337,7 @@ Target tealet is defunct (invalid for switching).
 
 **Example:**
 ```c
-int result = tealet_switch(t, &arg);
+int result = tealet_switch(t, &arg, TEALET_SWITCH_DEFAULT);
 if (result == TEALET_ERR_DEFUNCT) {
     fprintf(stderr, "Tealet has exited\n");
     tealet_delete(t);
@@ -1252,10 +1353,11 @@ if (result == TEALET_ERR_DEFUNCT) {
 #define TEALET_ERR_PANIC (-6)
 ```
 
-Main-tealet switch result signaling panic reroute.
+Switch result signaling explicit panic-tagged resume.
 
 **When returned:**
-- Returned by `tealet_switch()` in `main` when a non-main tealet called `tealet_exit()` to a defunct target and libtealet rerouted the exit to `main`.
+- Returned by `tealet_switch()` when the resumed tealet was targeted via
+    `tealet_exit(..., TEALET_EXIT_PANIC)` or `tealet_switch(..., TEALET_SWITCH_PANIC)`.
 
 **Recovery:**
 - Treat as fatal control-flow anomaly for the coroutine workflow.
@@ -1282,6 +1384,11 @@ Main-tealet switch result signaling panic reroute.
 #define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
 #define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
 #define TEALET_EXIT_DEFER   2  /* Defer exit to return */
+
+/* Switch flags */
+#define TEALET_SWITCH_DEFAULT 0  /* Default switch behavior */
+#define TEALET_SWITCH_FORCE   4  /* Force switch despite save-time memory failures */
+#define TEALET_SWITCH_PANIC   8  /* Mark receiving tealet as panic-resumed */
 ```
 
 Used with `tealet_exit()`.
@@ -1305,15 +1412,18 @@ Used with `tealet_exit()`.
 **Example Comparison:**
 ```c
 /* Pattern 1: Create then switch (more control) */
-tealet_t *t1 = tealet_create(main, func1, NULL);
-tealet_t *t2 = tealet_create(main, func2, NULL);
+tealet_t *t1 = NULL;
+tealet_t *t2 = NULL;
+tealet_create(main, &t1, func1, NULL);
+tealet_create(main, &t2, func2, NULL);
 setup_relationship(t1, t2);  /* Both exist but not started */
 void *arg = t2;
-tealet_switch(t1, &arg);  /* Now start t1 */
+tealet_switch(t1, &arg, TEALET_SWITCH_DEFAULT);  /* Now start t1 */
 
 /* Pattern 2: Create and start (more concise) */
 void *arg = my_data;
-tealet_t *t = tealet_new(main, my_func, &arg, NULL);
+tealet_t *t = NULL;
+tealet_new(main, &t, my_func, &arg, NULL);
 /* Already started, arg contains first return value */
 ```
 
@@ -1398,9 +1508,9 @@ tealet_t *worker_run(tealet_t *current, void *arg) {
     return current->main;
 }
 
-tealet_t *stub = tealet_stub_new(main, NULL);
-if (stub == NULL) {
-    /* allocation failure */
+tealet_t *stub = NULL;
+if (tealet_stub_new(main, &stub, NULL) != 0) {
+    /* allocation/setup failure */
 }
 
 tealet_t *clone = tealet_duplicate(stub);
@@ -1442,7 +1552,7 @@ tealet_t *counter_run(tealet_t *current, void *arg) {
     while (state->current < state->max) {
         void *value = (void*)(intptr_t)state->current;
         state->current++;
-        tealet_switch(current->main, &value);
+        tealet_switch(current->main, &value, TEALET_SWITCH_DEFAULT);
     }
     
     return current->main;
@@ -1458,8 +1568,8 @@ int main(void) {
     }
     
     /* Create counter tealet */
-    tealet_t *counter = tealet_create(main, counter_run, NULL);
-    if (counter == NULL) {
+    tealet_t *counter = NULL;
+    if (tealet_create(main, &counter, counter_run, NULL) != 0) {
         fprintf(stderr, "Failed to create counter\n");
         tealet_finalize(main);
         return 1;
@@ -1468,7 +1578,7 @@ int main(void) {
     /* Start it */
     int max = 5;
     void *arg = &max;
-    int result = tealet_switch(counter, &arg);
+    int result = tealet_switch(counter, &arg, TEALET_SWITCH_DEFAULT);
     if (result != 0) {
         fprintf(stderr, "Switch failed: %d\n", result);
         tealet_delete(counter);
@@ -1481,7 +1591,7 @@ int main(void) {
         int value = (int)(intptr_t)arg;
         printf("Value: %d\n", value);
         
-        result = tealet_switch(counter, &arg);
+        result = tealet_switch(counter, &arg, TEALET_SWITCH_DEFAULT);
         if (result != 0) {
             fprintf(stderr, "Switch failed: %d\n", result);
             break;
