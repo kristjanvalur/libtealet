@@ -1136,14 +1136,10 @@ static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
 
 static void tealet_restore_state(tealet_main_t *g_main, void *new_stack_pointer) {
   tealet_sub_t *g = g_main->g_target;
-  (void)new_stack_pointer;
 
   /* Restore the heap copy back into the C stack */
   assert(g->stack != NULL);
-  /* TODO(stackman): re-enable a restore stack-pointer assertion once
-   * STACKMAN_OP_RESTORE callback stack_pointer semantics are consistent
-   * across all backends.
-   */
+  assert((char *)new_stack_pointer == g->stack->chunk.stack_near);
   tealet_stack_restore(g->stack);
   tealet_stack_decref(g_main, g->stack);
   g->stack = NULL;
