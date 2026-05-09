@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - panic+force to main if FORCE still cannot complete transfer
   - API docs now include a concise robust manual `tealet_exit()` pattern for implementors.
 
+- Updated bundled Stackman distribution to `v1.2.1`.
+
 ### Documentation
 - Updated `README.md`, `docs/API.md`, `docs/ARCHITECTURE.md`, and `docs/GETTING_STARTED.md` to reflect the new signatures and behavioral semantics.
 

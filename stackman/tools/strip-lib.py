@@ -1,4 +1,4 @@
-# nulls the timestamp filed in a windows .lib archive,
+# nulls the timestamp field in a windows .lib archive,
 # making the lib reproducible.
 # the time is the TimeDateStamp in the COFF file header, four bytes at offset 4
 # See https://blog.conan.io/2019/09/02/Deterministic-builds-with-C-C++.html
@@ -202,13 +202,13 @@ def first_lm_write(fp, lm):
 
 def second_lm_read(fp):
     # number of members
-    m = struct.unpack("<L", fp.read(4))[0]  # unsigned long, big-endian
+    m = struct.unpack("<L", fp.read(4))[0]  # unsigned long, little-endian
     offsets = []
     for _ in range(m):
         offsets.append(struct.unpack("<L", fp.read(4))[0])
 
     # number of symbols
-    n = struct.unpack("<L", fp.read(4))[0]  # unsigned long, big-endian
+    n = struct.unpack("<L", fp.read(4))[0]  # unsigned long, little-endian
     indices = []
     for _ in range(n):
         indices.append(struct.unpack("<H", fp.read(2))[0])  # unsigned short

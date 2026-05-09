@@ -33,7 +33,7 @@
  * and preserve registers. But we ourselves assemble the 
  * calls and stack pointer changes
  *
- * This file can be exercised on 64 bit linux by adding -m32 to
+ * This file can be excercised on 64 bit linux by adding -m32 to
  * the gcc command line.
  */
 #include "../stackman_switch.h"
@@ -116,7 +116,7 @@ void *stackman_call(stackman_cb_t callback, void *context, void *stack_pointer)
   if (stack_pointer != 0)
   {
     __asm__ ("movl %[sp], %%esp" :: [sp] "r" (stack_pointer));
-    /* subtract 4 bytes to make it 16 byte aligned after pushing 3 args */
+    /* subtract 4 bytes to make it 16 byte alighed after pushing 3 args */
     /* (adjustment of stack pointer not required now)
     /* __asm__ ("subl $4, %esp"); */
   }

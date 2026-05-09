@@ -1,14 +1,27 @@
-[![build test and commit](https://github.com/kristjanvalur/stackman/actions/workflows/buildcommit.yml/badge.svg)](https://github.com/kristjanvalur/stackman/actions/workflows/buildcommit.yml)
+[![build test and commit](https://github.com/stackless-dev/stackman/actions/workflows/buildcommit.yml/badge.svg)](https://github.com/stackless-dev/stackman/actions/workflows/buildcommit.yml)
 
-# stackman
 
-**Version 1.2.0**
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║  > stackman                                                  ║
+║    ┌─┐┌┬┐┌─┐┌─┐┬┌─┌┬┐┌─┐┌┐┌                                  ║
+║    └─┐ │ ├─┤│  ├┴┐│││├─┤│││                                  ║
+║    └─┘ ┴ ┴ ┴└─┘┴ ┴┴ ┴┴ ┴┘└┘                                  ║
+║                                                              ║
+║  Do you have a stack? Stackman is here to help.              ║
+║                                                              ║
+║  v1.2.0 • 10 platforms • Stack switching simplified          ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
 
 Simple low-level stack manipulation API and implementation for common platforms
 
 ## Purpose
 
-This library aims to provide a basic API to perform stack manipulation
+This library aims to provide a basic API to perfom stack manipulation
 on various platforms.  Stack manipulation involves changing the machine stack
 pointer while optionally saving and restoring the stack contents.
 
@@ -116,13 +129,13 @@ void *stackman_call(stackman_cb_t callback, void *context, void *stack);
 
 This is the main _stack manipulation_ API.  When called, it will call `callback` function twice:
 
-1. First it calls it with the current opcode `STACKMAN_OP_SAVE`, passing the current `stack_pointer` to
+1. First it calls it with the opcode `STACKMAN_OP_SAVE`, passing the current `stack_pointer` to
 the callback.  This gives the callback the opportunity to _save_ the stack data somewhere.  The callback
 can then return a **different** stack pointer.
 2. It takes the returned value from the callback and replaces the CPU _stack pointer_ with it.
 3. It calls the callback a second time, with the opcode `STACKMAN_OP_RESTORE` and the new stack pointer.
 This gives the callback the opportunity to replace the data on the stack with previously saved data.
-4. It returns the return value from the second call to the callback function.
+4. `stackman_switch()` returns the return value from the second callback invocation.
 
 The `context` pointer is passed as-is to the callback, allowing it access to user-defined data.
 
@@ -150,7 +163,7 @@ a proper function call with stack, for example, when setting up a new stack entr
 
 ## Usage
 
- - Include `stackman.h` for a declaration of the `stackman_switch()` function
+ - Include `stackman.h` for a decleration of the `stackman_switch()` function
    and the definition of various platform specific macros.  See the documentation
    in the header file for the various macros.
  - Implement switching semantics via the callback and call `stackman_switch()` from your
@@ -167,9 +180,24 @@ There are two basic ways to add the library to your project: Using a static libr
 
 ### inlined code
 
- - Include `stackman_impl.h` in one of your .c source files to provide inline assembly.
- - Include `stackman_impl.h` in an assembly (.S) file in your project to include assembly code.
- - (Windows) Include `stackman_s.asm` in an assembly (.asm) file in your project.
+**Note:** Most platforms now use separate assembly files (`.S` or `.asm`) rather than inline assembly. 
+Inline assembly is only available for some platforms when using GCC (not Clang), and using separate 
+assembly files is generally preferred for reliability and compatibility.
+
+**To include the implementation directly in your project:**
+
+ - **Recommended:** Include `stackman_impl.h` in an assembly (`.S`) file in your project. This works for all Unix-like platforms (Linux, macOS, BSD).
+ - **Windows:** Include `stackman_s.asm` in an assembly (`.asm`) file in your project.
+ - **Legacy (GCC only, limited platforms):** Include `stackman_impl.h` in a `.c` source file to use inline assembly where available (x86, x86_64, ARM32, ARM64 with GCC).
+
+**Platforms with inline assembly support:**
+- x86 (sysv_i386)
+- x86_64 (sysv_amd64) 
+- ARM32 (arm32)
+- ARM64 (aarch64)
+
+Only when compiled with GCC and `STACKMAN_INLINE_ASM` is not disabled. Clang, RISC-V, macOS, and Windows 
+always use separate assembly files.
 
 In the case of inlined code, it can be specified to prefer in-line assembly and static linkage
 over separate assembly language source.

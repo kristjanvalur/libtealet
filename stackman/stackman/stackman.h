@@ -5,10 +5,10 @@
 /* Version information */
 #define STACKMAN_VERSION_MAJOR 1
 #define STACKMAN_VERSION_MINOR 2
-#define STACKMAN_VERSION_PATCH 0
+#define STACKMAN_VERSION_PATCH 1
 
 /* Version as a string */
-#define STACKMAN_VERSION "1.2.0"
+#define STACKMAN_VERSION "1.2.1"
 
 /* Version as a single number for comparisons (MMmmpp: Major, minor, patch) */
 #define STACKMAN_VERSION_NUMBER ((STACKMAN_VERSION_MAJOR * 10000) + \
@@ -80,10 +80,28 @@
 #endif
 
 
-/* align a stack pointer to the right alignment, either nudging it up or down */
+/* align a stack pointer to the righ alighment, either nudging it up or down */
 #define STACKMAN_SP_ALIGN_DOWN(a) (((intptr_t)(a) & ~(STACKMAN_STACK_ALIGN-1)))
 #define STACKMAN_SP_ALIGN_UP(a)	  (((intptr_t)((a)+STACKMAN_STACK_ALIGN-1) & ~(STACKMAN_STACK_ALIGN-1)))
 
+/* Stack pointer manipulation macros that work for both descending and ascending stacks.
+ * 
+ * STACKMAN_SP_FURTHEST and STACKMAN_SP_NEAREST are sentinel values representing the
+ * theoretical limits of the stack address space. These should be used for initialization
+ * and comparison only.
+ * 
+ * WARNING: Do NOT use STACKMAN_SP_FURTHEST or STACKMAN_SP_NEAREST with STACKMAN_SP_ADD
+ * or STACKMAN_SP_DIFF operations, as these sentinel values are at the extreme ends of
+ * the address space and arithmetic operations with them can cause pointer overflow and
+ * undefined behavior.
+ * 
+ * Safe operations with FURTHEST/NEAREST: STACKMAN_SP_LS, STACKMAN_SP_LE (comparison)
+ * Unsafe operations: STACKMAN_SP_ADD, STACKMAN_SP_DIFF (arithmetic)
+ * 
+ * For actual stack boundaries, use real pointer values (e.g., address of a stack variable).
+ * The sentinel values can be used instead if the stack bounds are unknown, but then the value
+ * should always be checked first for the sentinel value before performing any arithmetic operations.
+ */
 #if STACKMAN_STACK_DIR == 0
 #define STACKMAN_SP_FURTHEST      ((void*) (intptr_t) -STACKMAN_STACK_ALIGN)
 #define STACKMAN_SP_NEAREST       ((void*) 0)

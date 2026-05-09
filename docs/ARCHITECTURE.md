@@ -531,6 +531,11 @@ stackman handles:
 
 libtealet provides the **policy** (when/what to save), stackman provides the **mechanism** (how to switch).
 
+In this repository, stackman is vendored directly under `stackman/` from official
+Stackman release tarballs (for example,
+`https://github.com/stackless-dev/stackman/releases/download/vX.Y.Z/stackman-X.Y.Z.tar.gz`),
+not through a git submodule.
+
 ## Performance Characteristics
 
 ### Time Complexity

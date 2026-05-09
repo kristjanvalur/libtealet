@@ -12,7 +12,8 @@
 - Inspired by Stackless Python and the Python Greenlet project
 
 ### Dependencies
-- **stackman**: Low-level stack operations library (git submodule)
+- **stackman**: Low-level stack operations library vendored in-tree under `stackman/` from the official Stackman release tarball (not a git submodule).
+- Source for vendor updates: `https://github.com/stackless-dev/stackman/releases/download/vX.Y.Z/stackman-X.Y.Z.tar.gz`
 - Minimal runtime dependencies: `memcpy()`, `malloc()` (replaceable), `assert()` (debug builds only)
 
 ## Architecture
