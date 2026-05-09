@@ -194,7 +194,6 @@ int main(void) {
     
     void *arg = NULL;
     tealet_t *worker = NULL;
-    /* Assume tealet_new() returns 0 in this illustration. */
     tealet_new(main, &worker, worker_run, &arg, NULL);
     /* worker may already be deleted here! */
     
@@ -223,7 +222,6 @@ int main(void) {
     
     void *arg = NULL;
     tealet_t *worker = NULL;
-    /* Assume tealet_new() returns 0 in this illustration. */
     tealet_new(main, &worker, worker_run, &arg, NULL);
     /* worker still exists and can be queried */
     
