@@ -1139,6 +1139,7 @@ static void tealet_restore_state(tealet_main_t *g_main, void *new_stack_pointer)
 
   /* Restore the heap copy back into the C stack */
   assert(g->stack != NULL);
+  assert(new_stack_pointer == g->stack->chunk.stack_near);
   tealet_stack_restore(g->stack);
   tealet_stack_decref(g_main, g->stack);
   g->stack = NULL;

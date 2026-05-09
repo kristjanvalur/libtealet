@@ -132,6 +132,11 @@ Conceptually, `tealet_new()` is `tealet_create()` followed by `tealet_switch()` 
 In practice, it fails with `TEALET_ERR_MEM`, or it can return
 `TEALET_ERR_PANIC` to signal an unexpected panic-tagged switch-back.
 
+Even when `tealet_new()` returns `0`, the value stored in `pcreated` may
+already be invalid: the created tealet may have run and been deleted before
+returning (for example by returning from `run`, via
+`tealet_exit(..., TEALET_EXIT_DELETE)`, or any other deletion path).
+
 **Usage:**
 ```c
 void *arg = my_data;

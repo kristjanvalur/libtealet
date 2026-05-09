@@ -225,7 +225,7 @@ int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void 
 /**
  * @brief Create and immediately start a new tealet.
  * @param tealet Main/related tealet context.
- * @param pcreated Optional output pointer receiving the created tealet on success; may be NULL.
+ * @param pcreated Optional output pointer receiving the created tealet pointer; may be NULL.
  * @param run Entry function.
  * @param parg In/out switch argument pointer (same semantics as tealet_switch()).
  * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
@@ -233,6 +233,11 @@ int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void 
  *
  * Semantically equivalent to tealet_create() followed by tealet_switch(),
  * but performed as one operation.
+ *
+ * On successful return, a value written to @p pcreated is not guaranteed to
+ * remain valid: the new tealet may have already run and been deleted before
+ * tealet_new() returns (for example via return, tealet_exit(..., DELETE), or
+ * another deletion path).
  */
 TEALET_API
 int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
