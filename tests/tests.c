@@ -219,7 +219,7 @@ void fini_test() {
 /**************************************/
 
 // create a tealet, either with tealet_create or tealet_new
-static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg) {
+static int tealet_new_x(tealet_t *m, tealet_t **out, tealet_run_t run, void **parg, void *stack_far) {
   static int counter = 0;
   int i;
   int rc;
@@ -228,22 +228,24 @@ static tealet_t *tealet_new_x(tealet_t *m, tealet_run_t run, void **parg) {
   counter += 1;
   if (counter % 2) {
     r = NULL;
-    rc = tealet_new(m, &r, run, parg, NULL);
+    rc = tealet_new(m, &r, run, parg, stack_far);
     if (rc != 0)
-      return NULL;
-    return r;
+      return rc;
+    *out = r;
+    return 0;
   }
 
   r = NULL;
-  rc = tealet_create(m, &r, run, NULL);
+  rc = tealet_create(m, &r, run, stack_far);
   if (rc != 0)
-    return NULL;
+    return rc;
   i = tealet_switch(r, parg, TEALET_SWITCH_DEFAULT);
   if (i != 0) {
     tealet_delete(r);
-    return 0;
+    return i;
   }
-  return r;
+  *out = r;
+  return 0;
 }
 
 static tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far) {
@@ -255,35 +257,32 @@ static tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **pa
 }
 
 /* create a tealet or stub low on the stack */
-static tealet_t *tealet_new_descend(tealet_t *t, int level, tealet_run_t run, void **parg) {
-  tealet_t *stub;
+static int tealet_new_descend(tealet_t *t, tealet_t **out, int level, tealet_run_t run, void **parg, void *stack_far) {
   int boo[10];
   boo[9] = 0;
   (void)boo;
   if (level > 0)
-    return tealet_new_descend(t, level - 1, run, parg);
+    return tealet_new_descend(t, out, level - 1, run, parg, stack_far);
   if (run)
-    return tealet_new_x(t, run, parg);
-  if (tealet_stub_new(t, &stub, NULL) != 0)
-    return NULL;
-  return stub;
+    return tealet_new_x(t, out, run, parg, stack_far);
+  return tealet_stub_new(t, out, stack_far);
 }
 
 /***************************************
  * methods for creating tealets in different ways
  */
 
-static tealet_t *tealet_new_rnd(tealet_t *t, tealet_run_t run, void **parg, void *stack_far) {
-  (void)stack_far;
-  return tealet_new_descend(t, rand() % 20, run, parg);
+static int tealet_new_rnd(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far) {
+  return tealet_new_descend(t, out, rand() % 20, run, parg, stack_far);
 }
 
-static tealet_t *stub_new(tealet_t *t, tealet_run_t run, void **parg, void *stack_far) {
-  tealet_t *stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
+static int stub_new(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far) {
+  tealet_t *stub = NULL;
+  int rc;
   int res;
-  (void)stack_far;
-  if (stub == NULL)
-    return NULL;
+  rc = tealet_new_descend(t, &stub, rand() % 20, NULL, NULL, stack_far);
+  if (rc != 0)
+    return rc;
   if (run)
     res = tealet_stub_run(stub, run, parg);
   else
@@ -291,22 +290,24 @@ static tealet_t *stub_new(tealet_t *t, tealet_run_t run, void **parg, void *stac
   if (res) {
     tealet_delete(stub);
     assert(res == TEALET_ERR_MEM);
-    return NULL;
+    return res;
   }
-  return stub;
+  *out = stub;
+  return 0;
 }
 
-static tealet_t *stub_new2(tealet_t *t, tealet_run_t run, void **parg, void *stack_far) {
+static int stub_new2(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far) {
   tealet_t *dup, *stub;
+  int rc;
   int res;
-  (void)stack_far;
-  stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
-  if (stub == NULL)
-    return NULL;
+  stub = NULL;
+  rc = tealet_new_descend(t, &stub, rand() % 20, NULL, NULL, stack_far);
+  if (rc != 0)
+    return rc;
   dup = tealet_duplicate(stub);
   if (dup == NULL) {
     tealet_delete(stub);
-    return NULL;
+    return TEALET_ERR_MEM;
   }
   if (run)
     res = tealet_stub_run(dup, run, parg);
@@ -316,39 +317,44 @@ static tealet_t *stub_new2(tealet_t *t, tealet_run_t run, void **parg, void *sta
   if (res) {
     tealet_delete(dup);
     assert(res == TEALET_ERR_MEM);
-    return NULL;
+    return res;
   }
-  return dup;
+  *out = dup;
+  return 0;
 }
 
-static tealet_t *stub_new3(tealet_t *t, tealet_run_t run, void **parg, void *stack_far) {
+static int stub_new3(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far) {
   tealet_t *dup;
+  int rc;
   int res;
-  (void)stack_far;
   if ((rand() % 10) == 0)
     if (the_stub != NULL) {
       tealet_delete(the_stub);
       the_stub = NULL;
     }
+  if (the_stub == NULL) {
+    rc = tealet_new_descend(t, &the_stub, rand() % 20, NULL, NULL, stack_far);
+    if (rc != 0)
+      return rc;
+  }
   if (the_stub == NULL)
-    the_stub = tealet_new_descend(t, rand() % 20, NULL, NULL);
-  if (the_stub == NULL)
-    return NULL;
+    return TEALET_ERR_MEM;
   dup = tealet_duplicate(the_stub);
   if (dup == NULL)
-    return NULL;
+    return TEALET_ERR_MEM;
   if (run) {
     res = tealet_stub_run(dup, run, parg);
     if (res) {
       tealet_delete(dup);
       assert(res == TEALET_ERR_MEM);
-      return NULL;
+      return res;
     }
   }
-  return dup;
+  *out = dup;
+  return 0;
 }
 
-typedef tealet_t *(*t_new)(tealet_t *, tealet_run_t, void **, void *);
+typedef int (*t_new)(tealet_t *, tealet_t **, tealet_run_t, void **, void *);
 static t_new newarray[] = {tealet_new_rnd, stub_new, stub_new2, stub_new3};
 static tealet_t *(*tealet_new_native)(tealet_t *, tealet_run_t, void **, void *) = tealet_new_native_call;
 
@@ -357,7 +363,8 @@ static t_new get_new() {
     return newarray[newmode];
   return newarray[rand() % (sizeof(newarray) / sizeof(*newarray))];
 }
-#define tealet_new get_new()
+/* Explicitly named test-only creator dispatch to avoid shadowing public APIs. */
+#define TEALET_TEST_NEW(T, O, R, A, S) (get_new()((T), (O), (R), (A), (S)))
 
 /************************************************************/
 
@@ -702,12 +709,16 @@ tealet_t *test_status_run(tealet_t *t1, void *arg) {
 
 void test_status(void) {
   tealet_t *stub1;
+  int result;
   init_test();
 
   assert(tealet_status(g_main) == TEALET_STATUS_ACTIVE);
   assert(TEALET_IS_MAIN(g_main));
 
-  stub1 = tealet_new(g_main, NULL, NULL, NULL);
+  stub1 = NULL;
+  result = TEALET_TEST_NEW(g_main, &stub1, NULL, NULL, NULL);
+  assert(result == 0);
+  assert(stub1 != NULL);
   assert(tealet_status(stub1) == TEALET_STATUS_ACTIVE);
   assert(!TEALET_IS_MAIN(stub1));
   tealet_stub_run(stub1, test_status_run, NULL);
@@ -731,7 +742,10 @@ void test_exit(void) {
   int result;
   void *arg;
   init_test();
-  stub1 = tealet_new(g_main, NULL, NULL, NULL);
+  stub1 = NULL;
+  result = TEALET_TEST_NEW(g_main, &stub1, NULL, NULL, NULL);
+  assert(result == 0);
+  assert(stub1 != NULL);
   stub2 = tealet_duplicate(stub1);
   arg = (void *)TEALET_EXIT_DEFAULT;
   result = tealet_stub_run(stub1, test_exit_run, &arg);
@@ -825,10 +839,14 @@ void test_switch_self_panic(void) {
 tealet_t *test_switch_new_1(tealet_t *t1, void *arg) {
   tealet_t *caller = (tealet_t *)arg;
   tealet_t *stub;
+  int result;
   /* switch back to the creator */
   tealet_switch(caller, NULL, TEALET_SWITCH_DEFAULT);
   /* now we want to trample the stack */
-  stub = tealet_new_descend(t1, 50, NULL, NULL);
+  stub = NULL;
+  result = tealet_new_descend(t1, &stub, 50, NULL, NULL, NULL);
+  assert(result == 0);
+  assert(stub != NULL);
   tealet_delete(stub);
   /* and back to main */
   return g_main;
@@ -847,12 +865,16 @@ tealet_t *test_switch_new_2(tealet_t *t2, void *arg) {
 void test_switch_new(void) {
   tealet_t *tealet1, *tealet2;
   void *arg;
+  int result;
   init_test();
   arg = (void *)tealet_current(g_main);
   tealet1 = tealet_new_native_call(g_main, test_switch_new_1, &arg, NULL);
   /* the tealet is now running */
   arg = (void *)tealet1;
-  tealet2 = tealet_new_descend(g_main, 4, test_switch_new_2, &arg);
+  tealet2 = NULL;
+  result = tealet_new_descend(g_main, &tealet2, 4, test_switch_new_2, &arg, NULL);
+  assert(result == 0);
+  assert(tealet2 != NULL);
   assert(tealet_status(tealet2) == TEALET_STATUS_ACTIVE);
   tealet_switch(tealet2, NULL, TEALET_SWITCH_DEFAULT);
   /* tealet should be dead now */
@@ -1083,10 +1105,14 @@ tealet_t *extra_tealet(tealet_t *cur, void *arg) {
 void test_extra(void) {
   tealet_t *t1, *t2;
   extradata ed = {1, "abcd", 2};
+  int result;
   init_test_extra(NULL, sizeof(extradata));
   *TEALET_EXTRA(g_main, extradata) = ed;
 
-  t1 = tealet_new(g_main, NULL, NULL, NULL);
+  t1 = NULL;
+  result = TEALET_TEST_NEW(g_main, &t1, NULL, NULL, NULL);
+  assert(result == 0);
+  assert(t1 != NULL);
   *TEALET_EXTRA(t1, extradata) = ed;
   t2 = tealet_duplicate(t1);
   tealet_stub_run(t1, extra_tealet, NULL);
@@ -1109,6 +1135,7 @@ void test_stats(void) {
   tealet_t *t1;
   tealet_stats_t stats;
   int a, b;
+  int result;
   init_test_extra(NULL, 0);
 
   /* Skip this test if stats are not enabled */
@@ -1120,7 +1147,10 @@ void test_stats(void) {
   tealet_get_stats(g_main, &stats);
   assert(stats.n_active == 1);
   assert(stats.n_total == 1);
-  t1 = tealet_new(g_main, NULL, NULL, NULL);
+  t1 = NULL;
+  result = TEALET_TEST_NEW(g_main, &t1, NULL, NULL, NULL);
+  assert(result == 0);
+  assert(t1 != NULL);
   tealet_get_stats(g_main, &stats);
   /* can be more than 2 because of stub tealet */
   a = stats.n_active;
@@ -1338,7 +1368,9 @@ void test_exit_defunct_target_returns_error(void) {
 
   init_test();
 
-  victim = tealet_new(g_main, NULL, NULL, NULL);
+  victim = NULL;
+  result = TEALET_TEST_NEW(g_main, &victim, NULL, NULL, NULL);
+  assert(result == 0);
   assert(victim != NULL);
   result = tealet_debug_force_defunct(victim);
   assert(result == 0);
@@ -1393,7 +1425,9 @@ void test_debug_swap_far_invalid_caller_check_main(void) {
    */
   init_test();
 
-  child = tealet_new(g_main, NULL, NULL, NULL);
+  child = NULL;
+  result = TEALET_TEST_NEW(g_main, &child, NULL, NULL, NULL);
+  assert(result == 0);
   assert(child != NULL);
 
   new_far = (void *)((uintptr_t)&stack_probe + ((uintptr_t)64 << 20));
