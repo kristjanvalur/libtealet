@@ -374,7 +374,7 @@ int main(int argc, char *argv[]) {
         int status = tealet_status(g_tealets[i]);
         printf("  Tealet %d: status=%d (%s)\n", i, status,
                status == TEALET_STATUS_ACTIVE    ? "ACTIVE"
-           : status == TEALET_STATUS_NEW     ? "NEW"
+               : status == TEALET_STATUS_NEW     ? "NEW"
                : status == TEALET_STATUS_EXITED  ? "EXITED"
                : status == TEALET_STATUS_DEFUNCT ? "DEFUNCT"
                                                  : "UNKNOWN");

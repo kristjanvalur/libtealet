@@ -1662,14 +1662,14 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
 
   current = g_main->g_current;
   tealet_verify_current_matches_caller(current);
-  
+
   default_far = (void *)&result;
   stack_far_used = tealet_pick_initial_far(default_far, stack_far);
   result->flags |= TEALET_TFLAGS_BOUND;
-  
+
   tealet_lock_switch(g_main);
   assert(!g_main->g_target);
-  
+
   if (switch_now) {
     fail = tealet_initialstub(g_main, result, result, run, (parg != NULL ? parg : &arg), stack_far_used);
   } else {
@@ -1809,8 +1809,8 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
 
   if ((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC)) != 0)
-    return TEALET_ERR_INVAL;  
-  
+    return TEALET_ERR_INVAL;
+
   if ((g_target->flags & TEALET_TFLAGS_BOUND) == 0)
     return TEALET_ERR_INVAL;
 
