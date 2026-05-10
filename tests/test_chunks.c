@@ -74,9 +74,16 @@ int main(void) {
 
   /* Create and run a tealet to build up its stack with multiple chunks */
   printf("1. Creating tealet and forcing stack growth into multiple chunks...\n");
-  t1 = NULL;
-  if (tealet_new(g_main, &t1, worker_run, NULL, NULL) != 0) {
+  t1 = tealet_new(g_main);
+  if (t1 == NULL) {
     fprintf(stderr, "Failed to create tealet\n");
+    tealet_test_lock_assert_balanced(&g_lock_state);
+    tealet_finalize(g_main);
+    return 1;
+  }
+  if (tealet_run(t1, worker_run, NULL, NULL, TEALET_RUN_SWITCH) != 0) {
+    fprintf(stderr, "Failed to start tealet\n");
+    tealet_delete(t1);
     tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;

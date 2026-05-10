@@ -60,8 +60,14 @@ int main(void) {
 
   /* how many rounds? */
   data = (void *)10;
-  loop = NULL;
-  if (tealet_new(tmain, &loop, loop_func, &data, NULL) != 0) {
+  loop = tealet_new(tmain);
+  if (loop == NULL) {
+    tealet_test_lock_assert_balanced(&g_lock_state);
+    tealet_finalize(tmain);
+    return 1;
+  }
+  if (tealet_run(loop, loop_func, &data, NULL, TEALET_RUN_SWITCH) != 0) {
+    tealet_delete(loop);
     tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(tmain);
     return 1;

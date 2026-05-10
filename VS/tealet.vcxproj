@@ -273,11 +273,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\src\tealet.c" />
-    <ClCompile Include="..\src\tools.c" />
+    <ClCompile Include="..\src\tealet_extras.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\tealet.h" />
-    <ClInclude Include="..\src\tools.h" />
+    <ClInclude Include="..\src\tealet_extras.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

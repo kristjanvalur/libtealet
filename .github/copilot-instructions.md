@@ -23,7 +23,7 @@
 1. **tealet.h / tealet.c**: Core coroutine implementation
    - `tealet_t`: Main coroutine structure
    - `tealet_run_t`: Function pointer type for coroutine entry points
-   - Lifecycle: `tealet_initialize()` → `tealet_create()`/`tealet_new()` → `tealet_switch()` → `tealet_exit()`/`tealet_finalize()`
+  - Lifecycle: `tealet_initialize()` → `tealet_new()` → `tealet_run()`/`tealet_switch()` → `tealet_exit()`/`tealet_finalize()`
 
 2. **tealet_extras.h / tealet_extras.c**: Helper utilities for the library
 
@@ -72,13 +72,15 @@ tealet_finalize(main);
 
 ### Creating and Switching
 ```c
-// Pattern 1: Create then switch
-tealet_t *g = tealet_create(main, run_func, NULL);
+// Pattern 1: Create/bind then switch
+tealet_t *g = tealet_new(main);
+tealet_run(g, run_func, NULL, NULL, TEALET_RUN_DEFAULT);
 void *arg = my_data;
-tealet_switch(g, &arg);
+tealet_switch(g, &arg, TEALET_SWITCH_DEFAULT);
 
 // Pattern 2: Create and switch atomically
-tealet_t *g = tealet_new(main, run_func, &arg, NULL);
+tealet_t *g = tealet_new(main);
+tealet_run(g, run_func, &arg, NULL, TEALET_RUN_SWITCH);
 ```
 
 ### Run Function Pattern
@@ -301,7 +303,8 @@ Use this when you need to [specific use case].
 
 \`\`\`c
 // Practical example
-tealet_t *t = tealet_new(main, my_func, &arg, NULL);
+tealet_t *t = tealet_new(main);
+tealet_run(t, my_func, &arg, NULL, TEALET_RUN_SWITCH);
 \`\`\`
 
 **Note:** Platform-specific behavior or limitations.

@@ -185,7 +185,11 @@ static int worker_recursive(tealet_t *current, int depth) {
     } else if (choice == 3 && g_tealet_count < MAX_TEALETS) {
       /* Create new tealet at current stack depth */
       void *arg = NULL;
-      (void)tealet_new(current, NULL, worker_entry, &arg, NULL);
+      tealet_t *created = tealet_new(current);
+      if (created != NULL) {
+        if (tealet_run(created, worker_entry, &arg, NULL, TEALET_RUN_SWITCH) != 0)
+          tealet_delete(created);
+      }
       continue;
 
     } else if (choice == 4 && current != g_main && g_tealet_count >= MAX_TEALETS) {
@@ -370,6 +374,7 @@ int main(int argc, char *argv[]) {
         int status = tealet_status(g_tealets[i]);
         printf("  Tealet %d: status=%d (%s)\n", i, status,
                status == TEALET_STATUS_ACTIVE    ? "ACTIVE"
+               : status == TEALET_STATUS_NEW     ? "NEW"
                : status == TEALET_STATUS_EXITED  ? "EXITED"
                : status == TEALET_STATUS_DEFUNCT ? "DEFUNCT"
                                                  : "UNKNOWN");
