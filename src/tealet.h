@@ -240,6 +240,12 @@ tealet_t *tealet_new(tealet_t *tealet);
  * single path that avoids redundant internal state transitions.
  * With #TEALET_RUN_DEFAULT, it returns to caller after capture; execution
  * starts on a later tealet_switch() to that target.
+ *
+ * @warning With #TEALET_RUN_SWITCH, @p run may return/exit before
+ * tealet_run() returns to the caller. If that path uses auto-delete
+ * (implicit return policy or tealet_exit(..., #TEALET_EXIT_DELETE)),
+ * the @p tealet handle can become invalid before tealet_run() returns.
+ * Keep the tealet alive explicitly when post-call handle reuse is required.
  */
 TEALET_API
 int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far, int flags);
@@ -272,7 +278,7 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  * - In the child tealet: returns 0
  * - On error: returns -1 (or other negative TEALET_ERR_* code)
  *
- * If pchild is non-NULL, it will be filled with a pointer to the other tealet:
+ * If pother is non-NULL, it will be filled with a pointer to the other tealet:
  * - In the parent: points to the newly created child tealet
  * - In the child: points to the parent tealet
  * This allows both parent and child to reference each other for switching.

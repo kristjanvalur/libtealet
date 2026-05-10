@@ -783,22 +783,22 @@ Use this to combine boundary requirements from different stack references.
 ### tealet_new_probe()
 
 ```c
-void *tealet_new_probe(tealet_t *dummy1, tealet_t **dummy2, tealet_run_t dummy3,
-                       void **dummy4, void *dummy5);
+void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3,
+                       void *dummy4, int dummy5);
 ```
 
 A function to test what stack boundary would be used for a new tealet without creating one. This is mostly informative.
 
 **Parameters:**
-- `dummy1`, `dummy2`, `dummy3`, `dummy4`: Unused placeholders to match the `tealet_new()` call shape
-- `dummy5`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
+- `dummy1`, `dummy2`, `dummy3`, `dummy4`, `dummy5`: Unused placeholders to match the `tealet_run()` call shape
+- `dummy4`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
 
 **Returns:** The probed stack-boundary marker.
 
 **Usage:**
 ```c
 void *arg = NULL;
-void *probe = tealet_new_probe(main, NULL, my_run, &arg, NULL);
+void *probe = tealet_new_probe(main, my_run, &arg, NULL, NULL);
 printf("new tealet boundary probe: %p\n", probe);
 ```
 
