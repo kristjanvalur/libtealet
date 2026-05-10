@@ -44,14 +44,14 @@
 #define TEALET_MFLAGS_PANIC (1 << 16)
 
 /* Internal per-tealet flags (stored in tealet_sub_t::flags). */
-#define TEALET_TFLAGS_EXITING (1u << 0)
-#define TEALET_TFLAGS_DEFUNCT (1u << 1)
-#define TEALET_TFLAGS_AUTODELETE (1u << 2)
-#define TEALET_TFLAGS_EXITED (1u << 3)
+#define TEALET_TFLAGS_BOUND (1u << 0)
+#define TEALET_TFLAGS_EXITING (1u << 1)
+#define TEALET_TFLAGS_EXITED (1u << 2)
+#define TEALET_TFLAGS_DEFUNCT (1u << 3)
 #define TEALET_TFLAGS_MAIN_LINEAGE (1u << 4)
 #define TEALET_TFLAGS_FORK (1u << 5)
-#define TEALET_TFLAGS_EXITFORCE (1u << 6)
-#define TEALET_TFLAGS_BOUND (1u << 7)
+#define TEALET_TFLAGS_AUTODELETE (1u << 6)
+#define TEALET_TFLAGS_EXITFORCE (1u << 7)
 
 /* Internal per-stack flags (stored in tealet_stack_t::flags). */
 #define TEALET_SFLAGS_DEFUNCT (1u << 0)
