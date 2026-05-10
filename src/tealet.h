@@ -57,7 +57,7 @@ typedef struct tealet_alloc_t {
  * Automatic lock behavior is controlled by @ref tealet_lock_mode_t.
  *
  * In #TEALET_LOCK_SWITCH mode, libtealet automatically acquires/releases this
- * lock for switching APIs only: tealet_new(), tealet_create(),
+ * lock for switching APIs only: tealet_run(), tealet_new(), tealet_create(),
  * tealet_switch(), tealet_exit(), and tealet_fork().
  *
  * In #TEALET_LOCK_OFF mode, libtealet never auto-locks; callers are fully
@@ -218,6 +218,28 @@ void tealet_finalize(tealet_t *tealet);
  */
 TEALET_API
 tealet_t *tealet_add(tealet_t *tealet);
+
+/* tealet_run flags */
+#define TEALET_RUN_DEFAULT 0 /* capture initial stack state, do not switch to target */
+#define TEALET_RUN_SWITCH 1  /* capture initial stack state and immediately switch to target */
+
+/**
+ * @brief Run a callable on a NEW tealet, immediately or by binding for later resume.
+ * @param tealet NEW/unbound target tealet (typically from tealet_add()).
+ * @param run Callable entry function for the target.
+ * @param parg Optional in/out switch argument pointer; used when #TEALET_RUN_SWITCH is set.
+ * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
+ * @param flags Run mode: #TEALET_RUN_DEFAULT or #TEALET_RUN_SWITCH.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
+ *
+ * This API installs @p run on a NEW tealet and captures its initial saved
+ * stack state.
+ * With #TEALET_RUN_SWITCH, it switches to the target immediately.
+ * With #TEALET_RUN_DEFAULT, it returns to caller after capture; execution
+ * starts on a later tealet_switch() to that target.
+ */
+TEALET_API
+int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far, int flags);
 
 /**
  * @brief Create a new tealet without starting it.

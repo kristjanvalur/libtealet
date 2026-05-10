@@ -1633,47 +1633,96 @@ static void *tealet_pick_initial_far(void *default_far, void *hint) {
   return tealet_stack_further(default_far, hint);
 }
 
-/* create a tealet by saving the current stack and starting
- * immediate execution of a new one
+/* Prime/run a NEW tealet target.
  *
  * Switching API lock policy:
- * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * all switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
  * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
  * the lock internally.
  */
-int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far) {
-  tealet_sub_t *result; /* store this until we return */
+int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far, int flags) {
+  tealet_sub_t *result = (tealet_sub_t *)tealet;
   int fail;
   int api_result;
   void *arg = NULL;
   void *default_far;
   void *stack_far_used;
+  int switch_now;
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  if (pcreated != NULL)
-    *pcreated = NULL;
+  tealet_sub_t *previous;
+  tealet_sub_t *current;
+
+  if ((flags & ~TEALET_RUN_SWITCH) != 0)
+    return TEALET_ERR_INVAL;
+  if (run == NULL)
+    return TEALET_ERR_INVAL;
+
+  switch_now = ((flags & TEALET_RUN_SWITCH) != 0);
+
   tealet_lock_switch(g_main);
-  assert(!g_main->g_target);
-  result = tealet_alloc(g_main);
-  if (result == NULL) {
-    api_result = TEALET_ERR_MEM;
-    goto done; /* Could not allocate */
+  current = g_main->g_current;
+  tealet_verify_current_matches_caller(current);
+
+  if (result->flags != 0) {
+    api_result = TEALET_ERR_INVAL;
+    goto done;
   }
+
+  assert(!g_main->g_target);
+
   default_far = (void *)&result;
   stack_far_used = tealet_pick_initial_far(default_far, stack_far);
   result->flags |= TEALET_TFLAGS_BOUND;
-  fail = tealet_initialstub(g_main, result, result, run, (parg != NULL ? parg : &arg), stack_far_used);
+
+  if (switch_now) {
+    fail = tealet_initialstub(g_main, result, result, run, (parg != NULL ? parg : &arg), stack_far_used);
+  } else {
+    previous = g_main->g_previous;
+    g_main->g_current = result;
+    fail = tealet_initialstub(g_main, result, current, run, NULL, stack_far_used);
+    if (fail == 0)
+      g_main->g_previous = previous;
+  }
+
   if (fail) {
-    /* could not save stack */
-    tealet_delete((tealet_t *)result);
+    result->stack = NULL;
+    result->stack_far = NULL;
+    result->flags = 0;
+    if (!switch_now)
+      g_main->g_current = current;
     api_result = fail;
     goto done;
   }
-  if (pcreated != NULL)
-    *pcreated = (tealet_t *)result;
+
   api_result = 0;
 done:
   tealet_unlock_switch(g_main);
   return api_result;
+}
+
+/* create a tealet by saving the current stack and starting
+ * immediate execution of a new one
+ */
+int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far) {
+  tealet_t *created;
+  int api_result;
+
+  if (pcreated != NULL)
+    *pcreated = NULL;
+
+  created = tealet_add(tealet);
+  if (created == NULL)
+    return TEALET_ERR_MEM;
+
+  api_result = tealet_run(created, run, parg, stack_far, TEALET_RUN_SWITCH);
+  if (api_result) {
+    tealet_delete(created);
+    return api_result;
+  }
+
+  if (pcreated != NULL)
+    *pcreated = created;
+  return 0;
 }
 
 /* create a tealet by saving the target stack and switching
@@ -1686,54 +1735,25 @@ done:
  * the lock internally.
  */
 int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far) {
-  tealet_sub_t *result; /* store this until we return */
-  int fail;
+  tealet_t *created;
   int api_result;
-  void *default_far;
-  void *stack_far_used;
-  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
-  tealet_sub_t *previous;
-  tealet_sub_t *current;
 
   if (pcreated == NULL)
     return TEALET_ERR_INVAL;
   *pcreated = NULL;
 
-  tealet_lock_switch(g_main);
-  previous = g_main->g_previous;
-  current = g_main->g_current;
-  tealet_verify_current_matches_caller(current);
-  assert(!g_main->g_target);
-  result = tealet_alloc(g_main);
-  if (result == NULL) {
-    api_result = TEALET_ERR_MEM;
-    goto done; /* Could not allocate */
+  created = tealet_add(tealet);
+  if (created == NULL)
+    return TEALET_ERR_MEM;
+
+  api_result = tealet_run(created, run, NULL, stack_far, TEALET_RUN_DEFAULT);
+  if (api_result) {
+    tealet_delete(created);
+    return api_result;
   }
-  /* we turn into the new tealet and switch back, in order
-   * to save the new tealet's stack at this position
-   */
-  g_main->g_current = result;
-  default_far = (void *)&result;
-  stack_far_used = tealet_pick_initial_far(default_far, stack_far);
-  result->flags |= TEALET_TFLAGS_BOUND;
-  fail = tealet_initialstub(g_main, result, current, run, NULL, stack_far_used);
-  if (fail) {
-    /* could not save stack */
-    tealet_delete((tealet_t *)result);
-    g_main->g_current = current;
-    api_result = fail;
-  } else {
-    /* restore g_previous to whatever it was.  We don't count
-     * this switch from the temporary tealet back to us
-     * as proper switch in that sense
-     */
-    g_main->g_previous = previous;
-    *pcreated = (tealet_t *)result;
-    api_result = 0;
-  }
-done:
-  tealet_unlock_switch(g_main);
-  return api_result;
+
+  *pcreated = created;
+  return 0;
 }
 
 /* Switch to a tealet and back.
