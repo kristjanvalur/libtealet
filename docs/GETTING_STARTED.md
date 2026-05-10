@@ -90,11 +90,8 @@ int main(void) {
     
     /* Create and run a coroutine */
     void *arg = "Hello World";
-    tealet_t *coro = NULL;
-    if (tealet_new(main, &coro, hello_run, &arg, NULL) != 0) {
-        tealet_finalize(main);
-        return 1;
-    }
+    tealet_t *coro = tealet_new(main);
+    tealet_run(coro, hello_run, &arg, NULL, TEALET_RUN_SWITCH);
     
     /* Clean up */
     tealet_finalize(main);
@@ -151,7 +148,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```
 
 **Rule of thumb:** If data needs to survive a `tealet_switch()`, allocate it on the heap.
-**Exception:** You can intentionally include additional creator-frame stack data in a new tealet's initial snapshot by passing `stack_far` to `tealet_new()` or `tealet_create()`. This exists to make integration practical for existing code paths that already rely on stack-based structures.
+**Exception:** You can intentionally include additional creator-frame stack data in a new tealet's initial snapshot by passing `stack_far` to `tealet_run()`. This exists to make integration practical for existing code paths that already rely on stack-based structures.
 
 ## Tealet Lifecycle and Exiting
 
@@ -194,7 +191,8 @@ int main(void) {
     
     void *arg = NULL;
     tealet_t *worker = NULL;
-    tealet_new(main, &worker, worker_run, &arg, NULL);
+    worker = tealet_new(main);
+    tealet_run(worker, worker_run, &arg, NULL, TEALET_RUN_SWITCH);
     /* worker may already be deleted here! */
     
     int status = tealet_status(worker);  /* ❌ Dangling pointer! */
@@ -204,7 +202,7 @@ int main(void) {
 }
 ```
 
-**What happened?** `tealet_new()` creates the worker and **immediately runs it**. The worker completes and deletes itself **before** `tealet_new()` returns. Now `worker` is a dangling pointer.
+**What happened?** `tealet_run(..., TEALET_RUN_SWITCH)` starts the worker immediately. The worker completes and deletes itself before control returns. Now `worker` is a dangling pointer.
 
 ### ✅ Safe Pattern: Prevent Auto-Delete
 
@@ -222,7 +220,8 @@ int main(void) {
     
     void *arg = NULL;
     tealet_t *worker = NULL;
-    tealet_new(main, &worker, worker_run, &arg, NULL);
+    worker = tealet_new(main);
+    tealet_run(worker, worker_run, &arg, NULL, TEALET_RUN_SWITCH);
     /* worker still exists and can be queried */
     
     int status = tealet_status(worker);  /* ✅ Safe */
@@ -278,7 +277,8 @@ tealet_t *controlled_worker(tealet_t *current, void *arg) {
 int main(void) {
     /* ... */
     tealet_t *worker = NULL;
-    tealet_new(main, &worker, controlled_worker, &arg, NULL);
+    worker = tealet_new(main);
+    tealet_run(worker, controlled_worker, &arg, NULL, TEALET_RUN_SWITCH);
     
     /* Can switch back to worker multiple times */
     tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
@@ -327,8 +327,10 @@ int main(void) {
     /* Create both coroutines */
     tealet_t *ping = NULL;
     tealet_t *pong = NULL;
-    tealet_create(main, &ping, ping_run, NULL);
-    tealet_create(main, &pong, pong_run, NULL);
+    ping = tealet_new(main);
+    tealet_run(ping, ping_run, NULL, NULL, TEALET_RUN_DEFAULT);
+    pong = tealet_new(main);
+    tealet_run(pong, pong_run, NULL, NULL, TEALET_RUN_DEFAULT);
     
     /* Start ping, passing pong as argument */
     void *arg = pong;
@@ -381,7 +383,8 @@ int main(void) {
     int max = 5;
     void *arg = &max;
     tealet_t *gen = NULL;
-    tealet_new(main, &gen, range_run, &arg, NULL);
+    gen = tealet_new(main);
+    tealet_run(gen, range_run, &arg, NULL, TEALET_RUN_SWITCH);
     
     /* Pull values from generator */
     while (tealet_status(gen) == TEALET_STATUS_ACTIVE) {
@@ -456,13 +459,15 @@ int main(void) {
     
     /* Create consumer first */
     tealet_t *consumer = NULL;
-    tealet_create(main, &consumer, consumer_run, NULL);
+    consumer = tealet_new(main);
+    tealet_run(consumer, consumer_run, NULL, NULL, TEALET_RUN_DEFAULT);
     
     /* Create producer context */
     producer_ctx_t ctx = {consumer, buffer, 0};
     void *arg = &ctx;
     tealet_t *producer = NULL;
-    tealet_new(main, &producer, producer_run, &arg, NULL);
+    producer = tealet_new(main);
+    tealet_run(producer, producer_run, &arg, NULL, TEALET_RUN_SWITCH);
     
     printf("Total consumed: %d items\n", ctx.count);
     
@@ -475,23 +480,24 @@ int main(void) {
 
 ## Creation Patterns
 
-### `tealet_new()` - Create and Start Immediately
+### `tealet_new()` + `tealet_run(..., TEALET_RUN_SWITCH)` - Create and Start Immediately
 
 ```c
 void *arg = my_data;
-tealet_t *t = NULL;
-tealet_new(main, &t, my_run, &arg, NULL);
+tealet_t *t = tealet_new(main);
+tealet_run(t, my_run, &arg, NULL, TEALET_RUN_SWITCH);
 /* Returns when my_run switches back */
 /* arg now contains return value */
 ```
 
 Use when you want to start execution immediately.
+Conceptually this is `TEALET_RUN_DEFAULT` + `tealet_switch()`, but `TEALET_RUN_SWITCH` uses an optimized single path that avoids redundant internal state transitions.
 
-### `tealet_create()` + `tealet_switch()` - Deferred Start
+### `tealet_new()` + `tealet_run(..., TEALET_RUN_DEFAULT)` + `tealet_switch()` - Deferred Start
 
 ```c
-tealet_t *t = NULL;
-tealet_create(main, &t, my_run, NULL);
+tealet_t *t = tealet_new(main);
+tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT);
 /* Tealet created but not yet running */
 
 void *arg = my_data;
@@ -502,11 +508,11 @@ Use when you need to set up multiple coroutines before starting any.
 
 ## Error Handling
 
-Functions return negative error codes on failure (and write created tealets via out-parameters):
+Switching/binding functions return negative error codes on failure:
 
 ```c
-tealet_t *t = NULL;
-if (tealet_create(main, &t, my_run, NULL) != 0) {
+tealet_t *t = tealet_new(main);
+if (tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT) != 0) {
     fprintf(stderr, "Failed to create tealet (out of memory)\n");
     return TEALET_ERR_MEM;
 }
@@ -541,13 +547,13 @@ if (tealet_status(t) == TEALET_STATUS_DEFUNCT) {
 ```c
 /* Thread 1 */
 tealet_t *main1 = tealet_initialize(&alloc, 0);
-tealet_t *t1 = NULL;
-tealet_create(main1, &t1, func1, NULL);
+tealet_t *t1 = tealet_new(main1);
+tealet_run(t1, func1, NULL, NULL, TEALET_RUN_DEFAULT);
 
 /* Thread 2 */
 tealet_t *main2 = tealet_initialize(&alloc, 0);
-tealet_t *t2 = NULL;
-tealet_create(main2, &t2, func2, NULL);
+tealet_t *t2 = tealet_new(main2);
+tealet_run(t2, func2, NULL, NULL, TEALET_RUN_DEFAULT);
 
 /* ❌ WRONG: Can't switch between t1 and t2 (different mains) */
 /* ✅ OK: Can switch within same thread between t1 and other tealets from main1 */

@@ -33,11 +33,8 @@ int main(void) {
     tealet_t *main = tealet_initialize(&alloc, 0);
     
     void *arg = NULL;
-    tealet_t *coro = NULL;
-    if (tealet_new(main, &coro, worker, &arg, NULL) != 0) {
-        tealet_finalize(main);
-        return 1;
-    }
+    tealet_t *coro = tealet_new(main);
+    tealet_run(coro, worker, &arg, NULL, TEALET_RUN_SWITCH);
     
     tealet_finalize(main);
     return 0;

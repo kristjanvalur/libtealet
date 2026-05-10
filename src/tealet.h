@@ -235,6 +235,9 @@ tealet_t *tealet_new(tealet_t *tealet);
  * This API installs @p run on a NEW tealet and captures its initial saved
  * stack state.
  * With #TEALET_RUN_SWITCH, it switches to the target immediately.
+ * Conceptually, #TEALET_RUN_SWITCH is equivalent to
+ * #TEALET_RUN_DEFAULT followed by tealet_switch(), but uses an optimized
+ * single path that avoids redundant internal state transitions.
  * With #TEALET_RUN_DEFAULT, it returns to caller after capture; execution
  * starts on a later tealet_switch() to that target.
  */

@@ -82,18 +82,17 @@ This creates a mixed concurrency requirement:
 - **Configuration and switching remain thread-affine** in a main-tealet domain.
 - **Some non-switch lifecycle operations may still be invoked from foreign threads** in real integrations.
 
-For this reason, libtealet exposes **locking helpers** and applies automatic internal locking only to the five switching APIs:
-- `tealet_new()`
-- `tealet_create()`
+For this reason, libtealet exposes **locking helpers** and applies automatic internal locking only to the switching APIs:
+- `tealet_run()`
+- `tealet_fork()`
 - `tealet_switch()`
 - `tealet_exit()`
-- `tealet_fork()`
 
 Rationale: these APIs are temporally asymmetric. Execution can enter through one call boundary and continue from a different logical point (including tealet entry/exit boundaries). Centralizing lock ownership for these transitions inside the library avoids difficult cross-frame lock bookkeeping in integrator code.
 
-Stub helpers in `tealet_extras.h` are switching wrappers by inference and inherit this behavior through the core switching APIs.
+Stub/helpers in `tealet_extras.h` are wrappers built on core switching APIs and inherit this behavior.
 
-In short: switching lock complexity is handled internally for the five switching APIs, while auxiliary structure operations need explicit integrator-managed locking when foreign-thread calls are possible.
+In short: switching lock complexity is handled internally for the core switching APIs, while auxiliary structure operations need explicit integrator-managed locking when foreign-thread calls are possible.
 
 Current implementation strategy:
 - The switching APIs above acquire/release the configured lock around their transition work.
@@ -357,7 +356,7 @@ A tealet progresses through these states:
 ```
     [CREATED]
        ↓
-    tealet_create() / tealet_new()
+    tealet_new() + tealet_run()
        ↓
     [ACTIVE] ←──────┐
        ↓            │
@@ -542,7 +541,7 @@ not through a git submodule.
 
 | Operation | Complexity | Notes |
 |-----------|-----------|-------|
-| `tealet_create()` | O(1) | Just allocates structure |
+| `tealet_new()` | O(1) | Allocates unbound tealet structure |
 | `tealet_switch()` | O(n) | n = number of chunks to restore |
 | `tealet_duplicate()` | O(1) | Reference count increment |
 | Stack growth | O(k) | k = bytes to add |
