@@ -1652,28 +1652,21 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
   tealet_sub_t *previous;
   tealet_sub_t *current;
 
-  if ((flags & ~TEALET_RUN_SWITCH) != 0)
-    return TEALET_ERR_INVAL;
-  if (run == NULL)
+  if (result->flags != 0)
     return TEALET_ERR_INVAL;
 
   switch_now = ((flags & TEALET_RUN_SWITCH) != 0);
 
-  tealet_lock_switch(g_main);
   current = g_main->g_current;
   tealet_verify_current_matches_caller(current);
-
-  if (result->flags != 0) {
-    api_result = TEALET_ERR_INVAL;
-    goto done;
-  }
-
-  assert(!g_main->g_target);
-
+  
   default_far = (void *)&result;
   stack_far_used = tealet_pick_initial_far(default_far, stack_far);
   result->flags |= TEALET_TFLAGS_BOUND;
-
+  
+  tealet_lock_switch(g_main);
+  assert(!g_main->g_target);
+  
   if (switch_now) {
     fail = tealet_initialstub(g_main, result, result, run, (parg != NULL ? parg : &arg), stack_far_used);
   } else {
@@ -1700,66 +1693,99 @@ done:
   return api_result;
 }
 
-/* create a tealet by saving the current stack and starting
- * immediate execution of a new one
- */
-int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far) {
-  tealet_t *created;
-  int api_result;
-
-  if (pcreated != NULL)
-    *pcreated = NULL;
-
-  created = tealet_add(tealet);
-  if (created == NULL)
-    return TEALET_ERR_MEM;
-
-  api_result = tealet_run(created, run, parg, stack_far, TEALET_RUN_SWITCH);
-  if (api_result) {
-    tealet_delete(created);
-    return api_result;
-  }
-
-  if (pcreated != NULL)
-    *pcreated = created;
-  return 0;
-}
-
-/* create a tealet by saving the target stack and switching
- * back to the caller, allowing the caller to run the
- * tealet proper later, by switching to it.
+/* Fork the active tealet.
  *
  * Switching API lock policy:
- * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
  * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
  * the lock internally.
  */
-int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far) {
-  tealet_t *created;
+
+int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
+  tealet_sub_t *g_child = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(g_child);
+  tealet_sub_t *g_current;
+  tealet_sub_t *previous;
+  int result, is_parent;
   int api_result;
 
-  if (pcreated == NULL)
+  g_current = g_main->g_current;
+  tealet_verify_current_matches_caller(g_current);
+
+  /* Fork target must be a NEW/unbound tealet */
+  if (g_child->flags != 0) {
     return TEALET_ERR_INVAL;
-  *pcreated = NULL;
-
-  created = tealet_add(tealet);
-  if (created == NULL)
-    return TEALET_ERR_MEM;
-
-  api_result = tealet_run(created, run, NULL, stack_far, TEALET_RUN_DEFAULT);
-  if (api_result) {
-    tealet_delete(created);
-    return api_result;
   }
 
-  *pcreated = created;
-  return 0;
+  /* Current tealet must have a bounded stack (far boundary set).
+   * Even the main tealet can fork if its far boundary has been set.
+   */
+  if (TEALET_STACK_IS_UNBOUNDED(g_current)) {
+    return TEALET_ERR_UNFORKABLE;
+  }
+
+  /* Active tealets have NULL stack (implied by the check above) */
+  assert(g_current->stack == NULL);
+
+  /* Copy the far boundary */
+  g_child->stack_far = g_current->stack_far;
+  g_child->flags |= TEALET_TFLAGS_FORK;
+  g_child->flags |= TEALET_TFLAGS_BOUND;
+  if (g_current->flags & TEALET_TFLAGS_MAIN_LINEAGE)
+    g_child->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
+
+  tealet_lock_switch(g_main);
+
+  /* result of tealet_switchstack is:
+   * 1 if this was just a save
+   * 0 if this was a restore (switch back)
+   * <0 on error
+   */
+  if (flags & TEALET_FORK_SWITCH) {
+    /* save parent, switch to child*/
+    result = tealet_switchstack(g_main, g_child, NULL, parg);
+    is_parent = result == 0;
+  } else {
+    /* we are just saving the child's stack for later.
+     *Save the stack in the child, don't modify 'previous'
+     */
+    previous = g_main->g_previous;
+    g_main->g_current = g_child; /* Child becomes current (temporarily) */
+    result = tealet_switchstack(g_main, g_current, NULL, parg);
+    /* only in the case of just saving do we restore previous. otherwise
+     * we respect the previous from the switch
+     */
+    if (result == 1)
+      g_main->g_previous = previous;
+    is_parent = result == 1;
+  }
+
+  if (result < 0) {
+    /* Failed to save/restore; keep child reusable as NEW. */
+    g_child->stack = NULL;
+    g_child->stack_far = NULL;
+    g_child->flags = 0;
+    api_result = TEALET_ERR_MEM;
+    goto done;
+  }
+
+  if (pother)
+    *pother = (tealet_t *)(is_parent ? g_child : g_current);
+  api_result = is_parent;
+
+done:
+  /* we are now back.  If successful, we are either conceptually the same stack as when we called,
+   * or we have been switched to (via tealet_switch or tealet_exit().  in either case,
+   * release the lock.
+   */
+  tealet_unlock_switch(g_main);
+  return api_result;
 }
 
 /* Switch to a tealet and back.
  *
  * Switching API lock policy:
- * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
  * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
  * the lock internally.
  */
@@ -1839,7 +1865,7 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
 /* Exit current tealet and transfer control to requested target.
  *
  * Switching API lock policy:
- * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
  * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
  * the lock internally.
  */
@@ -1894,93 +1920,60 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   return result;
 }
 
-/* Fork the active tealet.
+/* create a tealet by saving the current stack and starting
+ * immediate execution of a new one
+ */
+int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far) {
+  tealet_t *created;
+  int api_result;
+
+  if (pcreated != NULL)
+    *pcreated = NULL;
+
+  created = tealet_add(tealet);
+  if (created == NULL)
+    return TEALET_ERR_MEM;
+
+  api_result = tealet_run(created, run, parg, stack_far, TEALET_RUN_SWITCH);
+  if (api_result) {
+    tealet_delete(created);
+    return api_result;
+  }
+
+  if (pcreated != NULL)
+    *pcreated = created;
+  return 0;
+}
+
+/* create a tealet by saving the target stack and switching
+ * back to the caller, allowing the caller to run the
+ * tealet proper later, by switching to it.
  *
  * Switching API lock policy:
- * all five switching APIs (`tealet_new()`, `tealet_create()`,
+ * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
  * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
  * the lock internally.
  */
-
-int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
-  tealet_sub_t *g_child = (tealet_sub_t *)_tealet;
-  tealet_main_t *g_main = TEALET_GET_MAIN(g_child);
-  tealet_sub_t *g_current;
-  tealet_sub_t *previous;
-  int result, is_parent;
+int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far) {
+  tealet_t *created;
   int api_result;
 
-  g_current = g_main->g_current;
-  tealet_verify_current_matches_caller(g_current);
-  
-  /* Fork target must be a NEW/unbound tealet */
-  if (g_child->flags != 0) {
+  if (pcreated == NULL)
     return TEALET_ERR_INVAL;
-  }
-  
-  /* Current tealet must have a bounded stack (far boundary set).
-  * Even the main tealet can fork if its far boundary has been set.
-  */
- if (TEALET_STACK_IS_UNBOUNDED(g_current)) {
-   return TEALET_ERR_UNFORKABLE;
-  }
-  
-  /* Active tealets have NULL stack (implied by the check above) */
-  assert(g_current->stack == NULL);
-  
-  /* Copy the far boundary */
-  g_child->stack_far = g_current->stack_far;
-  g_child->flags |= TEALET_TFLAGS_FORK;
-  g_child->flags |= TEALET_TFLAGS_BOUND;
-  if (g_current->flags & TEALET_TFLAGS_MAIN_LINEAGE)
-  g_child->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
-  
-  tealet_lock_switch(g_main);
+  *pcreated = NULL;
 
-  /* result of tealet_switchstack is:
-   * 1 if this was just a save
-   * 0 if this was a restore (switch back)
-   * <0 on error
-   */
-  if (flags & TEALET_FORK_SWITCH) {
-    /* save parent, switch to child*/
-    result = tealet_switchstack(g_main, g_child, NULL, parg);
-    is_parent = result == 0;
-  } else {
-    /* we are just saving the child's stack for later.
-     *Save the stack in the child, don't modify 'previous'
-     */
-    previous = g_main->g_previous;
-    g_main->g_current = g_child; /* Child becomes current (temporarily) */
-    result = tealet_switchstack(g_main, g_current, NULL, parg);
-    /* only in the case of just saving do we restore previous. otherwise
-     * we respect the previous from the switch
-     */
-    if (result == 1)
-      g_main->g_previous = previous;
-    is_parent = result == 1;
+  created = tealet_add(tealet);
+  if (created == NULL)
+    return TEALET_ERR_MEM;
+
+  api_result = tealet_run(created, run, NULL, stack_far, TEALET_RUN_DEFAULT);
+  if (api_result) {
+    tealet_delete(created);
+    return api_result;
   }
 
-  if (result < 0) {
-    /* Failed to save/restore; keep child reusable as NEW. */
-    g_child->stack = NULL;
-    g_child->stack_far = NULL;
-    g_child->flags = 0;
-    api_result = TEALET_ERR_MEM;
-    goto done;
-  }
-
-  if (pother)
-    *pother = (tealet_t *)(is_parent ? g_child : g_current);
-  api_result = is_parent;
-
-done:
-  /* we are now back.  If successful, we are either conceptually the same stack as when we called,
-   * or we have been switched to (via tealet_switch or tealet_exit().  in either case,
-   * release the lock.
-   */
-  tealet_unlock_switch(g_main);
-  return api_result;
+  *pcreated = created;
+  return 0;
 }
 
 tealet_t *tealet_duplicate(tealet_t *tealet) {

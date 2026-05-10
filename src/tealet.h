@@ -242,103 +242,6 @@ TEALET_API
 int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far, int flags);
 
 /**
- * @brief Create a new tealet without starting it.
- * @param tealet Main/related tealet context used for allocation and ownership.
- * @param pcreated Output pointer receiving the created tealet on success (must be non-NULL).
- * @param run Entry function for the created tealet.
- * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
- * @return 0 on success, negative #TEALET_ERR_* on failure.
- *
- * The new tealet enters execution when tealet_switch() first targets it.
- * If @p stack_far is non-NULL, capture range is only extended (never shrunk)
- * relative to the default internally selected boundary.
- */
-TEALET_API
-int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far);
-
-/**
- * @brief Create and immediately start a new tealet.
- * @param tealet Main/related tealet context.
- * @param pcreated Optional output pointer receiving the created tealet pointer; may be NULL.
- * @param run Entry function.
- * @param parg In/out switch argument pointer (same semantics as tealet_switch()).
- * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
- * @return 0 on success, negative #TEALET_ERR_* on failure.
- *
- * Semantically equivalent to tealet_create() followed by tealet_switch(),
- * but performed as one operation.
- *
- * On successful return, a value written to @p pcreated is not guaranteed to
- * remain valid: the new tealet may have already run and been deleted before
- * tealet_new() returns (for example via return, tealet_exit(..., DELETE), or
- * another deletion path).
- */
-TEALET_API
-int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
-
-/**
- * @brief Suspend current tealet and resume @p target.
- * @param target Tealet to switch to; must share the same main tealet and thread.
- * @param parg In/out argument pointer passed across switches; may be NULL.
- * @param flags Switch behavior bits: #TEALET_SWITCH_DEFAULT, #TEALET_SWITCH_FORCE,
- * #TEALET_SWITCH_PANIC.
- * @retval 0 Success.
- * @retval TEALET_ERR_MEM Save/restore failed due to memory pressure.
- * @retval TEALET_ERR_DEFUNCT Target tealet/stack is defunct.
- * @retval TEALET_ERR_PANIC Resumed due to panic-tagged transfer.
- * @retval TEALET_ERR_INVAL Invalid state/target.
- *
- * With #TEALET_SWITCH_FORCE, save-time memory failures may defunct
- * intermediate non-main saved stacks to complete the requested transfer.
- * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
- * growth would allow progress, because main is never marked defunct.
- *
- * #TEALET_SWITCH_PANIC requests panic delivery to the receiving tealet as
- * #TEALET_ERR_PANIC on its resumed switch return path.
- *
- * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
- */
-TEALET_API
-int tealet_switch(tealet_t *target, void **parg, int flags);
-
-/* Switch flags */
-#define TEALET_SWITCH_DEFAULT 0 /* default switch behavior */
-#define TEALET_SWITCH_FORCE 4   /* force switch despite save-time memory failures */
-#define TEALET_SWITCH_PANIC 8   /* mark the receiving tealet as panic-resumed */
-
-/* Exit flags */
-#define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
-#define TEALET_EXIT_DELETE 1  /* Auto-delete on exit */
-#define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
-#define TEALET_EXIT_FORCE 4   /* Force exit switch despite save-time memory failures */
-#define TEALET_EXIT_PANIC 8   /* Mark the receiving tealet as panic-resumed */
-
-/**
- * @brief Exit current tealet and transfer control to @p target.
- * @param target Requested target tealet.
- * @param arg Optional argument to deliver to @p target.
- * @param flags Exit behavior bits: #TEALET_EXIT_DEFAULT, #TEALET_EXIT_DELETE,
- * #TEALET_EXIT_DEFER, #TEALET_EXIT_FORCE, #TEALET_EXIT_PANIC.
- * @return 0 only for deferred setup path; otherwise returns a negative error code if transfer cannot start.
- *
- * Without #TEALET_EXIT_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
- * With #TEALET_EXIT_FORCE, save-time memory failures may defunct intermediate stacks
- * to complete the requested transfer.
- * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
- * growth would allow progress, because main is never marked defunct.
- *
- * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
- * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
- * #TEALET_EXIT_DEFER.
- *
- * `return p;` from run() uses an implicit policy rooted in
- * `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`, with retries for memory/defunct
- * failures and a panic+force fallback to main.
- */
-TEALET_API
-int tealet_exit(tealet_t *target, void *arg, int flags);
-
-/**
  * @brief Fork the active tealet by duplicating its execution state.
  * @param tealet NEW/unbound tealet (from tealet_add()) to become the fork child.
  * @param pother Optional out-pointer to the opposite side (parent gets child, child gets parent).
@@ -438,6 +341,103 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
 #define TEALET_FORK_SWITCH 1
 TEALET_API
 int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
+
+/**
+ * @brief Suspend current tealet and resume @p target.
+ * @param target Tealet to switch to; must share the same main tealet and thread.
+ * @param parg In/out argument pointer passed across switches; may be NULL.
+ * @param flags Switch behavior bits: #TEALET_SWITCH_DEFAULT, #TEALET_SWITCH_FORCE,
+ * #TEALET_SWITCH_PANIC.
+ * @retval 0 Success.
+ * @retval TEALET_ERR_MEM Save/restore failed due to memory pressure.
+ * @retval TEALET_ERR_DEFUNCT Target tealet/stack is defunct.
+ * @retval TEALET_ERR_PANIC Resumed due to panic-tagged transfer.
+ * @retval TEALET_ERR_INVAL Invalid state/target.
+ *
+ * With #TEALET_SWITCH_FORCE, save-time memory failures may defunct
+ * intermediate non-main saved stacks to complete the requested transfer.
+ * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
+ * growth would allow progress, because main is never marked defunct.
+ *
+ * #TEALET_SWITCH_PANIC requests panic delivery to the receiving tealet as
+ * #TEALET_ERR_PANIC on its resumed switch return path.
+ *
+ * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
+ */
+TEALET_API
+int tealet_switch(tealet_t *target, void **parg, int flags);
+
+/* Switch flags */
+#define TEALET_SWITCH_DEFAULT 0 /* default switch behavior */
+#define TEALET_SWITCH_FORCE 4   /* force switch despite save-time memory failures */
+#define TEALET_SWITCH_PANIC 8   /* mark the receiving tealet as panic-resumed */
+
+/* Exit flags */
+#define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
+#define TEALET_EXIT_DELETE 1  /* Auto-delete on exit */
+#define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
+#define TEALET_EXIT_FORCE 4   /* Force exit switch despite save-time memory failures */
+#define TEALET_EXIT_PANIC 8   /* Mark the receiving tealet as panic-resumed */
+
+/**
+ * @brief Exit current tealet and transfer control to @p target.
+ * @param target Requested target tealet.
+ * @param arg Optional argument to deliver to @p target.
+ * @param flags Exit behavior bits: #TEALET_EXIT_DEFAULT, #TEALET_EXIT_DELETE,
+ * #TEALET_EXIT_DEFER, #TEALET_EXIT_FORCE, #TEALET_EXIT_PANIC.
+ * @return 0 only for deferred setup path; otherwise returns a negative error code if transfer cannot start.
+ *
+ * Without #TEALET_EXIT_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
+ * With #TEALET_EXIT_FORCE, save-time memory failures may defunct intermediate stacks
+ * to complete the requested transfer.
+ * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
+ * growth would allow progress, because main is never marked defunct.
+ *
+ * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
+ * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
+ * #TEALET_EXIT_DEFER.
+ *
+ * `return p;` from run() uses an implicit policy rooted in
+ * `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`, with retries for memory/defunct
+ * failures and a panic+force fallback to main.
+ */
+TEALET_API
+int tealet_exit(tealet_t *target, void *arg, int flags);
+
+/**
+ * @brief Create a new tealet without starting it.
+ * @param tealet Main/related tealet context used for allocation and ownership.
+ * @param pcreated Output pointer receiving the created tealet on success (must be non-NULL).
+ * @param run Entry function for the created tealet.
+ * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
+ *
+ * The new tealet enters execution when tealet_switch() first targets it.
+ * If @p stack_far is non-NULL, capture range is only extended (never shrunk)
+ * relative to the default internally selected boundary.
+ */
+TEALET_API
+int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far);
+
+/**
+ * @brief Create and immediately start a new tealet.
+ * @param tealet Main/related tealet context.
+ * @param pcreated Optional output pointer receiving the created tealet pointer; may be NULL.
+ * @param run Entry function.
+ * @param parg In/out switch argument pointer (same semantics as tealet_switch()).
+ * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
+ *
+ * Semantically equivalent to tealet_create() followed by tealet_switch(),
+ * but performed as one operation.
+ *
+ * On successful return, a value written to @p pcreated is not guaranteed to
+ * remain valid: the new tealet may have already run and been deleted before
+ * tealet_new() returns (for example via return, tealet_exit(..., DELETE), or
+ * another deletion path).
+ */
+TEALET_API
+int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
 
 /**
  * @brief Duplicate a suspended tealet and its saved stack state.
