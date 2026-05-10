@@ -1133,8 +1133,6 @@ tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
 
 These APIs are convenience helpers built on top of the core tealet primitives (`tealet_create`, `tealet_switch`, `tealet_malloc`, and `tealet_duplicate`).
 
-For backward compatibility, `tools.h` remains as an alias header that includes `tealet_extras.h`.
-
 They are optional extensions intended for common patterns (stats-collecting allocator and copyable stubs). For low-level behavior details, you can inspect the implementation in `src/tealet_extras.c`.
 
 ### tealet_statsalloc_init()

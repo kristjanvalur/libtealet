@@ -214,7 +214,6 @@ jobs:
         mkdir -p release/tealet
         cp src/tealet.h release/tealet/
         cp src/tealet_extras.h release/tealet/
-        cp src/tools.h release/tealet/
         cp -r stackman release/
         cp Makefile README.md LICENSE release/
         
