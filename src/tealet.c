@@ -1712,6 +1712,9 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
 
+  if ((flags & ~TEALET_RUN_SWITCH) != 0)
+    return TEALET_ERR_INVAL;
+
   /* Fork target must be a NEW/unbound tealet */
   if (g_child->flags != 0) {
     return TEALET_ERR_INVAL;
@@ -1741,7 +1744,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
    * 0 if this was a restore (switch back)
    * <0 on error
    */
-  if (flags & TEALET_FORK_SWITCH) {
+  if (flags & TEALET_RUN_SWITCH) {
     /* save parent, switch to child*/
     result = tealet_switchstack(g_main, g_child, NULL, parg);
     is_parent = result == 0;
