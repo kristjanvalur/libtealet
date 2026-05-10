@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Creation semantics now use explicit allocation + bind/start steps**
+  - `tealet_new()` now allocates and returns a NEW/unbound tealet handle.
+  - `tealet_run()` is the bind/start primitive, with:
+    - `TEALET_RUN_DEFAULT` for deferred start (capture without immediate switch)
+    - `TEALET_RUN_SWITCH` for immediate start via an optimized single path
+      equivalent in effect to `TEALET_RUN_DEFAULT` + `tealet_switch()`.
+  - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
+    mode flags.
+
+### Removed
+- **Legacy creation API surface removed from core**
+  - Removed core `tealet_create()` and the old create-and-start `tealet_new(...)`
+    out-parameter signature.
+  - Removed legacy `TEALET_FORK_DEFAULT` / `TEALET_FORK_SWITCH` flags in favor
+    of `TEALET_RUN_*`.
+
+### Documentation
+- Updated `README.md`, `docs/GETTING_STARTED.md`, `docs/API.md`,
+  `docs/ARCHITECTURE.md`, and `src/tealet.h` Doxygen comments to reflect the
+  new creation flow and run-mode semantics.
+
 ## [0.6.0] - 2026-05-09
 
 ### Changed
