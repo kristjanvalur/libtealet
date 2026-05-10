@@ -318,14 +318,15 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
 
 /**
  * @brief Fork the active tealet by duplicating its execution state.
- * @param current Currently active tealet to duplicate.
+ * @param tealet NEW/unbound tealet (from tealet_add()) to become the fork child.
  * @param pother Optional out-pointer to the opposite side (parent gets child, child gets parent).
  * @param parg Optional in/out argument pointer passed to whichever side resumes later.
  * @param flags Fork mode: #TEALET_FORK_DEFAULT or #TEALET_FORK_SWITCH.
  * @retval 1 Parent side.
  * @retval 0 Child side.
  * @retval TEALET_ERR_UNFORKABLE Current stack is unbounded (set far boundary first).
- * @retval TEALET_ERR_MEM Memory allocation failure.
+ * @retval TEALET_ERR_MEM Memory failure during stack save/restore.
+ * @retval TEALET_ERR_INVAL Invalid target tealet or flags.
  *
  * @warning For forks originating from main-lineage execution (main tealet or a clone
  * of main), exit explicitly via tealet_exit() and do not use #TEALET_EXIT_DEFER.
@@ -390,8 +391,8 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  *   path as the original tealet.
  *
  * Example:
- *   tealet_t *child = NULL;
- *   int result = tealet_fork(current, &child, NULL, TEALET_FORK_DEFAULT);
+ *   tealet_t *child = tealet_add(current);
+ *   int result = tealet_fork(child, &child, NULL, TEALET_FORK_DEFAULT);
  *   if (result == 0) {
  *       // This is the child tealet
  *       // ... child-specific code ...
@@ -414,7 +415,7 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
 #define TEALET_FORK_DEFAULT 0
 #define TEALET_FORK_SWITCH 1
 TEALET_API
-int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags);
+int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
 
 /**
  * @brief Duplicate a suspended tealet and its saved stack state.
@@ -591,10 +592,11 @@ void tealet_reset_peak_stats(tealet_t *t);
  *
  *   void run_program(void *far_marker) {
  *       tealet_t *main = tealet_initialize(&alloc, 0);
+ *       tealet_t *child = tealet_add(main);
  *       tealet_set_far(main, far_marker);
  *
  *       int local_var = 0;
- *       tealet_fork(main, &child, 0);
+ *       tealet_fork(child, &child, 0, TEALET_FORK_DEFAULT);
  *   }
  *
  * Alternative (far_boundary from same function, requires care):
@@ -602,10 +604,11 @@ void tealet_reset_peak_stats(tealet_t *t);
  *   void my_main() {
  *       int far_marker;
  *       tealet_t *main = tealet_initialize(&alloc, 0);
+ *       tealet_t *child = tealet_add(main);
  *       tealet_set_far(main, &far_marker);
  *
  *       int local_var = 0;
- *       tealet_fork(main, &child, 0);
+ *       tealet_fork(child, &child, 0, TEALET_FORK_DEFAULT);
  *   }
  *
  * By providing this address, you promise that no stack data beyond (further

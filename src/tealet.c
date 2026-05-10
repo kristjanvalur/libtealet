@@ -1883,46 +1883,39 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
  */
 
 int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
-  tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
-  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  tealet_sub_t *g_child = (tealet_sub_t *)_tealet;
+  tealet_main_t *g_main = TEALET_GET_MAIN(g_child);
   tealet_sub_t *g_current;
   tealet_sub_t *previous;
-  tealet_sub_t *g_child;
   int result, is_parent;
   int api_result;
 
-  tealet_lock_switch(g_main);
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
-
-  /* Current tealet must have a bounded stack (far boundary set).
-   * Even the main tealet can fork if its far boundary has been set.
-   */
-  if (TEALET_STACK_IS_UNBOUNDED(g_current)) {
-    api_result = TEALET_ERR_UNFORKABLE;
-    goto done;
+  
+  /* Fork target must be a NEW/unbound tealet */
+  if (g_child->flags != 0) {
+    return TEALET_ERR_INVAL;
   }
-
+  
+  /* Current tealet must have a bounded stack (far boundary set).
+  * Even the main tealet can fork if its far boundary has been set.
+  */
+ if (TEALET_STACK_IS_UNBOUNDED(g_current)) {
+   return TEALET_ERR_UNFORKABLE;
+  }
+  
   /* Active tealets have NULL stack (implied by the check above) */
   assert(g_current->stack == NULL);
-
-  /* Allocate the child tealet */
-  g_child = tealet_alloc(g_main);
-  if (g_child == NULL) {
-    api_result = TEALET_ERR_MEM;
-    goto done;
-  }
-
-  /* Copy extra data if present */
-  if (g_main->g_extrasize)
-    memcpy(g_child->base.extra, g_current->base.extra, g_main->g_extrasize);
-
+  
   /* Copy the far boundary */
   g_child->stack_far = g_current->stack_far;
   g_child->flags |= TEALET_TFLAGS_FORK;
   g_child->flags |= TEALET_TFLAGS_BOUND;
   if (g_current->flags & TEALET_TFLAGS_MAIN_LINEAGE)
-    g_child->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
+  g_child->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
+  
+  tealet_lock_switch(g_main);
 
   /* result of tealet_switchstack is:
    * 1 if this was just a save
@@ -1949,8 +1942,10 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   }
 
   if (result < 0) {
-    /* Failed to save stack */
-    tealet_free_tealet(g_main, g_child);
+    /* Failed to save/restore; keep child reusable as NEW. */
+    g_child->stack = NULL;
+    g_child->stack_far = NULL;
+    g_child->flags = 0;
     api_result = TEALET_ERR_MEM;
     goto done;
   }

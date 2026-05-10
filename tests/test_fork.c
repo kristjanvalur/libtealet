@@ -73,8 +73,11 @@ static void test_basic_fork(void *far_marker) {
 
   int testvalue = 0;
 
+  other = tealet_add(main);
+  assert(other != NULL);
+
   /* Fork - creates child but stays in parent */
-  result = tealet_fork(main, &other, NULL, TEALET_FORK_DEFAULT);
+  result = tealet_fork(other, &other, NULL, TEALET_FORK_DEFAULT);
 
   if (result == 1) {
     /* We are the parent, other = child */
@@ -152,8 +155,11 @@ static void test_fork_switch(void *far_marker) {
   printf("  Before fork: switch_count=%d\n", switch_count);
   int testvalue = 0;
 
+  other = tealet_add(main);
+  assert(other != NULL);
+
   /* Fork with immediate switch - becomes child immediately */
-  result = tealet_fork(main, &other, NULL, TEALET_FORK_SWITCH);
+  result = tealet_fork(other, &other, NULL, TEALET_FORK_SWITCH);
 
   switch_count++;
 
@@ -217,7 +223,9 @@ static void test_multiple_forks(void *far_marker) {
   assert(result == 0);
 
   /* Create first child */
-  result = tealet_fork(main, &child1, NULL, TEALET_FORK_DEFAULT);
+  child1 = tealet_add(main);
+  assert(child1 != NULL);
+  result = tealet_fork(child1, &child1, NULL, TEALET_FORK_DEFAULT);
   if (result == 0) {
     /* We are child1 */
     printf("  Child1: woke up, exiting\n");
@@ -229,7 +237,9 @@ static void test_multiple_forks(void *far_marker) {
   printf("  Parent: created child1=%p\n", (void *)child1);
 
   /* Create second child */
-  result = tealet_fork(main, &child2, NULL, TEALET_FORK_DEFAULT);
+  child2 = tealet_add(main);
+  assert(child2 != NULL);
+  result = tealet_fork(child2, &child2, NULL, TEALET_FORK_DEFAULT);
   if (result == 0) {
     /* We are child2 */
     printf("  Child2: woke up, exiting\n");
@@ -281,7 +291,9 @@ static void test_fork_switch_arg(void *far_marker) {
 
   /* Fork with FORK_SWITCH - parent passes parg, child switches back with value
    */
-  result = tealet_fork(main, &other, &arg, TEALET_FORK_SWITCH);
+  other = tealet_add(main);
+  assert(other != NULL);
+  result = tealet_fork(other, &other, &arg, TEALET_FORK_SWITCH);
 
   if (result == 0) {
     /* We are the child - arg should be NULL initially */
@@ -346,7 +358,9 @@ static void test_fork_default_arg(void *far_marker) {
   assert(result == 0);
 
   /* Fork without FORK_SWITCH - stays in parent */
-  result = tealet_fork(main, &child, &arg, TEALET_FORK_DEFAULT);
+  child = tealet_add(main);
+  assert(child != NULL);
+  result = tealet_fork(child, &child, &arg, TEALET_FORK_DEFAULT);
 
   if (result == 1) {
     /* We are the parent - arg should still be NULL */
@@ -413,7 +427,9 @@ static void test_ping_pong(void *far_marker) {
   int data[5] = {0, 0, 0, 0, 0};
 
   /* Fork */
-  result = tealet_fork(main, &child, NULL, TEALET_FORK_DEFAULT);
+  child = tealet_add(main);
+  assert(child != NULL);
+  result = tealet_fork(child, &child, NULL, TEALET_FORK_DEFAULT);
 
   counter++;
 
