@@ -51,6 +51,7 @@
 #define TEALET_TFLAGS_MAIN_LINEAGE (1u << 4)
 #define TEALET_TFLAGS_FORK (1u << 5)
 #define TEALET_TFLAGS_EXITFORCE (1u << 6)
+#define TEALET_TFLAGS_BOUND (1u << 7)
 
 /* Internal per-stack flags (stored in tealet_stack_t::flags). */
 #define TEALET_SFLAGS_DEFUNCT (1u << 0)
@@ -1550,7 +1551,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   g_main = (tealet_main_t *)g;
   g->stack = NULL;
   g->stack_far = STACKMAN_SP_FURTHEST;
-  g->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
+  g->flags |= (TEALET_TFLAGS_MAIN_LINEAGE | TEALET_TFLAGS_BOUND);
   g_main->g_user = NULL;
   g_main->g_main_stack_probe = &stack_probe;
   g_main->g_current = g;
@@ -1591,6 +1592,23 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
 #endif
   assert(TEALET_IS_MAIN((tealet_t *)g_main));
   return (tealet_t *)g_main;
+}
+
+tealet_t *tealet_add(tealet_t *tealet) {
+  tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
+  tealet_sub_t *result;
+
+  result = tealet_alloc(g_main);
+  if (result == NULL)
+    return NULL;
+
+  /* Unbound tealets intentionally start with no stack boundary and no bound
+   * execution state.
+   */
+  result->stack_far = NULL;
+  result->stack = NULL;
+  result->flags = 0;
+  return (tealet_t *)result;
 }
 
 void tealet_finalize(tealet_t *tealet) {
@@ -1642,6 +1660,7 @@ int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **p
   }
   default_far = (void *)&result;
   stack_far_used = tealet_pick_initial_far(default_far, stack_far);
+  result->flags |= TEALET_TFLAGS_BOUND;
   fail = tealet_initialstub(g_main, result, result, run, (parg != NULL ? parg : &arg), stack_far_used);
   if (fail) {
     /* could not save stack */
@@ -1696,6 +1715,7 @@ int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void 
   g_main->g_current = result;
   default_far = (void *)&result;
   stack_far_used = tealet_pick_initial_far(default_far, stack_far);
+  result->flags |= TEALET_TFLAGS_BOUND;
   fail = tealet_initialstub(g_main, result, current, run, NULL, stack_far_used);
   if (fail) {
     /* could not save stack */
@@ -1733,6 +1753,9 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
 
   if ((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC)) != 0)
+    return TEALET_ERR_INVAL;  
+  
+  if ((g_target->flags & TEALET_TFLAGS_BOUND) == 0)
     return TEALET_ERR_INVAL;
 
   force_requested = ((flags & TEALET_SWITCH_FORCE) != 0);
@@ -1775,6 +1798,8 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   assert(g_current != (tealet_sub_t *)g_main); /* mustn't exit main */
   if (g_target == g_current)
     return TEALET_ERR_INVAL; /* invalid tealet */
+  if ((g_target->flags & TEALET_TFLAGS_BOUND) == 0)
+    return TEALET_ERR_INVAL;
 
   g_current->flags |= TEALET_TFLAGS_EXITING;
   if (flags & TEALET_EXIT_FORCE)
@@ -1895,6 +1920,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   /* Copy the far boundary */
   g_child->stack_far = g_current->stack_far;
   g_child->flags |= TEALET_TFLAGS_FORK;
+  g_child->flags |= TEALET_TFLAGS_BOUND;
   if (g_current->flags & TEALET_TFLAGS_MAIN_LINEAGE)
     g_child->flags |= TEALET_TFLAGS_MAIN_LINEAGE;
 
@@ -1954,8 +1980,10 @@ tealet_t *tealet_duplicate(tealet_t *tealet) {
     return NULL;
   g_copy->stack_far = g_tealet->stack_far;
   g_copy->flags = g_tealet->flags;
-  /* can't fail */
-  g_copy->stack = tealet_stack_dup(g_tealet->stack);
+  if (g_tealet->stack != NULL)
+    g_copy->stack = tealet_stack_dup(g_tealet->stack); /* can't fail */
+  else
+    g_copy->stack = NULL;
   if (g_main->g_extrasize)
     memcpy(g_copy->base.extra, g_tealet->base.extra, g_main->g_extrasize);
   return (tealet_t *)g_copy;
@@ -2004,6 +2032,8 @@ unsigned int tealet_get_origin(tealet_t *_tealet) {
 
 int tealet_status(tealet_t *_tealet) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
+  if ((tealet->flags & TEALET_TFLAGS_BOUND) == 0)
+    return TEALET_STATUS_NEW;
   if (tealet->flags & TEALET_TFLAGS_EXITED)
     return TEALET_STATUS_EXITED;
   if (tealet_is_defunct(tealet))

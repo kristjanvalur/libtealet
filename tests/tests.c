@@ -470,6 +470,30 @@ void test_stack_far_isolation(void) {
   fini_test();
 }
 
+void test_add_unbound_phase1(void) {
+  tealet_t *unbound;
+  tealet_t *copy;
+  int rc;
+
+  init_test();
+  unbound = tealet_add(g_main);
+  assert(unbound != NULL);
+  assert(tealet_status(unbound) == TEALET_STATUS_NEW);
+  assert(tealet_get_far(unbound) == NULL);
+
+  copy = tealet_duplicate(unbound);
+  assert(copy != NULL);
+  assert(tealet_status(copy) == TEALET_STATUS_NEW);
+  assert(tealet_get_far(copy) == NULL);
+
+  rc = tealet_switch(unbound, NULL, TEALET_SWITCH_DEFAULT);
+  assert(rc == TEALET_ERR_INVAL);
+
+  tealet_delete(copy);
+  tealet_delete(unbound);
+  fini_test();
+}
+
 /************************************************************/
 
 tealet_t *test_simple_run(tealet_t *t1, void *arg) {
@@ -1494,6 +1518,7 @@ static test_entry_t test_list[] = {
     {"test_main_current", test_main_current},
     {"test_stack_further", test_stack_further},
     {"test_stack_far_isolation", test_stack_far_isolation},
+    {"test_add_unbound_phase1", test_add_unbound_phase1},
     {"test_simple", test_simple},
     {"test_lock_transitions", test_lock_transitions},
     {"test_lock_transitions_stub", test_lock_transitions_stub},

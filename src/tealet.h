@@ -208,6 +208,18 @@ TEALET_API
 void tealet_finalize(tealet_t *tealet);
 
 /**
+ * @brief Allocate a new unbound tealet object.
+ * @param tealet Main/related tealet context used for allocation and ownership.
+ * @return Newly allocated unbound tealet, or NULL on allocation failure.
+ *
+ * The returned tealet is intentionally unbound: it has no runnable execution
+ * entry and cannot be switched to. In this phase, unbound tealets can be
+ * duplicated and deleted, and tealet_get_far() returns NULL for them.
+ */
+TEALET_API
+tealet_t *tealet_add(tealet_t *tealet);
+
+/**
  * @brief Create a new tealet without starting it.
  * @param tealet Main/related tealet context used for allocation and ownership.
  * @param pcreated Output pointer receiving the created tealet on success (must be non-NULL).
@@ -491,6 +503,8 @@ unsigned int tealet_get_origin(tealet_t *tealet);
 
 /* Status code: active tealet. */
 #define TEALET_STATUS_ACTIVE 0
+/* Status code: new/unbound tealet (created via tealet_add()). */
+#define TEALET_STATUS_NEW 2
 /* Status code: exited tealet. */
 #define TEALET_STATUS_EXITED 1
 /* Status code: defunct tealet. */
