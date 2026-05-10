@@ -36,6 +36,50 @@ void tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base) {
   alloc->n_allocs = alloc->s_allocs = 0;
 }
 
+int tealet_prepare(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far) {
+  tealet_t *created;
+  int result;
+
+  if (pcreated == NULL)
+    return TEALET_ERR_INVAL;
+  *pcreated = NULL;
+
+  created = tealet_new(tealet);
+  if (created == NULL)
+    return TEALET_ERR_MEM;
+
+  result = tealet_run(created, run, NULL, stack_far, TEALET_RUN_DEFAULT);
+  if (result != 0) {
+    tealet_delete(created);
+    return result;
+  }
+
+  *pcreated = created;
+  return 0;
+}
+
+int tealet_spawn(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far) {
+  tealet_t *created;
+  int result;
+
+  if (pcreated != NULL)
+    *pcreated = NULL;
+
+  created = tealet_new(tealet);
+  if (created == NULL)
+    return TEALET_ERR_MEM;
+
+  result = tealet_run(created, run, parg, stack_far, TEALET_RUN_SWITCH);
+  if (result != 0) {
+    tealet_delete(created);
+    return result;
+  }
+
+  if (pcreated != NULL)
+    *pcreated = created;
+  return 0;
+}
+
 /****************************************************************
  * Implement copyable stubs by using a trampoline
  * A stub is a special paused tealet, that can be restarted to
@@ -64,7 +108,7 @@ static tealet_t *_tealet_stub_main(tealet_t *current, void *arg) {
 
 /* create a stub and return it */
 int tealet_stub_new(tealet_t *t, tealet_t **pstub, void *stack_far) {
-  return tealet_create(t, pstub, _tealet_stub_main, stack_far);
+  return tealet_prepare(t, pstub, _tealet_stub_main, stack_far);
 }
 
 /*

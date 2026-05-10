@@ -1371,14 +1371,14 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
   int exit_flags;
   void *exit_arg;
   int retry_flags;
-  int run_on_create = g_new == g_target; /* true for tealet_new(), we are switching to the new tealet */
+  int run_on_switch = g_new == g_target; /* true for tealet_run(..., TEALET_RUN_SWITCH) */
   void *run_arg, *switch_arg;
   void *initial_run_arg;
   assert(g_new->stack == NULL); /* it is fresh */
   assert(run);
 
-  if (run_on_create) {
-    /* tealet_new() case */
+  if (run_on_switch) {
+    /* TEALET_RUN_SWITCH case */
     assert(parg != NULL);
     /* Capture *parg before switching stacks.  After the switch, the
      * creator's stack region may be snapshot-checked and/or page-guarded,
@@ -1387,7 +1387,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
      */
     initial_run_arg = *parg;
   } else {
-    /* tealet_create() case */
+    /* TEALET_RUN_DEFAULT case */
     assert(parg == NULL);
     initial_run_arg = NULL;
   }
@@ -1403,23 +1403,23 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
   /* 'result' is 1 if this was just the necessary stack 'save' to create
    * a new tealet, with no restore of an existing stack
    */
-  if (run_on_create == result) {
-    /* need to run the actual code.  In the 'run_on_create' case this is
+  if (run_on_switch == result) {
+    /* need to run the actual code.  In the 'run_on_switch' case this is
      * done on the initial save.  The current tealet is the new tealet,
      * the previous tealet's stack was saved, and we run as the new one.
-     * In the '!run_on_create' case, the initial save was the new tealet
+     * In the '!run_on_switch' case, the initial save was the new tealet
      * and we just returned immediately to the calling one.  We are now
      * returning here on a switch, to run the tealet
      */
 
-    /* the following assertion may be invalid, if a tealet_create() tealet
+    /* the following assertion may be invalid, if a TEALET_RUN_DEFAULT tealet
      * was duplicated.  We may now be a copy
      */
-    if (run_on_create) {
-      assert(g_main->g_current == g_new); /* only valid for tealet_new */
-      run_arg = initial_run_arg;          /* tealet_new(). captured before stack switch */
+    if (run_on_switch) {
+      assert(g_main->g_current == g_new); /* only valid for TEALET_RUN_SWITCH */
+      run_arg = initial_run_arg;          /* captured before stack switch */
     } else {
-      run_arg = switch_arg; /* tealet_create(). use the arg from the switch */
+      run_arg = switch_arg; /* TEALET_RUN_DEFAULT: use the arg from the switch */
     }
     assert(g_main->g_current->stack == NULL); /* running */
 
@@ -1466,11 +1466,11 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     assert(!"Implicit return transfer failed");
     abort();
   } else {
-    /* Either just a create, with no run, or a switch back
-     * into the tealet_new()
+    /* Either just a default-mode capture with no run, or a switch back
+     * into the TEALET_RUN_SWITCH caller.
      */
-    if (run_on_create) {
-      /* tealet_new() case, switch back - return the switch arg */
+    if (run_on_switch) {
+      /* TEALET_RUN_SWITCH case, switch back - return the switch arg */
       *parg = switch_arg;
     }
   }
@@ -1594,7 +1594,7 @@ tealet_t *tealet_initialize(tealet_alloc_t *alloc, size_t extrasize) {
   return (tealet_t *)g_main;
 }
 
-tealet_t *tealet_add(tealet_t *tealet) {
+tealet_t *tealet_new(tealet_t *tealet) {
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
   tealet_sub_t *result;
 
@@ -1636,8 +1636,8 @@ static void *tealet_pick_initial_far(void *default_far, void *hint) {
 /* Prime/run a NEW tealet target.
  *
  * Switching API lock policy:
- * all switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
- * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * all switching APIs (`tealet_run()`, `tealet_fork()`,
+ * `tealet_switch()`, `tealet_exit()`) acquire/release
  * the lock internally.
  */
 int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far, int flags) {
@@ -1696,8 +1696,8 @@ done:
 /* Fork the active tealet.
  *
  * Switching API lock policy:
- * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
- * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * all four switching APIs (`tealet_run()`, `tealet_fork()`,
+ * `tealet_switch()`, `tealet_exit()`) acquire/release
  * the lock internally.
  */
 
@@ -1785,8 +1785,8 @@ done:
 /* Switch to a tealet and back.
  *
  * Switching API lock policy:
- * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
- * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * all four switching APIs (`tealet_run()`, `tealet_fork()`,
+ * `tealet_switch()`, `tealet_exit()`) acquire/release
  * the lock internally.
  */
 
@@ -1865,8 +1865,8 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
 /* Exit current tealet and transfer control to requested target.
  *
  * Switching API lock policy:
- * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
- * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
+ * all four switching APIs (`tealet_run()`, `tealet_fork()`,
+ * `tealet_switch()`, `tealet_exit()`) acquire/release
  * the lock internally.
  */
 
@@ -1918,62 +1918,6 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
 
   tealet_unlock_switch(g_main);
   return result;
-}
-
-/* create a tealet by saving the current stack and starting
- * immediate execution of a new one
- */
-int tealet_new(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far) {
-  tealet_t *created;
-  int api_result;
-
-  if (pcreated != NULL)
-    *pcreated = NULL;
-
-  created = tealet_add(tealet);
-  if (created == NULL)
-    return TEALET_ERR_MEM;
-
-  api_result = tealet_run(created, run, parg, stack_far, TEALET_RUN_SWITCH);
-  if (api_result) {
-    tealet_delete(created);
-    return api_result;
-  }
-
-  if (pcreated != NULL)
-    *pcreated = created;
-  return 0;
-}
-
-/* create a tealet by saving the target stack and switching
- * back to the caller, allowing the caller to run the
- * tealet proper later, by switching to it.
- *
- * Switching API lock policy:
- * all six switching APIs (`tealet_run()`, `tealet_new()`, `tealet_create()`,
- * `tealet_switch()`, `tealet_exit()`, `tealet_fork()`) acquire/release
- * the lock internally.
- */
-int tealet_create(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far) {
-  tealet_t *created;
-  int api_result;
-
-  if (pcreated == NULL)
-    return TEALET_ERR_INVAL;
-  *pcreated = NULL;
-
-  created = tealet_add(tealet);
-  if (created == NULL)
-    return TEALET_ERR_MEM;
-
-  api_result = tealet_run(created, run, NULL, stack_far, TEALET_RUN_DEFAULT);
-  if (api_result) {
-    tealet_delete(created);
-    return api_result;
-  }
-
-  *pcreated = created;
-  return 0;
 }
 
 tealet_t *tealet_duplicate(tealet_t *tealet) {
@@ -2349,7 +2293,7 @@ void *tealet_stack_further(void *a, void *b) {
 #pragma warning(push)
 #pragma warning(disable : 4172)
 #endif
-void *tealet_new_probe(tealet_t *d1, tealet_t **d2, tealet_run_t d3, void **d4, void *d5) {
+void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *d4, int d5) {
   tealet_sub_t *result;
   void *default_far;
   void *r;
@@ -2357,8 +2301,9 @@ void *tealet_new_probe(tealet_t *d1, tealet_t **d2, tealet_run_t d3, void **d4, 
   (void)d2;
   (void)d3;
   (void)d4;
+  (void)d5;
   default_far = (void *)&result;
-  r = tealet_pick_initial_far(default_far, d5);
+  r = tealet_pick_initial_far(default_far, d4);
   return r;
 }
 #if __GNUC__ > 4

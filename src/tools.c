@@ -64,7 +64,7 @@ static tealet_t *_tealet_stub_main(tealet_t *current, void *arg) {
 
 /* create a stub and return it */
 int tealet_stub_new(tealet_t *t, tealet_t **pstub, void *stack_far) {
-  return tealet_create(t, pstub, _tealet_stub_main, stack_far);
+  return tealet_prepare(t, pstub, _tealet_stub_main, stack_far);
 }
 
 /*
