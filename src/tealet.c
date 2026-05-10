@@ -1432,7 +1432,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
      * Note: DEFER+FORCE is redundant in this implicit return path because a
      * TEALET_ERR_MEM retry always adds FORCE anyway.
      */
-    exit_flags = TEALET_EXIT_DELETE;
+    exit_flags = TEALET_EXIT_DEFAULT;
     exit_arg = NULL;
     if (g_main->g_flags & TEALET_EXIT_DEFER) {
       exit_flags = g_main->g_flags & (~TEALET_EXIT_DEFER);

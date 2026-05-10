@@ -200,7 +200,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 }
 ```
 
-The run function executes until it returns or calls `tealet_exit()`. Upon return, the tealet is automatically deleted and execution transfers to the returned tealet.
+The run function executes until it returns or calls `tealet_exit()`. On return, execution transfers to the returned tealet and the current tealet remains allocated until explicitly deleted.
 
 ---
 
@@ -464,7 +464,7 @@ Exit current tealet and transfer control to target.
 
 **Flags:**
 - `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual cleanup required
-- `TEALET_EXIT_DELETE`: Auto-delete tealet on exit (same as return behavior)
+- `TEALET_EXIT_DELETE`: Auto-delete tealet on exit; outstanding pointers to the exiting tealet become invalid after transfer
 - `TEALET_EXIT_DEFER`:  Store flags and argument, return to caller.  Will be used when
   tealet exits later.
 - `TEALET_EXIT_FORCE`: Force the requested transfer despite save-time memory pressure by defuncting affected non-main stacks as needed
@@ -494,7 +494,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     
     /* return value ignored.
      * exit value from earlier will be used.
-     * Tealet is not auto-deleted
+    * Tealet is not auto-deleted unless TEALET_EXIT_DELETE is requested
      */
     return nullptr;
 }
@@ -1001,7 +1001,7 @@ tealet_delete(t);
 **Important:**
 - Cannot delete the currently executing tealet (use `tealet_exit()` instead)
 - Cannot delete the main tealet (use `tealet_finalize()`)
-- Tealets are automatically deleted when their run function returns
+- Tealets remain allocated when their run function returns
 - Only call on tealets you've kept alive explicitly
 
 **When to Use:**
@@ -1010,7 +1010,7 @@ tealet_delete(t);
 - Manual resource management
 
 **When Not Needed:**
-- Run function returns normally → automatic deletion
+- Run function returns normally → explicit `tealet_delete()` required
 - `tealet_exit()` with `TEALET_EXIT_DELETE` → automatic deletion
 
 ---
@@ -1342,7 +1342,7 @@ Switch result signaling explicit panic-tagged resume.
 ```c
 /* Exit flags (new names) */
 #define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
-#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
+#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit; pointers to exiting tealet become invalid */
 #define TEALET_EXIT_DEFER   2  /* Defer exit to return */
 
 /* Switch flags */

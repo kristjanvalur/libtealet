@@ -521,9 +521,10 @@ static void test_new_previous(void *far_marker) {
   assert(tealet_run(started, test_new_previous_run, &arg, NULL, TEALET_RUN_SWITCH) == 0);
 
   /* Verify tealet_previous() after return from tealet_run() */
-  /* Note: the tealet has already been freed at this point, so we just verify
-   * we're back in main */
+  /* With default return behavior, the started tealet remains allocated until
+   * explicitly deleted by the caller. */
   assert(tealet_current(main) == main);
+  tealet_delete(started);
   printf("  Main: returned from tealet_run(SWITCH), tealet_previous() test passed\n");
 
   finalize_main_checked(main);
