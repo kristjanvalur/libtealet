@@ -24,13 +24,9 @@ void tealet_statsalloc_init(tealet_statsalloc_t *alloc, tealet_alloc_t *base);
  * Convenience creation wrappers built on tealet_new() + tealet_run().
  */
 
-/* Allocate/bind without immediate switch; equivalent to tealet_run(..., TEALET_RUN_DEFAULT). */
+/* Allocate a NEW tealet and run it according to TEALET_RUN_* flags. */
 TEALET_API
-int tealet_prepare(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *stack_far);
-
-/* Allocate/bind and immediately switch; equivalent to tealet_run(..., TEALET_RUN_SWITCH). */
-TEALET_API
-int tealet_spawn(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far);
+int tealet_spawn(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void **parg, void *stack_far, int flags);
 
 /****************************************************************
  * A tealet stub mechanism.
