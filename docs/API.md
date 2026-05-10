@@ -277,13 +277,13 @@ You can also obtain a call-site boundary marker with `tealet_new_probe()` when y
 ### tealet_fork()
 
 ```c
-int tealet_fork(tealet_t *current, tealet_t **pother, void **parg, int flags);
+int tealet_fork(tealet_t *child, tealet_t **pother, void **parg, int flags);
 ```
 
-Fork the current tealet, creating a child tealet that duplicates the execution state.
+Fork the current tealet into a NEW child tealet, duplicating execution state.
 
 **Parameters:**
-- `current`: The currently active tealet to fork
+- `child`: NEW/unbound tealet (from `tealet_new()`) that receives forked child state
 - `pother`: Pointer to receive the "other" tealet pointer:
   - In parent: receives pointer to child
   - In child: receives pointer to parent
@@ -312,9 +312,10 @@ int main(void) {
     int stack_marker;
     tealet_set_far(main, &stack_marker);
     
+    tealet_t *child = tealet_new(main);
     tealet_t *other = NULL;
     void *arg = NULL;
-    int result = tealet_fork(main, &other, &arg, TEALET_RUN_DEFAULT);
+    int result = tealet_fork(child, &other, &arg, TEALET_RUN_DEFAULT);
     
     if (result == 0) {
         /* This is the CHILD */

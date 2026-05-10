@@ -76,7 +76,7 @@ tealet_finalize(main);
 tealet_t *g = tealet_new(main);
 tealet_run(g, run_func, NULL, NULL, TEALET_RUN_DEFAULT);
 void *arg = my_data;
-tealet_switch(g, &arg);
+tealet_switch(g, &arg, TEALET_SWITCH_DEFAULT);
 
 // Pattern 2: Create and switch atomically
 tealet_t *g = tealet_new(main);

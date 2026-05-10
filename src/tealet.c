@@ -1652,6 +1652,9 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
   tealet_sub_t *previous;
   tealet_sub_t *current;
 
+  assert(run != NULL);
+  assert((flags & ~TEALET_RUN_SWITCH) == 0);
+
   if (result->flags != 0)
     return TEALET_ERR_INVAL;
 
@@ -1707,13 +1710,15 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   tealet_sub_t *g_current;
   tealet_sub_t *previous;
   int result, is_parent;
+  int switch_now;
   int api_result;
 
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
 
-  if ((flags & ~TEALET_RUN_SWITCH) != 0)
-    return TEALET_ERR_INVAL;
+  assert((flags & ~TEALET_RUN_SWITCH) == 0);
+
+  switch_now = ((flags & TEALET_RUN_SWITCH) != 0);
 
   /* Fork target must be a NEW/unbound tealet */
   if (g_child->flags != 0) {
@@ -1744,7 +1749,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
    * 0 if this was a restore (switch back)
    * <0 on error
    */
-  if (flags & TEALET_RUN_SWITCH) {
+  if (switch_now) {
     /* save parent, switch to child*/
     result = tealet_switchstack(g_main, g_child, NULL, parg);
     is_parent = result == 0;
@@ -1768,7 +1773,9 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
     g_child->stack = NULL;
     g_child->stack_far = NULL;
     g_child->flags = 0;
-    api_result = TEALET_ERR_MEM;
+    if (!switch_now)
+      g_main->g_current = g_current;
+    api_result = result;
     goto done;
   }
 
