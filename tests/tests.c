@@ -560,7 +560,7 @@ static tealet_t *test_lock_transition_run(tealet_t *current, void *arg) {
   lock_snapshot_take(&g_lock_exit_before);
   g_lock_phase = LOCK_PHASE_DONE;
   tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -599,7 +599,7 @@ static tealet_t *test_lock_transition_stub_run(tealet_t *current, void *arg) {
   lock_snapshot_take(&g_lock_exit_before);
   g_lock_phase = LOCK_PHASE_DONE;
   tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -656,7 +656,7 @@ void test_lock_transitions_fork(void) {
   assert(result == 0);
   tealet_test_lock_assert_unheld(&g_lock_state);
   tealet_exit(other, NULL, 0);
-  assert(0);
+  abort();
 }
 
 void test_simple_create(void) {
@@ -759,7 +759,7 @@ tealet_t *test_exit_run(tealet_t *t1, void *arg) {
   assert(t1 != g_main);
   status += 1;
   result = tealet_exit(g_main, NULL, (int)(intptr_t)arg);
-  assert(0);
+  abort();
   assert(result == 0);
   return (tealet_t *)-1;
 }
@@ -1199,7 +1199,7 @@ tealet_t *mem_error_tealet(tealet_t *t1, void *arg) {
   res = tealet_switch(peer, &myarg, TEALET_SWITCH_DEFAULT);
   assert(res == TEALET_ERR_MEM);
   tealet_exit(peer, myarg, TEALET_EXIT_DELETE);
-  assert(0); // never runs
+  abort(); // never runs
   return NULL;
 }
 
@@ -1225,7 +1225,7 @@ static tealet_t *oom_force_to_main_run(tealet_t *current, void *arg) {
 
   /* FORCE should continue by defuncting current and transferring out. */
   result = tealet_switch(current->main, NULL, TEALET_SWITCH_FORCE);
-  assert(0);
+  abort();
   assert(result == 0);
   return NULL;
 }
@@ -1294,7 +1294,7 @@ static tealet_t *oom_force_peer_to_main_panic_run(tealet_t *current, void *arg) 
   /* Clear allocator fault so this switch-out can complete. */
   talloc_fail = 0;
   result = tealet_switch(current->main, NULL, TEALET_SWITCH_PANIC);
-  assert(0);
+  abort();
   assert(result == TEALET_ERR_PANIC);
   return NULL;
 }
@@ -1307,7 +1307,7 @@ static tealet_t *oom_force_to_peer_run(tealet_t *current, void *arg) {
 
   talloc_fail = 1;
   result = tealet_switch(oom_w2, NULL, TEALET_SWITCH_FORCE);
-  assert(0);
+  abort();
   assert(result == 0);
   (void)current;
   return NULL;
@@ -1345,6 +1345,140 @@ void test_oom_force_peer_then_panic_main(void) {
   fini_test();
 }
 
+static tealet_t *switch_nofail_mem_run(tealet_t *current, void *arg) {
+  (void)arg;
+
+  /* Purpose: NOFAIL should retry with FORCE and transfer to main under OOM. */
+  talloc_fail = 1;
+  tealet_switch(current->main, NULL, TEALET_SWITCH_NOFAIL);
+  abort();
+  return NULL;
+}
+
+void test_switch_nofail_retries_force(void) {
+  tealet_t *worker;
+  int result;
+
+  init_test_extra(NULL, 0);
+
+  worker = NULL;
+  assert(tealet_spawn(g_main, &worker, switch_nofail_mem_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
+  assert(worker != NULL);
+
+  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == 0);
+
+  talloc_fail = 0;
+  assert(tealet_status(worker) == TEALET_STATUS_DEFUNCT);
+  tealet_delete(worker);
+  fini_test();
+}
+
+static tealet_t *switch_nofail_defunct_target_run(tealet_t *current, void *arg) {
+  tealet_t *target = (tealet_t *)arg;
+
+  tealet_switch(target, NULL, TEALET_SWITCH_NOFAIL);
+  abort();
+  (void)current;
+  return NULL;
+}
+
+void test_switch_nofail_defunct_target_panics_main(void) {
+  tealet_t *victim;
+  tealet_t *switcher;
+  void *arg;
+  int result;
+
+  init_test_extra(NULL, 0);
+
+  victim = NULL;
+  assert(tealet_spawn(g_main, &victim, oom_force_to_main_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
+  assert(victim != NULL);
+
+  result = tealet_switch(victim, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == 0);
+  talloc_fail = 0;
+  assert(tealet_status(victim) == TEALET_STATUS_DEFUNCT);
+
+  switcher = NULL;
+  assert(tealet_spawn(g_main, &switcher, switch_nofail_defunct_target_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
+  assert(switcher != NULL);
+  arg = (void *)victim;
+  result = tealet_switch(switcher, &arg, TEALET_SWITCH_DEFAULT);
+  assert(result == TEALET_ERR_PANIC);
+
+  tealet_delete(switcher);
+  tealet_delete(victim);
+  fini_test();
+}
+
+static tealet_t *exit_nofail_mem_run(tealet_t *current, void *arg) {
+  (void)arg;
+
+  /* Purpose: NOFAIL should retry with FORCE and transfer to main under OOM. */
+  talloc_fail = 1;
+  tealet_exit(current->main, NULL, TEALET_EXIT_NOFAIL);
+  abort();
+  return NULL;
+}
+
+void test_exit_nofail_retries_force(void) {
+  tealet_t *worker;
+  int result;
+
+  init_test_extra(NULL, 0);
+
+  worker = NULL;
+  assert(tealet_spawn(g_main, &worker, exit_nofail_mem_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
+  assert(worker != NULL);
+
+  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == 0);
+
+  talloc_fail = 0;
+  assert(tealet_status(worker) != TEALET_STATUS_ACTIVE);
+  tealet_delete(worker);
+  fini_test();
+}
+
+static tealet_t *exit_nofail_defunct_target_run(tealet_t *current, void *arg) {
+  tealet_t *target = (tealet_t *)arg;
+
+  tealet_exit(target, NULL, TEALET_EXIT_NOFAIL);
+  abort();
+  (void)current;
+  return NULL;
+}
+
+void test_exit_nofail_defunct_target_panics_main(void) {
+  tealet_t *victim;
+  tealet_t *exiter;
+  void *arg;
+  int result;
+
+  init_test_extra(NULL, 0);
+
+  victim = NULL;
+  assert(tealet_spawn(g_main, &victim, oom_force_to_main_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
+  assert(victim != NULL);
+
+  result = tealet_switch(victim, NULL, TEALET_SWITCH_DEFAULT);
+  assert(result == 0);
+  talloc_fail = 0;
+  assert(tealet_status(victim) == TEALET_STATUS_DEFUNCT);
+
+  exiter = NULL;
+  assert(tealet_spawn(g_main, &exiter, exit_nofail_defunct_target_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
+  assert(exiter != NULL);
+  arg = (void *)victim;
+  result = tealet_switch(exiter, &arg, TEALET_SWITCH_DEFAULT);
+  assert(result == TEALET_ERR_PANIC);
+
+  tealet_delete(exiter);
+  tealet_delete(victim);
+  fini_test();
+}
+
 static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
   int result;
   (void)arg;
@@ -1353,7 +1487,7 @@ static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
   assert(result == TEALET_ERR_INVAL);
 
   tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1383,7 +1517,7 @@ static tealet_t *test_exit_defunct_fail_run(tealet_t *current, void *arg) {
   assert(result == TEALET_ERR_DEFUNCT);
 
   tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1418,7 +1552,7 @@ static tealet_t *test_explicit_panic_exit_run(tealet_t *current, void *arg) {
 
   assert(current != g_main);
   tealet_exit(target, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_PANIC);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1493,7 +1627,7 @@ static tealet_t *test_invalid_caller_check_child_run(tealet_t *current, void *ar
   assert(result == 0);
 
   tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1545,6 +1679,10 @@ static test_entry_t test_list[] = {
     {"test_oom_force_marks_source_defunct", test_oom_force_marks_source_defunct},
     {"test_oom_force_main_not_defunct", test_oom_force_main_not_defunct},
     {"test_oom_force_peer_then_panic_main", test_oom_force_peer_then_panic_main},
+    {"test_switch_nofail_retries_force", test_switch_nofail_retries_force},
+    {"test_switch_nofail_defunct_target_panics_main", test_switch_nofail_defunct_target_panics_main},
+    {"test_exit_nofail_retries_force", test_exit_nofail_retries_force},
+    {"test_exit_nofail_defunct_target_panics_main", test_exit_nofail_defunct_target_panics_main},
     {"test_exit_self_invalid", test_exit_self_invalid},
 #if TEALET_WITH_TESTING
     {"test_exit_defunct_target_returns_error", test_exit_defunct_target_returns_error},
