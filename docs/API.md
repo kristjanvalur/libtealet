@@ -1374,6 +1374,7 @@ Switch result signaling explicit panic-tagged resume.
 #define TEALET_SWITCH_DEFAULT 0  /* Default switch behavior */
 #define TEALET_SWITCH_FORCE   4  /* Force switch despite save-time memory failures */
 #define TEALET_SWITCH_PANIC   8  /* Mark receiving tealet as panic-resumed */
+#define TEALET_SWITCH_NOFAIL 16  /* Retry with FORCE, then panic+force to main */
 ```
 
 Used with `tealet_exit()`.
