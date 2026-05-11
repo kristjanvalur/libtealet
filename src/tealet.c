@@ -1838,7 +1838,7 @@ static int tealet_xfer_inner(tealet_t *target, void *in_arg, void **out_arg, int
   result = tealet_switchstack(g_main, g_target, in_arg, out_arg);
 
   if (result < 0) {
-    g_current->flags &= ~(TEALET_TFLAGS_EXITING | TEALET_TFLAGS_AUTODELETE);
+    g_current->flags &= ~(TEALET_TFLAGS_EXITING | TEALET_TFLAGS_AUTODELETE | TEALET_TFLAGS_SAVEFORCE);
   }
 
   if (is_exit) {
