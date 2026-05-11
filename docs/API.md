@@ -633,19 +633,23 @@ Get the current status of a tealet.
 - `t`: Tealet to inspect
 
 **Returns:** Status code:
-- `TEALET_STATUS_INITIAL` (0): Created but not yet started
-- `TEALET_STATUS_ACTIVE` (1): Started and can be switched to
-- `TEALET_STATUS_DEFUNCT` (-1): Corrupt or returned from run function
+- `TEALET_STATUS_ACTIVE` (0): Active tealet
+- `TEALET_STATUS_NEW` (1): New/unbound tealet (from `tealet_new()`)
+- `TEALET_STATUS_EXITED` (2): Exited tealet
+- `TEALET_STATUS_DEFUNCT` (3): Defunct tealet
 
 **Usage:**
 ```c
 int status = tealet_status(t);
 switch (status) {
-    case TEALET_STATUS_INITIAL:
-        /* Can switch to it for first time */
-        break;
     case TEALET_STATUS_ACTIVE:
         /* Can switch to it */
+        break;
+    case TEALET_STATUS_NEW:
+        /* Not yet bound/runnable */
+        break;
+    case TEALET_STATUS_EXITED:
+        /* Exited and no longer runnable */
         break;
     case TEALET_STATUS_DEFUNCT:
         /* Cannot use, should delete */
@@ -1352,9 +1356,10 @@ Switch result signaling explicit panic-tagged resume.
 ### Status Codes
 
 ```c
-#define TEALET_STATUS_INITIAL  0   /* Created, not started */
-#define TEALET_STATUS_ACTIVE   1   /* Running, can switch to */
-#define TEALET_STATUS_DEFUNCT  (-1) /* Completed or corrupt */
+#define TEALET_STATUS_ACTIVE   0  /* Active tealet */
+#define TEALET_STATUS_NEW      1  /* New/unbound tealet */
+#define TEALET_STATUS_EXITED   2  /* Exited tealet */
+#define TEALET_STATUS_DEFUNCT  3  /* Defunct tealet */
 ```
 
 ---
