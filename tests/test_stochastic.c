@@ -151,7 +151,7 @@ static int worker_recursive(tealet_t *current, int depth) {
       } else {
         /* Immediate exit: child tealets switch to main, main unwinds */
         if (current != g_main) {
-          tealet_switch(g_main, NULL, TEALET_SWITCH_DEFAULT);
+          tealet_switch(g_main, NULL, TEALET_XFER_DEFAULT);
           /* we should not resume this */
           assert(0);
         }
@@ -178,7 +178,7 @@ static int worker_recursive(tealet_t *current, int depth) {
       /* Switch to another tealet */
       target = pick_random_tealet(current);
       if (target) {
-        tealet_switch(target, NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(target, NULL, TEALET_XFER_DEFAULT);
       }
       continue;
 
@@ -211,7 +211,7 @@ static int worker_recursive(tealet_t *current, int depth) {
         /* Switch to a random tealet */
         target = pick_random_tealet(current);
         if (target) {
-          tealet_switch(target, NULL, TEALET_SWITCH_DEFAULT);
+          tealet_switch(target, NULL, TEALET_XFER_DEFAULT);
         }
         /* We shouldn't resume here - we've exited */
         assert(0);
@@ -270,7 +270,7 @@ static tealet_t *worker_entry(tealet_t *current, void *arg) {
 
   /* When we return here normally, we're done - exit to main without auto-delete
    */
-  tealet_exit(g_main, NULL, TEALET_EXIT_DEFAULT);
+  tealet_exit(g_main, NULL, TEALET_XFER_DEFAULT);
 
   /* Unreachable */
   return g_main;
@@ -355,7 +355,7 @@ int main(int argc, char *argv[]) {
           if (g_verbose) {
             printf("  Switching to tealet %d to unwind\n", i);
           }
-          tealet_switch(g_tealets[i], NULL, TEALET_SWITCH_DEFAULT);
+          tealet_switch(g_tealets[i], NULL, TEALET_XFER_DEFAULT);
         }
       }
     }

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **NOFAIL transfer policies for both exit and switch APIs**
-  - Added `TEALET_EXIT_NOFAIL` and `TEALET_SWITCH_NOFAIL` to provide a
+  - Added `TEALET_XFER_NOFAIL` to provide a
     robustness-oriented transfer mode for callers that prioritize forward
     progress under memory pressure/defunct-target conditions.
   - NOFAIL attempts the requested transfer with FORCE first.
@@ -38,12 +38,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
     mode flags.
 
+- **Transfer flags are unified across switch and exit**
+  - Shared transfer behavior now uses `TEALET_XFER_*` flags.
+  - `tealet_switch()` accepts only `TEALET_XFER_*`.
+  - `tealet_exit()` accepts `TEALET_XFER_*` plus exit-only
+    `TEALET_EXIT_DELETE` / `TEALET_EXIT_DEFER`.
+
 ### Removed
 - **Legacy creation API surface removed from core**
   - Removed core `tealet_create()` and the old create-and-start `tealet_new(...)`
     out-parameter signature.
   - Removed legacy `TEALET_FORK_DEFAULT` / `TEALET_FORK_SWITCH` flags in favor
     of `TEALET_RUN_*`.
+
+- **Separate switch/exit transfer-flag names removed**
+  - Removed `TEALET_SWITCH_DEFAULT` / `TEALET_SWITCH_FORCE` /
+    `TEALET_SWITCH_PANIC` / `TEALET_SWITCH_NOFAIL`.
+  - Removed `TEALET_EXIT_DEFAULT` / `TEALET_EXIT_FORCE` /
+    `TEALET_EXIT_PANIC` / `TEALET_EXIT_NOFAIL`.
 
 ### Documentation
 - Updated `README.md`, `docs/GETTING_STARTED.md`, `docs/API.md`,

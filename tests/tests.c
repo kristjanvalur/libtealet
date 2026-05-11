@@ -239,7 +239,7 @@ static int tealet_new_x(tealet_t *m, tealet_t **out, tealet_run_t run, void **pa
   rc = tealet_spawn(m, &r, run, NULL, stack_far, TEALET_RUN_DEFAULT);
   if (rc != 0)
     return rc;
-  i = tealet_switch(r, parg, TEALET_SWITCH_DEFAULT);
+  i = tealet_switch(r, parg, TEALET_XFER_DEFAULT);
   if (i != 0) {
     tealet_delete(r);
     return i;
@@ -395,7 +395,7 @@ static tealet_t *test_stack_far_isolation_run(tealet_t *current, void *arg) {
   assert(current != run_arg->main);
   assert(run_arg->shared->value == run_arg->before);
   run_arg->shared->value = run_arg->after;
-  tealet_switch(run_arg->main, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(run_arg->main, NULL, TEALET_XFER_DEFAULT);
   assert(run_arg->shared->value == run_arg->after);
   return run_arg->main;
 }
@@ -427,7 +427,7 @@ static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg) {
   assert(shared.value == 11);
 
   /* Resume child: it confirms its private value, then returns/exits to parent. */
-  tealet_switch(child, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(child, NULL, TEALET_XFER_DEFAULT);
 
   /* Child has exited; explicit delete is still required. */
   tealet_delete(child);
@@ -493,7 +493,7 @@ void test_add_unbound_phase1(void) {
   assert(tealet_status(copy) == TEALET_STATUS_NEW);
   assert(tealet_get_far(copy) == NULL);
 
-  rc = tealet_switch(unbound, NULL, TEALET_SWITCH_DEFAULT);
+  rc = tealet_switch(unbound, NULL, TEALET_XFER_DEFAULT);
   assert(rc == TEALET_ERR_INVAL);
 
   tealet_delete(copy);
@@ -559,7 +559,7 @@ static tealet_t *test_lock_transition_run(tealet_t *current, void *arg) {
   lock_snapshot_assert_delta_one(&g_lock_new_before);
 
   g_lock_phase = LOCK_PHASE_WAIT_RESUME;
-  tealet_switch(g_main, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(g_main, NULL, TEALET_XFER_DEFAULT);
 
   tealet_test_lock_assert_unheld(&g_lock_state);
   assert(g_lock_phase == LOCK_PHASE_SWITCH_RESUME);
@@ -587,7 +587,7 @@ void test_lock_transitions(void) {
 
   lock_snapshot_take(&g_lock_switch_before);
   g_lock_phase = LOCK_PHASE_SWITCH_RESUME;
-  result = tealet_switch(t, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
   assert(result == 0);
   assert(g_lock_phase == LOCK_PHASE_DONE);
 
@@ -682,7 +682,7 @@ void test_simple_create_and_run(void) {
   init_test();
   t = NULL;
   assert(tealet_spawn(g_main, &t, test_simple_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
-  tealet_switch(t, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
   assert(status == 1);
   assert(tealet_previous(g_main) == t);
   tealet_delete(t);
@@ -707,7 +707,7 @@ void test_create_previous(void) {
   assert(tealet_spawn(g_main, &t, test_create_previous_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(status == 0);
   /* Now switch to it - it should see main as previous */
-  tealet_switch(t, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
   assert(status == 42); /* Verify it ran */
   assert(tealet_previous(g_main) == t);
   tealet_delete(t);
@@ -717,7 +717,7 @@ void test_create_previous(void) {
 
 static tealet_t *test_previous_manual_delete_run(tealet_t *t1, void *arg) {
   (void)arg;
-  tealet_switch(t1->main, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t1->main, NULL, TEALET_XFER_DEFAULT);
   return t1->main;
 }
 
@@ -729,7 +729,7 @@ void test_previous_cleared_on_manual_delete(void) {
   assert(tealet_spawn(g_main, &t, test_previous_manual_delete_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(t != NULL);
 
-  tealet_switch(t, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
   assert(tealet_previous(g_main) == t);
 
   tealet_delete(t);
@@ -787,7 +787,7 @@ void test_exit(void) {
   assert(result == 0);
   assert(stub1 != NULL);
   stub2 = tealet_duplicate(stub1);
-  arg = (void *)TEALET_EXIT_DEFAULT;
+  arg = (void *)TEALET_XFER_DEFAULT;
   result = tealet_stub_run(stub1, test_exit_run, &arg);
   assert(result == 0);
   assert(status == 1);
@@ -811,16 +811,16 @@ tealet_t *test_switch_2(tealet_t *t2, void *arg) {
   assert(status == 1);
   status = 2;
   assert(tealet_current(g_main) == t2);
-  tealet_switch(glob_t1, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(glob_t1, NULL, TEALET_XFER_DEFAULT);
   assert(status == 3);
   status = 4;
   assert(tealet_current(g_main) == t2);
-  tealet_switch(glob_t1, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(glob_t1, NULL, TEALET_XFER_DEFAULT);
   assert(status == 5);
   status = 6;
   assert(t2 == glob_t2);
   assert(tealet_current(g_main) == t2);
-  tealet_switch(t2, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t2, NULL, TEALET_XFER_DEFAULT);
   assert(status == 6);
   status = 7;
   assert(tealet_current(g_main) == t2);
@@ -837,7 +837,7 @@ tealet_t *test_switch_1(tealet_t *t1, void *arg) {
   assert(status == 2);
   status = 3;
   assert(tealet_current(g_main) == t1);
-  tealet_switch(glob_t2, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(glob_t2, NULL, TEALET_XFER_DEFAULT);
   assert(status == 4);
   status = 5;
   assert(tealet_current(g_main) == t1);
@@ -863,7 +863,7 @@ void test_switch_self_panic(void) {
   init_test();
 
   /* Self-switch with PANIC should consume panic immediately. */
-  result = tealet_switch(g_main, NULL, TEALET_SWITCH_PANIC);
+  result = tealet_switch(g_main, NULL, TEALET_XFER_PANIC);
   assert(result == TEALET_ERR_PANIC);
 
   /* Ensure panic flag is not left armed for a later unrelated switch. */
@@ -884,7 +884,7 @@ tealet_t *test_switch_new_1(tealet_t *t1, void *arg) {
   tealet_t *stub;
   int result;
   /* switch back to the creator */
-  tealet_switch(caller, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(caller, NULL, TEALET_XFER_DEFAULT);
   /* now we want to trample the stack */
   stub = NULL;
   result = tealet_new_descend(t1, &stub, 50, NULL, NULL, NULL);
@@ -899,7 +899,7 @@ tealet_t *test_switch_new_2(tealet_t *t2, void *arg) {
   tealet_t *target = (tealet_t *)arg;
   /* switch to tealet 1 to trample the stack*/
   target->extra = (void *)t2;
-  tealet_switch(target, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(target, NULL, TEALET_XFER_DEFAULT);
 
   /* and then return to main */
   return g_main;
@@ -919,7 +919,7 @@ void test_switch_new(void) {
   assert(result == 0);
   assert(tealet2 != NULL);
   assert(tealet_status(tealet2) == TEALET_STATUS_ACTIVE);
-  tealet_switch(tealet2, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(tealet2, NULL, TEALET_XFER_DEFAULT);
   tealet_delete(tealet1);
   tealet_delete(tealet2);
   fini_test();
@@ -932,7 +932,7 @@ tealet_t *test_arg_1(tealet_t *t1, void *arg) {
   void *myarg;
   tealet_t *peer = (tealet_t *)arg;
   myarg = (void *)1;
-  tealet_switch(peer, &myarg, TEALET_SWITCH_DEFAULT);
+  tealet_switch(peer, &myarg, TEALET_XFER_DEFAULT);
   assert(myarg == (void *)2);
   myarg = (void *)3;
   tealet_exit(peer, myarg, TEALET_EXIT_DELETE);
@@ -947,7 +947,7 @@ void test_arg(void) {
   t1 = tealet_new_native_call(g_main, test_arg_1, &myarg, NULL);
   assert(myarg == (void *)1);
   myarg = (void *)2;
-  tealet_switch(t1, &myarg, TEALET_SWITCH_DEFAULT);
+  tealet_switch(t1, &myarg, TEALET_XFER_DEFAULT);
   assert(myarg == (void *)3);
   fini_test();
 }
@@ -985,7 +985,7 @@ static void random_run(int index) {
       arg = (void *)(intptr_t)i;
       assert(tealet_new_native_call(g_main, random_new_tealet, &arg, NULL) != NULL);
     } else {
-      tealet_switch(tealetarray[i], NULL, TEALET_SWITCH_DEFAULT);
+      tealet_switch(tealetarray[i], NULL, TEALET_XFER_DEFAULT);
     }
     assert(status >= prevstatus);
     assert(tealet_current(g_main) == cur);
@@ -1076,7 +1076,7 @@ int random2_descend(int index, int level) {
     if (tealetarray[target] == NULL)
       random2_new(target);
     else
-      tealet_switch(tealetarray[target], NULL, TEALET_SWITCH_DEFAULT);
+      tealet_switch(tealetarray[target], NULL, TEALET_XFER_DEFAULT);
     return 1;
   } else {
     /* find a telet */
@@ -1085,7 +1085,7 @@ int random2_descend(int index, int level) {
       int k = (j + target) % ARRAYSIZE;
       if (k != index && tealetarray[k]) {
         status += 1;
-        tealet_switch(tealetarray[k], NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(tealetarray[k], NULL, TEALET_XFER_DEFAULT);
         return 1;
       }
     }
@@ -1124,7 +1124,7 @@ void test_random2(void) {
     for (i = 1; i < ARRAYSIZE; i++)
       if (tealetarray[i]) {
         status++;
-        tealet_switch(tealetarray[i], NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(tealetarray[i], NULL, TEALET_XFER_DEFAULT);
         break;
       }
     if (i == ARRAYSIZE)
@@ -1219,7 +1219,7 @@ tealet_t *mem_error_tealet(tealet_t *t1, void *arg) {
   int res;
   tealet_t *peer = (tealet_t *)arg;
   talloc_fail = 1;
-  res = tealet_switch(peer, &myarg, TEALET_SWITCH_DEFAULT);
+  res = tealet_switch(peer, &myarg, TEALET_XFER_DEFAULT);
   assert(res == TEALET_ERR_MEM);
   tealet_exit(peer, myarg, TEALET_EXIT_DELETE);
   abort(); // never runs
@@ -1243,11 +1243,11 @@ static tealet_t *oom_force_to_main_run(tealet_t *current, void *arg) {
 
   /* First attempt without FORCE fails in-place with MEM. */
   talloc_fail = 1;
-  result = tealet_switch(current->main, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(current->main, NULL, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_MEM);
 
   /* FORCE should continue by defuncting current and transferring out. */
-  result = tealet_switch(current->main, NULL, TEALET_SWITCH_FORCE);
+  result = tealet_switch(current->main, NULL, TEALET_XFER_FORCE);
   abort();
   assert(result == 0);
   return NULL;
@@ -1266,12 +1266,12 @@ void test_oom_force_marks_source_defunct(void) {
   assert(tealet_spawn(g_main, &worker, oom_force_to_main_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(worker != NULL);
 
-  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(worker, NULL, TEALET_XFER_DEFAULT);
   assert(result == 0);
 
   talloc_fail = 0;
   assert(tealet_status(worker) == TEALET_STATUS_DEFUNCT);
-  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(worker, NULL, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_DEFUNCT);
 
   tealet_delete(worker);
@@ -1297,7 +1297,7 @@ void test_oom_force_main_not_defunct(void) {
   assert(worker != NULL);
 
   talloc_fail = 1;
-  result = tealet_switch(worker, NULL, TEALET_SWITCH_FORCE);
+  result = tealet_switch(worker, NULL, TEALET_XFER_FORCE);
   assert(result == TEALET_ERR_MEM);
 
   talloc_fail = 0;
@@ -1316,7 +1316,7 @@ static tealet_t *oom_force_peer_to_main_panic_run(tealet_t *current, void *arg) 
 
   /* Clear allocator fault so this switch-out can complete. */
   talloc_fail = 0;
-  result = tealet_switch(current->main, NULL, TEALET_SWITCH_PANIC);
+  result = tealet_switch(current->main, NULL, TEALET_XFER_PANIC);
   abort();
   assert(result == TEALET_ERR_PANIC);
   return NULL;
@@ -1329,7 +1329,7 @@ static tealet_t *oom_force_to_peer_run(tealet_t *current, void *arg) {
   assert(oom_w2 != NULL);
 
   talloc_fail = 1;
-  result = tealet_switch(oom_w2, NULL, TEALET_SWITCH_FORCE);
+  result = tealet_switch(oom_w2, NULL, TEALET_XFER_FORCE);
   abort();
   assert(result == 0);
   (void)current;
@@ -1354,11 +1354,11 @@ void test_oom_force_peer_then_panic_main(void) {
   assert(tealet_spawn(g_main, &w1, oom_force_to_peer_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(w1 != NULL);
 
-  result = tealet_switch(w1, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(w1, NULL, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_PANIC);
 
   assert(tealet_status(w1) == TEALET_STATUS_DEFUNCT);
-  result = tealet_switch(w1, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(w1, NULL, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_DEFUNCT);
 
   tealet_delete(w1);
@@ -1373,7 +1373,7 @@ static tealet_t *switch_nofail_mem_run(tealet_t *current, void *arg) {
 
   /* Purpose: NOFAIL should retry with FORCE and transfer to main under OOM. */
   talloc_fail = 1;
-  tealet_switch(current->main, NULL, TEALET_SWITCH_NOFAIL);
+  tealet_switch(current->main, NULL, TEALET_XFER_NOFAIL);
   abort();
   return NULL;
 }
@@ -1388,7 +1388,7 @@ void test_switch_nofail_retries_force(void) {
   assert(tealet_spawn(g_main, &worker, switch_nofail_mem_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(worker != NULL);
 
-  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(worker, NULL, TEALET_XFER_DEFAULT);
   assert(result == 0);
 
   talloc_fail = 0;
@@ -1400,7 +1400,7 @@ void test_switch_nofail_retries_force(void) {
 static tealet_t *switch_nofail_defunct_target_run(tealet_t *current, void *arg) {
   tealet_t *target = (tealet_t *)arg;
 
-  tealet_switch(target, NULL, TEALET_SWITCH_NOFAIL);
+  tealet_switch(target, NULL, TEALET_XFER_NOFAIL);
   abort();
   (void)current;
   return NULL;
@@ -1418,7 +1418,7 @@ void test_switch_nofail_defunct_target_panics_main(void) {
   assert(tealet_spawn(g_main, &victim, oom_force_to_main_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(victim != NULL);
 
-  result = tealet_switch(victim, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(victim, NULL, TEALET_XFER_DEFAULT);
   assert(result == 0);
   talloc_fail = 0;
   assert(tealet_status(victim) == TEALET_STATUS_DEFUNCT);
@@ -1427,7 +1427,7 @@ void test_switch_nofail_defunct_target_panics_main(void) {
   assert(tealet_spawn(g_main, &switcher, switch_nofail_defunct_target_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(switcher != NULL);
   arg = (void *)victim;
-  result = tealet_switch(switcher, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(switcher, &arg, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_PANIC);
 
   tealet_delete(switcher);
@@ -1440,7 +1440,7 @@ static tealet_t *exit_nofail_mem_run(tealet_t *current, void *arg) {
 
   /* Purpose: NOFAIL should retry with FORCE and transfer to main under OOM. */
   talloc_fail = 1;
-  tealet_exit(current->main, NULL, TEALET_EXIT_NOFAIL);
+  tealet_exit(current->main, NULL, TEALET_XFER_NOFAIL);
   abort();
   return NULL;
 }
@@ -1455,7 +1455,7 @@ void test_exit_nofail_retries_force(void) {
   assert(tealet_spawn(g_main, &worker, exit_nofail_mem_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(worker != NULL);
 
-  result = tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(worker, NULL, TEALET_XFER_DEFAULT);
   assert(result == 0);
 
   talloc_fail = 0;
@@ -1467,7 +1467,7 @@ void test_exit_nofail_retries_force(void) {
 static tealet_t *exit_nofail_defunct_target_run(tealet_t *current, void *arg) {
   tealet_t *target = (tealet_t *)arg;
 
-  tealet_exit(target, NULL, TEALET_EXIT_NOFAIL);
+  tealet_exit(target, NULL, TEALET_XFER_NOFAIL);
   abort();
   (void)current;
   return NULL;
@@ -1485,7 +1485,7 @@ void test_exit_nofail_defunct_target_panics_main(void) {
   assert(tealet_spawn(g_main, &victim, oom_force_to_main_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(victim != NULL);
 
-  result = tealet_switch(victim, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(victim, NULL, TEALET_XFER_DEFAULT);
   assert(result == 0);
   talloc_fail = 0;
   assert(tealet_status(victim) == TEALET_STATUS_DEFUNCT);
@@ -1494,7 +1494,7 @@ void test_exit_nofail_defunct_target_panics_main(void) {
   assert(tealet_spawn(g_main, &exiter, exit_nofail_defunct_target_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(exiter != NULL);
   arg = (void *)victim;
-  result = tealet_switch(exiter, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(exiter, &arg, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_PANIC);
 
   tealet_delete(exiter);
@@ -1525,7 +1525,7 @@ void test_exit_self_invalid(void) {
   runner = NULL;
   assert(tealet_spawn(g_main, &runner, test_exit_self_invalid_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(runner != NULL);
-  assert(tealet_switch(runner, NULL, TEALET_SWITCH_DEFAULT) == 0);
+  assert(tealet_switch(runner, NULL, TEALET_XFER_DEFAULT) == 0);
 
   fini_test();
 }
@@ -1563,7 +1563,7 @@ void test_exit_defunct_target_returns_error(void) {
   assert(tealet_spawn(g_main, &exiter, test_exit_defunct_fail_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(exiter != NULL);
   arg = (void *)victim;
-  result = tealet_switch(exiter, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(exiter, &arg, TEALET_XFER_DEFAULT);
   assert(result == 0);
 
   tealet_delete(victim);
@@ -1574,7 +1574,7 @@ static tealet_t *test_explicit_panic_exit_run(tealet_t *current, void *arg) {
   tealet_t *target = (tealet_t *)arg;
 
   assert(current != g_main);
-  tealet_exit(target, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_PANIC);
+  tealet_exit(target, NULL, TEALET_EXIT_DELETE | TEALET_XFER_PANIC);
   abort();
   return NULL;
 }
@@ -1590,7 +1590,7 @@ void test_exit_explicit_panic(void) {
   assert(tealet_spawn(g_main, &exiter, test_explicit_panic_exit_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(exiter != NULL);
   arg = (void *)g_main;
-  result = tealet_switch(exiter, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(exiter, &arg, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_PANIC);
 
   fini_test();
@@ -1618,7 +1618,7 @@ void test_debug_swap_far_invalid_caller_check_main(void) {
   result = tealet_debug_swap_far(g_main, new_far, &old_far);
   assert(result == 0);
 
-  result = tealet_switch(child, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(child, NULL, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_INVAL);
 
   result = tealet_debug_swap_far(g_main, old_far, &old_far);
@@ -1643,7 +1643,7 @@ static tealet_t *test_invalid_caller_check_child_run(tealet_t *current, void *ar
   result = tealet_debug_swap_far(current, new_far, &old_far);
   assert(result == 0);
 
-  result = tealet_switch(g_main, NULL, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(g_main, NULL, TEALET_XFER_DEFAULT);
   assert(result == TEALET_ERR_INVAL);
 
   result = tealet_debug_swap_far(current, old_far, &old_far);

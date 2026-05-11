@@ -123,7 +123,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     void *ptr = &local_value;
     
     /* DANGER: Switching invalidates local_value */
-    tealet_switch(current->main, &ptr, TEALET_SWITCH_DEFAULT);
+    tealet_switch(current->main, &ptr, TEALET_XFER_DEFAULT);
     /* ptr now points to invalid stack data */
     
     return current->main;
@@ -139,7 +139,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     *heap_value = 42;
     void *ptr = heap_value;
     
-    tealet_switch(current->main, &ptr, TEALET_SWITCH_DEFAULT);
+    tealet_switch(current->main, &ptr, TEALET_XFER_DEFAULT);
     /* ptr still valid */
     
     free(heap_value);
@@ -205,10 +205,10 @@ int main(void) {
 
 ### Exit Flags
 
-- `TEALET_EXIT_DEFAULT` (0): **Keep tealet allocated**; tealet must be manually deleted with `tealet_delete()`
+- `TEALET_XFER_DEFAULT` (0): **Keep tealet allocated**; tealet must be manually deleted with `tealet_delete()`
 - `TEALET_EXIT_DELETE`: **Auto-delete on exit**; any tealet pointers to the exiting tealet become invalid after transfer
 - `TEALET_EXIT_DEFER`: **Defer exit transfer policy to run function return** (advanced; see API docs)
-- `TEALET_EXIT_NOFAIL`: **Enable robust fallback retries** without manual recovery logic
+- `TEALET_XFER_NOFAIL`: **Enable robust fallback retries** without manual recovery logic
 
 ### Shutdown Order Requirement
 
@@ -236,9 +236,9 @@ tealet_t *fire_and_forget(tealet_t *current, void *arg) {
 tealet_t *controlled_worker(tealet_t *current, void *arg) {
     while (should_continue()) {
         do_work();
-        tealet_switch(current->main, NULL, TEALET_SWITCH_DEFAULT);  /* Yield back */
+        tealet_switch(current->main, NULL, TEALET_XFER_DEFAULT);  /* Yield back */
     }
-    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT | TEALET_EXIT_NOFAIL);  /* Don't auto-delete */
+    tealet_exit(current->main, NULL, TEALET_XFER_DEFAULT | TEALET_XFER_NOFAIL);  /* Don't auto-delete */
     return current->main;
 }
 
@@ -249,8 +249,8 @@ int main(void) {
     tealet_run(worker, controlled_worker, &arg, NULL, TEALET_RUN_SWITCH);
     
     /* Can switch back to worker multiple times */
-    tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
-    tealet_switch(worker, NULL, TEALET_SWITCH_DEFAULT);
+    tealet_switch(worker, NULL, TEALET_XFER_DEFAULT);
+    tealet_switch(worker, NULL, TEALET_XFER_DEFAULT);
     
     /* Manual cleanup when done */
     tealet_delete(worker);
@@ -271,7 +271,7 @@ tealet_t *ping_run(tealet_t *current, void *arg) {
     
     for (int i = 0; i < 3; i++) {
         printf("Ping %d\n", i);
-        tealet_switch(pong, NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(pong, NULL, TEALET_XFER_DEFAULT);
     }
     
     return current->main;
@@ -282,7 +282,7 @@ tealet_t *pong_run(tealet_t *current, void *arg) {
     
     for (int i = 0; i < 3; i++) {
         printf("  Pong %d\n", i);
-        tealet_switch(ping, NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(ping, NULL, TEALET_XFER_DEFAULT);
     }
     
     return current->main;
@@ -302,11 +302,11 @@ int main(void) {
     
     /* Start ping, passing pong as argument */
     void *arg = pong;
-    tealet_switch(ping, &arg, TEALET_SWITCH_DEFAULT);
+    tealet_switch(ping, &arg, TEALET_XFER_DEFAULT);
     
     /* Start pong, passing ping as argument */
     arg = ping;
-    tealet_switch(pong, &arg, TEALET_SWITCH_DEFAULT);
+    tealet_switch(pong, &arg, TEALET_XFER_DEFAULT);
     
     tealet_delete(ping);
     tealet_delete(pong);
@@ -337,7 +337,7 @@ tealet_t *range_run(tealet_t *current, void *arg) {
     for (int i = 0; i < max; i++) {
         /* Yield value back to caller */
         void *value = (void*)(intptr_t)i;
-        tealet_switch(current->main, &value, TEALET_SWITCH_DEFAULT);
+        tealet_switch(current->main, &value, TEALET_XFER_DEFAULT);
     }
     
     return current->main;
@@ -357,7 +357,7 @@ int main(void) {
     /* Pull values from generator */
     while (tealet_status(gen) == TEALET_STATUS_ACTIVE) {
         printf("%d\n", (int)(intptr_t)arg);
-        tealet_switch(gen, &arg, TEALET_SWITCH_DEFAULT);
+        tealet_switch(gen, &arg, TEALET_XFER_DEFAULT);
     }
     
     tealet_delete(gen);
@@ -396,7 +396,7 @@ tealet_t *producer_run(tealet_t *current, void *arg) {
         printf("Produced: %d\n", *ctx->buffer);
         
         /* Switch to consumer */
-        tealet_switch(ctx->consumer, NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(ctx->consumer, NULL, TEALET_XFER_DEFAULT);
     }
     
     return current->main;
@@ -412,7 +412,7 @@ tealet_t *consumer_run(tealet_t *current, void *arg) {
         ctx->count++;
         
         /* Switch back to producer */
-        tealet_switch(producer, NULL, TEALET_SWITCH_DEFAULT);
+        tealet_switch(producer, NULL, TEALET_XFER_DEFAULT);
     }
     
     return current->main;
@@ -469,7 +469,7 @@ tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT);
 /* Tealet created but not yet running */
 
 void *arg = my_data;
-tealet_switch(t, &arg, TEALET_SWITCH_DEFAULT);  /* Now it starts */
+tealet_switch(t, &arg, TEALET_XFER_DEFAULT);  /* Now it starts */
 ```
 
 Use when you need to set up multiple coroutines before starting any.
@@ -485,7 +485,7 @@ if (tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT) != 0) {
     return TEALET_ERR_MEM;
 }
 
-int result = tealet_switch(t, &arg, TEALET_SWITCH_DEFAULT);
+int result = tealet_switch(t, &arg, TEALET_XFER_DEFAULT);
 if (result == TEALET_ERR_DEFUNCT) {
     fprintf(stderr, "Target tealet is corrupt\n");
     return -1;

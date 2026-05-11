@@ -333,7 +333,7 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  *   } else if (result > 0) {
  *       // This is the parent tealet
  *       // ... parent-specific code ...
- *       tealet_switch(child, &arg, TEALET_SWITCH_DEFAULT); // Switch to child when ready
+ *       tealet_switch(child, &arg, TEALET_XFER_DEFAULT); // Switch to child when ready
  *   } else {
  *       // Error occurred (result < 0)
  *   }
@@ -353,26 +353,26 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * @brief Suspend current tealet and resume @p target.
  * @param target Tealet to switch to; must share the same main tealet and thread.
  * @param parg In/out argument pointer passed across switches; may be NULL.
- * @param flags Switch behavior bits: #TEALET_SWITCH_DEFAULT, #TEALET_SWITCH_FORCE,
- * #TEALET_SWITCH_PANIC, #TEALET_SWITCH_NOFAIL.
+ * @param flags Switch behavior bits: #TEALET_XFER_DEFAULT, #TEALET_XFER_FORCE,
+ * #TEALET_XFER_PANIC, #TEALET_XFER_NOFAIL.
  * @retval 0 Success.
  * @retval TEALET_ERR_MEM Save/restore failed due to memory pressure.
  * @retval TEALET_ERR_DEFUNCT Target tealet/stack is defunct.
  * @retval TEALET_ERR_PANIC Resumed due to panic-tagged transfer.
  * @retval TEALET_ERR_INVAL Invalid state/target.
  *
- * With #TEALET_SWITCH_FORCE, save-time memory failures may defunct
+ * With #TEALET_XFER_FORCE, save-time memory failures may defunct
  * intermediate non-main saved stacks to complete the requested transfer.
  * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
  * growth would allow progress, because main is never marked defunct.
  *
- * #TEALET_SWITCH_PANIC requests panic delivery to the receiving tealet as
+ * #TEALET_XFER_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path.
  *
- * #TEALET_SWITCH_NOFAIL applies retry/fallback policy: first attempt with
+ * #TEALET_XFER_NOFAIL applies retry/fallback policy: first attempt with
  * FORCE, then panic+force fallback to main only on #TEALET_ERR_MEM/
  * #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
- * When @p target is main, #TEALET_SWITCH_NOFAIL is guaranteed to succeed,
+ * When @p target is main, #TEALET_XFER_NOFAIL is guaranteed to succeed,
  * because main is never allowed to become defunct.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
@@ -380,48 +380,44 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
 TEALET_API
 int tealet_switch(tealet_t *target, void **parg, int flags);
 
-/* Switch flags */
-#define TEALET_SWITCH_DEFAULT 0 /* default switch behavior */
-#define TEALET_SWITCH_FORCE 4   /* force switch despite save-time memory failures */
-#define TEALET_SWITCH_PANIC 8   /* mark the receiving tealet as panic-resumed */
-#define TEALET_SWITCH_NOFAIL 16 /* retry with FORCE and panic-to-main fallback */
+/* Transfer flags shared by tealet_switch() and tealet_exit() */
+#define TEALET_XFER_DEFAULT 0 /* default transfer behavior */
+#define TEALET_XFER_FORCE 4   /* force transfer despite save-time memory failures */
+#define TEALET_XFER_PANIC 8   /* mark the receiving tealet as panic-resumed */
+#define TEALET_XFER_NOFAIL 16 /* retry with FORCE and panic-to-main fallback */
 
-/* Exit flags */
-#define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
-#define TEALET_EXIT_DELETE 1  /* Auto-delete on exit; pointers to exiting tealet become invalid */
-#define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
-#define TEALET_EXIT_FORCE 4   /* Force exit switch despite save-time memory failures */
-#define TEALET_EXIT_PANIC 8   /* Mark the receiving tealet as panic-resumed */
-#define TEALET_EXIT_NOFAIL 16 /* Retry with FORCE and panic-to-main fallback */
+/* Exit-only flags */
+#define TEALET_EXIT_DELETE 1 /* Auto-delete on exit; pointers to exiting tealet become invalid */
+#define TEALET_EXIT_DEFER 2  /* Defer exit to return statement */
 
 /**
  * @brief Exit current tealet and transfer control to @p target.
  * @param target Requested target tealet.
  * @param arg Optional argument to deliver to @p target.
- * @param flags Exit behavior bits: #TEALET_EXIT_DEFAULT, #TEALET_EXIT_DELETE,
- * #TEALET_EXIT_DEFER, #TEALET_EXIT_FORCE, #TEALET_EXIT_PANIC,
- * #TEALET_EXIT_NOFAIL.
+ * @param flags Exit behavior bits: #TEALET_XFER_DEFAULT, #TEALET_EXIT_DELETE,
+ * #TEALET_EXIT_DEFER, #TEALET_XFER_FORCE, #TEALET_XFER_PANIC,
+ * #TEALET_XFER_NOFAIL.
  * @return 0 only for deferred setup path; otherwise returns a negative error code if transfer cannot start.
  *
- * Without #TEALET_EXIT_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
- * With #TEALET_EXIT_FORCE, save-time memory failures may defunct intermediate stacks
+ * Without #TEALET_XFER_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
+ * With #TEALET_XFER_FORCE, save-time memory failures may defunct intermediate stacks
  * to complete the requested transfer.
  * #TEALET_ERR_MEM can still be returned with FORCE when only main-stack
  * growth would allow progress, because main is never marked defunct.
  *
- * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
+ * #TEALET_XFER_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
  * #TEALET_EXIT_DEFER (debug builds assert this flag combination).
  *
- * #TEALET_EXIT_NOFAIL enables automatic retry policy:
- * 1) requested target with #TEALET_EXIT_FORCE,
+ * #TEALET_XFER_NOFAIL enables automatic retry policy:
+ * 1) requested target with #TEALET_XFER_FORCE,
  * 2) panic+force fallback to main only on #TEALET_ERR_MEM/
  *    #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
- * When @p target is main, #TEALET_EXIT_NOFAIL is guaranteed to succeed,
+ * When @p target is main, #TEALET_XFER_NOFAIL is guaranteed to succeed,
  * because main is never allowed to become defunct.
  *
  * `return p;` from run() uses an implicit policy rooted in
- * `tealet_exit(p, NULL, TEALET_EXIT_DEFAULT)`, with retries for memory/defunct
+ * `tealet_exit(p, NULL, TEALET_XFER_DEFAULT)`, with retries for memory/defunct
  * failures and a panic+force fallback to main.
  */
 TEALET_API
@@ -454,7 +450,7 @@ tealet_t *tealet_duplicate(tealet_t *tealet);
  * @param target Tealet to delete.
  *
  * Deallocate a tealet.  Use this to delete a tealet that has exited
- * with tealet_exit() with 'TEALET_EXIT_DEFAULT', or defunct tealets.
+ * with tealet_exit() with 'TEALET_XFER_DEFAULT', or defunct tealets.
  * Active tealet can also be
  * deleted, such as stubs that are no longer in use, but take care
  * because any local resources in such tealets won't be freed.
