@@ -56,8 +56,7 @@ static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg) {
   child_arg = run_arg;
 
   stack_far = tealet_stack_further(&shared, (void *)(&shared + 1));
-  child = tealet_new_native_call(current, test_stack_far_isolation_run,
-                                 &child_arg, stack_far);
+  child = tealet_new_native_call(current, test_stack_far_isolation_run, &child_arg, stack_far);
   assert(child != NULL);
 
   /* Child already ran once during creation (RUN_SWITCH): it wrote its private
@@ -114,8 +113,7 @@ void test_stack_far_isolation(void) {
   tealet_t *parent;
 
   init_test();
-  parent = tealet_new_native_call(g_main, test_stack_far_isolation_parent, NULL,
-                                  NULL);
+  parent = tealet_new_native_call(g_main, test_stack_far_isolation_parent, NULL, NULL);
   assert(parent != NULL);
   tealet_delete(parent);
   fini_test();

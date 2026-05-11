@@ -82,8 +82,7 @@ void test_simple_create(void) {
   tealet_t *t;
   init_test();
   t = NULL;
-  assert(tealet_spawn(g_main, &t, test_simple_run, NULL, NULL,
-                      TEALET_RUN_DEFAULT) == 0);
+  assert(tealet_spawn(g_main, &t, test_simple_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(status == 0);
   tealet_delete(t);
   fini_test();
@@ -96,8 +95,7 @@ void test_simple_create_and_run(void) {
   tealet_t *t;
   init_test();
   t = NULL;
-  assert(tealet_spawn(g_main, &t, test_simple_run, NULL, NULL,
-                      TEALET_RUN_DEFAULT) == 0);
+  assert(tealet_spawn(g_main, &t, test_simple_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
   assert(status == 1);
   assert(tealet_previous(g_main) == t);
@@ -124,8 +122,7 @@ void test_create_previous(void) {
   init_test();
   /* Create tealet without running it */
   t = NULL;
-  assert(tealet_spawn(g_main, &t, test_create_previous_run, NULL, NULL,
-                      TEALET_RUN_DEFAULT) == 0);
+  assert(tealet_spawn(g_main, &t, test_create_previous_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(status == 0);
   /* Now switch to it - it should see main as previous */
   tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
@@ -150,8 +147,7 @@ void test_previous_cleared_on_manual_delete(void) {
 
   init_test();
   t = NULL;
-  assert(tealet_spawn(g_main, &t, test_previous_manual_delete_run, NULL, NULL,
-                      TEALET_RUN_DEFAULT) == 0);
+  assert(tealet_spawn(g_main, &t, test_previous_manual_delete_run, NULL, NULL, TEALET_RUN_DEFAULT) == 0);
   assert(t != NULL);
 
   tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
