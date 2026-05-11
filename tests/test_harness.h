@@ -6,6 +6,7 @@
 extern int status;
 extern tealet_t *g_main;
 extern int talloc_fail;
+extern tealet_alloc_t talloc;
 
 typedef struct lock_snapshot_t {
   int lock_calls;

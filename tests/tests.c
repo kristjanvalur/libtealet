@@ -11,6 +11,7 @@
 #include "test_locking.h"
 #include "test_resilience.h"
 #include "test_stack.h"
+#include "test_stats_extra.h"
 #include "test_stress.h"
 #include "test_transfer.h"
 
@@ -142,7 +143,7 @@ void print_final_stats(void) {
   stats_max_naive = 0;
 }
 
-static tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
+tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
 int talloc_fail = 0;
 
 /* Capture cumulative callback counters so we can assert transition deltas
@@ -360,85 +361,6 @@ static t_new get_new() {
 
 int tealet_test_new_dispatch(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far) {
   return TEALET_TEST_NEW(t, out, run, parg, stack_far);
-}
-
-typedef struct extradata {
-  int foo;
-  char bar[5];
-  int gaz;
-} extradata;
-
-tealet_t *extra_tealet(tealet_t *cur, void *arg) {
-  extradata ed2 = {1, "abcd", 2};
-  extradata *ed1 = TEALET_EXTRA(cur, extradata);
-  assert(ed1->foo == ed2.foo);
-  assert(strcmp(ed1->bar, ed2.bar) == 0);
-  assert(ed1->gaz == ed2.gaz);
-  return g_main;
-}
-
-void test_extra(void) {
-  tealet_t *t1, *t2;
-  extradata ed = {1, "abcd", 2};
-  int result;
-  init_test_extra(NULL, sizeof(extradata));
-  *TEALET_EXTRA(g_main, extradata) = ed;
-
-  t1 = NULL;
-  result = TEALET_TEST_NEW(g_main, &t1, NULL, NULL, NULL);
-  assert(result == 0);
-  assert(t1 != NULL);
-  *TEALET_EXTRA(t1, extradata) = ed;
-  t2 = tealet_duplicate(t1);
-  tealet_stub_run(t1, extra_tealet, NULL);
-  tealet_stub_run(t2, extra_tealet, NULL);
-  tealet_delete(t2);
-  tealet_delete(t1);
-  fini_test();
-}
-
-void test_memstats(void) {
-  tealet_statsalloc_t salloc;
-  tealet_statsalloc_init(&salloc, &talloc);
-  assert(salloc.n_allocs == 0);
-  assert(salloc.s_allocs == 0);
-  init_test_extra(&salloc.alloc, 0);
-  assert(salloc.n_allocs > 0);
-  assert(salloc.s_allocs > 0);
-  fini_test();
-}
-
-void test_stats(void) {
-  tealet_t *t1;
-  tealet_stats_t stats;
-  int a, b;
-  int result;
-  init_test_extra(NULL, 0);
-
-  /* Skip this test if stats are not enabled */
-  if (!g_stats_enabled) {
-    fini_test();
-    return;
-  }
-
-  tealet_get_stats(g_main, &stats);
-  assert(stats.n_active == 1);
-  assert(stats.n_total == 1);
-  t1 = NULL;
-  result = TEALET_TEST_NEW(g_main, &t1, NULL, NULL, NULL);
-  assert(result == 0);
-  assert(t1 != NULL);
-  tealet_get_stats(g_main, &stats);
-  /* can be more than 2 because of stub tealet */
-  a = stats.n_active;
-  b = stats.n_total;
-  assert(a >= 2);
-  assert(b >= a); /* can be bigger if tmp stub was created */
-  tealet_delete(t1);
-  tealet_get_stats(g_main, &stats);
-  assert(stats.n_active == a - 1);
-  assert(stats.n_total == b);
-  fini_test();
 }
 
 typedef struct test_entry_t {

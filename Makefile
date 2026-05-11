@@ -251,11 +251,14 @@ tests/test_lifecycle.o: tests/test_lifecycle.c src/tealet.h
 tests/test_stack.o: tests/test_stack.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_stack.c
 
-bin/test-static: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o bin/libtealet.a
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o ${DEBUG} -ltealet
+tests/test_stats_extra.o: tests/test_stats_extra.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_stats_extra.c
 
-bin/test-dynamic: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o ${DEBUG} -ltealet
+bin/test-static: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o tests/test_stats_extra.o bin/libtealet.a
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o tests/test_stats_extra.o ${DEBUG} -ltealet
+
+bin/test-dynamic: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o tests/test_stats_extra.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o tests/test_lifecycle.o tests/test_stack.o tests/test_stats_extra.o ${DEBUG} -ltealet
 
 # Sanitizer tests - run on single platform for sanity checking
 .PHONY: test-sanitizers test-ubsan test-valgrind
