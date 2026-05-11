@@ -382,13 +382,13 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
 
 /* Transfer flags shared by tealet_switch() and tealet_exit() */
 #define TEALET_XFER_DEFAULT 0 /* default transfer behavior */
-#define TEALET_XFER_FORCE 4   /* force transfer despite save-time memory failures */
-#define TEALET_XFER_PANIC 8   /* mark the receiving tealet as panic-resumed */
-#define TEALET_XFER_NOFAIL 16 /* retry with FORCE and panic-to-main fallback */
+#define TEALET_XFER_FORCE 1   /* force transfer despite save-time memory failures */
+#define TEALET_XFER_PANIC 2   /* mark the receiving tealet as panic-resumed */
+#define TEALET_XFER_NOFAIL 4  /* retry with FORCE and panic-to-main fallback */
 
 /* Exit-only flags */
-#define TEALET_EXIT_DELETE 1 /* Auto-delete on exit; pointers to exiting tealet become invalid */
-#define TEALET_EXIT_DEFER 2  /* Defer exit to return statement */
+#define TEALET_EXIT_DELETE 256 /* Auto-delete on exit; pointers to exiting tealet become invalid */
+#define TEALET_EXIT_DEFER 512  /* Defer exit to return statement */
 
 /**
  * @brief Exit current tealet and transfer control to @p target.

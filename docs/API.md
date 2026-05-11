@@ -1364,13 +1364,13 @@ Switch result signaling explicit panic-tagged resume.
 ```c
 /* Transfer flags (shared by tealet_switch() and tealet_exit()) */
 #define TEALET_XFER_DEFAULT 0  /* Default transfer behavior */
-#define TEALET_XFER_FORCE   4  /* Force transfer despite save-time memory failures */
-#define TEALET_XFER_PANIC   8  /* Mark receiving tealet as panic-resumed */
-#define TEALET_XFER_NOFAIL 16  /* Retry with FORCE, then panic+force to main */
+#define TEALET_XFER_FORCE   1  /* Force transfer despite save-time memory failures */
+#define TEALET_XFER_PANIC   2  /* Mark receiving tealet as panic-resumed */
+#define TEALET_XFER_NOFAIL  4  /* Retry with FORCE, then panic+force to main */
 
 /* Exit-only flags */
-#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit; pointers to exiting tealet become invalid */
-#define TEALET_EXIT_DEFER   2  /* Defer exit to return */
+#define TEALET_EXIT_DELETE  256  /* Auto-delete on exit; pointers to exiting tealet become invalid */
+#define TEALET_EXIT_DEFER   512  /* Defer exit to return */
 ```
 
 Used with `tealet_switch()` and `tealet_exit()`.

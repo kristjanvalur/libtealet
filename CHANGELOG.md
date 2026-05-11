@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tealet_switch()` accepts only `TEALET_XFER_*`.
   - `tealet_exit()` accepts `TEALET_XFER_*` plus exit-only
     `TEALET_EXIT_DELETE` / `TEALET_EXIT_DEFER`.
+  - `TEALET_XFER_*` occupies the low 8-bit transfer flag space; exit-only flags
+    begin at `0x100` to reserve headroom for future transfer-flag growth.
 
 ### Removed
 - **Legacy creation API surface removed from core**
