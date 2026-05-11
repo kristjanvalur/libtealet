@@ -53,7 +53,7 @@ static void tealet_test_lock_install(tealet_t *main_tealet, tealet_test_lock_sta
   locking.unlock = tealet_test_unlock_cb;
   locking.arg = (void *)state;
 
-  result = tealet_config_set_locking(main_tealet, &locking);
+  result = tealet_configure_set_locking(main_tealet, &locking);
   assert(result == 0);
 }
 

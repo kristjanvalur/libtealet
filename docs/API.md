@@ -940,10 +940,10 @@ This helper is intended as a simple one-way "enable checks" API; use `tealet_con
 
 ---
 
-### tealet_config_set_locking()
+### tealet_configure_set_locking()
 
 ```c
-int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+int tealet_configure_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
 ```
 
 Configure optional lock/unlock callbacks for a main-tealet domain.
@@ -1187,7 +1187,7 @@ operation.
 
 ### Automatic vs manual locking
 
-Locking mode is configured via `tealet_config_set_locking()` and
+Locking mode is configured via `tealet_configure_set_locking()` and
 `tealet_lock_t.mode`:
 
 - `TEALET_LOCK_SWITCH`: libtealet automatically acquires/releases the lock for

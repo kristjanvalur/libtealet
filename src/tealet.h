@@ -690,7 +690,7 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * Do not assume either state.
  */
 TEALET_API
-int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+int tealet_configure_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
 
 /**
  * @brief Enable stack-integrity checking with practical defaults.
