@@ -126,6 +126,14 @@ tealet_exit(target, arg, TEALET_EXIT_DEFER);    // Defer to return statement
 - `TEALET_ERR_DEFUNCT`: Target tealet is corrupt
 - Use `assert()` for debug builds
 
+### Example snippets policy (review-critical)
+- Example/tutorial code is primarily illustrative and may intentionally omit
+  exhaustive error handling and edge-case branches.
+- Do not require production-style hardening in principle-focused snippets unless
+  the example is explicitly presented as a robust error-handling pattern.
+- In reviews, prioritize correctness of the demonstrated concept and API usage
+  over full defensive handling of every failure mode.
+
 ## Important Warnings
 
 ### Stack Data Safety
