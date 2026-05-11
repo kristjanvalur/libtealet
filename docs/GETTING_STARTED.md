@@ -162,9 +162,6 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     
     /* ✅ Recommended: Explicit exit */
     tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
-    
-    /* Should not reach here */
-    return current->main;  /* Fallback only */
 }
 ```
 
@@ -232,7 +229,6 @@ tealet_t *fire_and_forget(tealet_t *current, void *arg) {
     /* Do work that doesn't need caller intervention */
     printf("Task complete\n");
     tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
-    return current->main;  /* Fallback only */
 }
 ```
 
