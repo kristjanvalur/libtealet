@@ -421,13 +421,18 @@ static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg) {
   child = tealet_new_native(current, test_stack_far_isolation_run, &child_arg, stack_far);
   assert(child != NULL);
 
-  /* Child wrote to its own copied stack, parent value remains unchanged. */
+  /* Child already ran once during creation (RUN_SWITCH): it wrote its private
+   * copy and switched back to parent.
+   */
   assert(shared.value == 11);
 
+  /* Resume child: it confirms its private value, then returns/exits to main. */
   tealet_switch(child, NULL, TEALET_SWITCH_DEFAULT);
+
+  /* Child has exited; explicit delete is still required. */
   tealet_delete(child);
 
-  /* Child still observes its own modified value on resume. */
+  /* Parent value remains unchanged throughout. */
   assert(shared.value == 11);
   tealet_free(current, run_arg);
   return g_main;

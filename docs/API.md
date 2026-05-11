@@ -486,7 +486,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```c
 tealet_t *my_run(tealet_t *current, void *arg) {
     if (should_exit) {
-        /* store exit target and flags /*
+        /* store exit target and flags */
         tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here, can do cleanup */
         cleanup_resources();
@@ -494,9 +494,9 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     
     /* return value ignored.
      * exit value from earlier will be used.
-    * Tealet is not auto-deleted unless TEALET_EXIT_DELETE is requested
+     * Tealet is not auto-deleted unless TEALET_EXIT_DELETE is requested
      */
-    return nullptr;
+    return NULL;
 }
 ```
 
@@ -523,10 +523,9 @@ Main is never marked defunct, so this edge case remains a hard memory failure.
 This means a successful forced exit can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
 
-**Note:** Returning from the run function automatically deletes the tealet using
-an implicit `tealet_exit()` policy: try requested target, panic+force to main
-if target is defunct, retry requested target with FORCE on memory failure, and
-if FORCE still fails (including the main-stack edge above), panic+force to main.
+**Note:** Returning from the run function does not auto-delete by default; it
+uses `TEALET_EXIT_DEFAULT` semantics unless `TEALET_EXIT_DELETE` was requested
+explicitly (for example via deferred exit flags).
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
