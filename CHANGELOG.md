@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     switch) are returned unchanged.
 
 ### Changed
+- **Regression test suite was restructured into focused modules**
+  - Split the former monolithic regression harness into dedicated test files
+    (lifecycle, transfer, locking, resilience, stack, stats, and stress) with
+    shared harness helpers.
+  - Preserved existing behavior while improving maintainability and
+    cross-platform project integration.
+
 - **Transfer internals now use one-shot signaling flags with explicit consumption points**
   - Renamed the internal transient per-tealet force bit from `EXITFORCE` to
     `SAVEFORCE` to reflect that it applies to save behavior generally, not only
