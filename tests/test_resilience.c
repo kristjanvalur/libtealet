@@ -7,6 +7,10 @@
 #include "tealet_extras.h"
 #include "test_harness.h"
 
+/* This file contains tests for OOM/NOFAIL/PANIC resilience, and ensures that
+ * error-propagation and debug-path APIs return the expected failures.
+ */
+
 #if TEALET_WITH_TESTING
 int tealet_debug_force_defunct(tealet_t *target);
 int tealet_debug_swap_far(tealet_t *target, void *new_far, void **old_far);
@@ -25,6 +29,9 @@ tealet_t *mem_error_tealet(tealet_t *t1, void *arg) {
   return NULL;
 }
 
+/* Verify that memory-failure propagation through switch and exit cleanup is
+ * correct and does not accidentally skip required cleanup paths.
+ */
 void test_mem_error(void) {
   void *myarg;
   tealet_t *t1;
@@ -57,8 +64,8 @@ void test_oom_force_marks_source_defunct(void) {
   tealet_t *worker;
   int result;
 
-  /* Purpose: under OOM, FORCE switch-to-main should succeed by marking the
-   * source worker defunct. The defunct worker must reject future switches.
+  /* Verify that OOM with FORCE switch-to-main marks the source worker defunct
+   * and does not accidentally allow future switches into that worker.
    */
   init_test_extra(NULL, 0);
 
@@ -88,8 +95,8 @@ void test_oom_force_main_not_defunct(void) {
   tealet_t *worker;
   int result;
 
-  /* Purpose: when FORCE is requested from main and save fails under OOM,
-   * main must not be marked defunct; the operation returns TEALET_ERR_MEM.
+  /* Verify that FORCE from main under OOM returns TEALET_ERR_MEM and does not
+   * accidentally mark main as defunct.
    */
   init_test_extra(NULL, 0);
 
@@ -142,9 +149,8 @@ void test_oom_force_peer_then_panic_main(void) {
   tealet_t *w1;
   int result;
 
-  /* Purpose: with two workers, OOM during w1->w2 with FORCE should defunct w1,
-   * continue to w2, and then panic-tagged switch to main should surface as
-   * TEALET_ERR_PANIC on main.
+  /* Verify that OOM during FORCE transfer from w1->w2 defuncts w1 and does
+   * not accidentally suppress PANIC signaling back to main.
    */
   init_test_extra(NULL, 0);
 
@@ -175,13 +181,18 @@ void test_oom_force_peer_then_panic_main(void) {
 static tealet_t *switch_nofail_mem_run(tealet_t *current, void *arg) {
   (void)arg;
 
-  /* Purpose: NOFAIL should retry with FORCE and transfer to main under OOM. */
+  /* Verify that NOFAIL retries with FORCE under OOM and does not accidentally
+   * stop at the first memory error.
+   */
   talloc_fail = 1;
   tealet_switch(current->main, NULL, TEALET_XFER_NOFAIL);
   abort();
   return NULL;
 }
 
+/* Verify that NOFAIL switch escalation to FORCE succeeds and does not
+ * accidentally leave the worker active.
+ */
 void test_switch_nofail_retries_force(void) {
   tealet_t *worker;
   int result;
@@ -211,6 +222,9 @@ static tealet_t *switch_nofail_defunct_target_run(tealet_t *current, void *arg) 
   return NULL;
 }
 
+/* Verify that NOFAIL switch to a defunct target reports PANIC and does not
+ * accidentally return success.
+ */
 void test_switch_nofail_defunct_target_panics_main(void) {
   tealet_t *victim;
   tealet_t *switcher;
@@ -245,13 +259,18 @@ void test_switch_nofail_defunct_target_panics_main(void) {
 static tealet_t *exit_nofail_mem_run(tealet_t *current, void *arg) {
   (void)arg;
 
-  /* Purpose: NOFAIL should retry with FORCE and transfer to main under OOM. */
+  /* Verify that NOFAIL exit retries with FORCE under OOM and does not
+   * accidentally stop at the first memory error.
+   */
   talloc_fail = 1;
   tealet_exit(current->main, NULL, TEALET_XFER_NOFAIL);
   abort();
   return NULL;
 }
 
+/* Verify that NOFAIL exit escalation to FORCE succeeds and does not
+ * accidentally keep the worker active.
+ */
 void test_exit_nofail_retries_force(void) {
   tealet_t *worker;
   int result;
@@ -281,6 +300,9 @@ static tealet_t *exit_nofail_defunct_target_run(tealet_t *current, void *arg) {
   return NULL;
 }
 
+/* Verify that NOFAIL exit to a defunct target surfaces PANIC and does not
+ * accidentally return success.
+ */
 void test_exit_nofail_defunct_target_panics_main(void) {
   tealet_t *victim;
   tealet_t *exiter;
@@ -327,8 +349,8 @@ static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
 void test_exit_self_invalid(void) {
   tealet_t *runner;
 
-  /* Purpose: exiting to self is invalid and must report TEALET_ERR_INVAL
-   * (not TEALET_ERR_DEFUNCT).
+  /* Verify that exiting to self returns TEALET_ERR_INVAL and does not
+   * accidentally report TEALET_ERR_DEFUNCT.
    */
   init_test();
 
@@ -355,6 +377,9 @@ static tealet_t *test_exit_defunct_fail_run(tealet_t *current, void *arg) {
   return NULL;
 }
 
+/* Verify that exiting to a defunct target returns TEALET_ERR_DEFUNCT and does
+ * not accidentally permit transfer.
+ */
 void test_exit_defunct_target_returns_error(void) {
   tealet_t *victim;
   tealet_t *exiter;
@@ -391,6 +416,9 @@ static tealet_t *test_explicit_panic_exit_run(tealet_t *current, void *arg) {
   return NULL;
 }
 
+/* Verify that explicit PANIC exit reports TEALET_ERR_PANIC upstream and does
+ * not accidentally clear panic signaling.
+ */
 void test_exit_explicit_panic(void) {
   tealet_t *exiter;
   int result;
@@ -416,9 +444,8 @@ void test_debug_swap_far_invalid_caller_check_main(void) {
   char stack_probe;
   int result;
 
-  /* Test purpose: validate caller-check failure on the main tealet.
-   * We move main->stack_far to current stack probe + 64 MiB so the
-   * max-stack-distance check fails deterministically, then restore it.
+  /* Verify that caller-check failure on main returns TEALET_ERR_INVAL and
+   * does not accidentally leave mutated far-pointer state behind.
    */
   init_test();
 
@@ -449,9 +476,8 @@ static tealet_t *test_invalid_caller_check_child_run(tealet_t *current,
   int result;
   (void)arg;
 
-  /* Test purpose: validate caller-check failure on a running child tealet.
-   * We move child->stack_far to current stack probe + 64 MiB so switching to
-   * main fails with TEALET_ERR_INVAL, then restore and exit normally.
+  /* Verify that caller-check failure on a running child returns
+   * TEALET_ERR_INVAL and does not accidentally persist the far-pointer tweak.
    */
   new_far = (void *)((uintptr_t)&stack_probe + ((uintptr_t)64 << 20));
   result = tealet_debug_swap_far(current, new_far, &old_far);
@@ -471,8 +497,8 @@ static tealet_t *test_invalid_caller_check_child_run(tealet_t *current,
 void test_debug_swap_far_invalid_caller_check_child(void) {
   tealet_t *runner;
 
-  /* Test purpose: ensure child-path caller validation is covered using
-   * debug far-pointer mutation and proper restoration.
+  /* Verify that child-path caller validation is enforced and does not
+   * accidentally allow a bad far-pointer configuration to pass.
    */
   init_test();
 

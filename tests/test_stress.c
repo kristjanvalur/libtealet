@@ -7,6 +7,10 @@
 #include "tealet.h"
 #include "test_harness.h"
 
+/* This file contains tests for randomized switching stress, and ensures that
+ * scheduler and lifecycle APIs remain stable under high churn.
+ */
+
 #define ARRAYSIZE 127
 #define MAX_STATUS 50000
 
@@ -68,6 +72,9 @@ static tealet_t *random_new_tealet(tealet_t *cur, void *arg) {
   return NULL;
 }
 
+/* Verify that random create/switch/exit churn preserves core invariants and
+ * does not accidentally strand tealets in inconsistent states.
+ */
 void test_random(void) {
   int i;
   init_test();
@@ -160,6 +167,9 @@ static void random2_run(int index) {
   tealetarray[index] = NULL;
 }
 
+/* Verify that randomized switching with bounded per-tealet runs remains
+ * stable and does not accidentally deadlock or orphan runnable tealets.
+ */
 void test_random2(void) {
   int i;
   init_test();

@@ -8,6 +8,10 @@
 #include "tealet_extras.h"
 #include "test_harness.h"
 
+/* This file contains tests for transfer semantics, and ensures that status,
+ * switch, exit, and argument-passing APIs behave consistently.
+ */
+
 tealet_t *test_status_run(tealet_t *t1, void *arg) {
   (void)arg;
   assert(t1 == tealet_current(t1));
@@ -16,6 +20,9 @@ tealet_t *test_status_run(tealet_t *t1, void *arg) {
   return g_main;
 }
 
+/* Verify that status and main/non-main identity invariants hold and do not
+ * accidentally misclassify active tealets.
+ */
 void test_status(void) {
   tealet_t *stub1;
   int result;
@@ -46,6 +53,9 @@ tealet_t *test_exit_run(tealet_t *t1, void *arg) {
   return (tealet_t *)-1;
 }
 
+/* Verify that exit behavior for default and delete modes is correct and does
+ * not accidentally leave exited state inconsistent.
+ */
 void test_exit(void) {
   tealet_t *stub1, *stub2;
   int result;
@@ -113,6 +123,9 @@ tealet_t *test_switch_1(tealet_t *t1, void *arg) {
   return glob_t2;
 }
 
+/* Verify that multi-hop switching preserves ordering and state progression and
+ * does not accidentally corrupt switch sequencing.
+ */
 void test_switch(void) {
   init_test();
   assert(tealet_new_native_call(g_main, test_switch_1, NULL, NULL) != NULL);
@@ -128,12 +141,15 @@ static tealet_t *switch_self_panic_runner(tealet_t *current, void *arg) {
   return current->main;
 }
 
+/* Verify that PANIC self-switch is immediate and non-sticky, and does not
+ * accidentally poison later unrelated switches.
+ */
 void test_switch_self_panic(void) {
   tealet_t *runner;
   int result;
 
-  /* Purpose: self-switch with PANIC should return TEALET_ERR_PANIC
-   * immediately and must not leak panic state into later switches.
+  /* Verify that self-switch with PANIC returns TEALET_ERR_PANIC immediately
+   * and does not accidentally leak panic state into later switches.
    */
   init_test();
 
@@ -161,6 +177,9 @@ tealet_t *test_arg_1(tealet_t *t1, void *arg) {
   return NULL;
 }
 
+/* Verify that bidirectional argument passing across switch/exit is preserved
+ * and does not accidentally drop updated payloads.
+ */
 void test_arg(void) {
   void *myarg;
   tealet_t *t1;

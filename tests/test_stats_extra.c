@@ -6,6 +6,11 @@
 #include "tealet_extras.h"
 #include "test_harness.h"
 
+/* This file contains tests for extras payload propagation and stats
+ * accounting, and ensures that related APIs report consistent allocation and
+ * counter behavior.
+ */
+
 typedef struct extradata {
   int foo;
   char bar[5];
@@ -22,6 +27,9 @@ static tealet_t *extra_tealet(tealet_t *cur, void *arg) {
   return g_main;
 }
 
+/* Verify that TEALET_EXTRA payload survives duplicate and stub-run paths and
+ * does not accidentally lose field values.
+ */
 void test_extra(void) {
   tealet_t *t1;
   tealet_t *t2;
@@ -43,6 +51,9 @@ void test_extra(void) {
   fini_test();
 }
 
+/* Verify that the stats allocator wrapper records initialization allocations
+ * and does not accidentally undercount allocation activity.
+ */
 void test_memstats(void) {
   tealet_statsalloc_t salloc;
   tealet_statsalloc_init(&salloc, &talloc);
@@ -54,6 +65,9 @@ void test_memstats(void) {
   fini_test();
 }
 
+/* Verify that active/total stats counters track create/delete transitions and
+ * do not accidentally drift after teardown.
+ */
 void test_stats(void) {
   tealet_t *t1;
   tealet_stats_t stats;

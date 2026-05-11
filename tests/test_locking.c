@@ -5,6 +5,10 @@
 #include "tealet_extras.h"
 #include "test_harness.h"
 
+/* This file contains tests for lock transition accounting, and ensures that
+ * create/switch/exit APIs trigger balanced lock and unlock callbacks.
+ */
+
 typedef enum lock_transition_phase_e {
   LOCK_PHASE_NONE = 0,
   LOCK_PHASE_NEW_START = 1,
@@ -47,7 +51,9 @@ static tealet_t *test_lock_transition_run(tealet_t *current, void *arg) {
   return NULL;
 }
 
-/* Validate lock transition counts in the direct creation/switch path. */
+/* Verify that direct create/switch/exit transitions produce balanced lock
+ * callbacks and do not accidentally leave the lock held.
+ */
 void test_lock_transitions(void) {
   tealet_t *t;
   int result;
@@ -87,7 +93,9 @@ static tealet_t *test_lock_transition_stub_run(tealet_t *current, void *arg) {
   return NULL;
 }
 
-/* Validate lock transition counts for stub create and first run. */
+/* Verify that stub creation and first stub run produce balanced lock
+ * callbacks and do not accidentally skip unlock on exit.
+ */
 void test_lock_transitions_stub(void) {
   tealet_t *stub;
   int result;
@@ -111,7 +119,9 @@ void test_lock_transitions_stub(void) {
   fini_test();
 }
 
-/* Validate lock transition count for tealet_fork(). */
+/* Verify that tealet_fork() performs one balanced lock transition and does
+ * not accidentally continue child execution after exit.
+ */
 void test_lock_transitions_fork(void) {
   tealet_t *other = NULL;
   int result;

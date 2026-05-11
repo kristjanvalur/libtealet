@@ -4,6 +4,11 @@
 
 #include "test_harness.h"
 
+/* This file contains tests for stack-distance helpers and stack-far
+ * isolation, and ensures that stack-related APIs keep parent/child data
+ * separated.
+ */
+
 typedef struct stack_far_case_t {
   int value;
 } stack_far_case_t;
@@ -72,6 +77,9 @@ static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg) {
   return g_main;
 }
 
+/* Verify that tealet_stack_further chooses consistent farther addresses and
+ * does not accidentally invert stack-distance ordering.
+ */
 void test_stack_further(void) {
   int a_local;
   int b_local;
@@ -99,8 +107,9 @@ void test_stack_further(void) {
   fini_test();
 }
 
-/* test that stack isolation works if tealets are created with an extended
- * stack. */
+/* Verify that extended stack_far creation preserves parent/child isolation and
+ * does not accidentally leak child writes into parent storage.
+ */
 void test_stack_far_isolation(void) {
   tealet_t *parent;
 

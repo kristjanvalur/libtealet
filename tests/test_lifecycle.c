@@ -5,11 +5,21 @@
 #include "tealet_extras.h"
 #include "test_harness.h"
 
+/* This file contains tests for basic lifecycle flow, and ensures that create,
+ * previous, switch, and exit APIs preserve expected state transitions.
+ */
+
+/* Verify that initialize/finalize preserves current-tealet invariants and
+ * does not accidentally leave harness state dirty.
+ */
 void test_main_current(void) {
   init_test();
   fini_test();
 }
 
+/* Verify that unbound tealets reject switching and duplicate correctly, and do
+ * not accidentally expose a runnable state.
+ */
 void test_add_unbound_phase1(void) {
   tealet_t *unbound;
   tealet_t *copy;
@@ -52,6 +62,9 @@ static tealet_t *test_simple_run(tealet_t *t1, void *arg) {
   return g_main;
 }
 
+/* Verify that native create+run updates origin and previous fields and does
+ * not accidentally lose lineage metadata.
+ */
 void test_simple(void) {
   tealet_t *t;
   init_test();
@@ -62,6 +75,9 @@ void test_simple(void) {
   fini_test();
 }
 
+/* Verify that spawn default mode creates without immediate execution and does
+ * not accidentally run user code early.
+ */
 void test_simple_create(void) {
   tealet_t *t;
   init_test();
@@ -73,6 +89,9 @@ void test_simple_create(void) {
   fini_test();
 }
 
+/* Verify that a spawned tealet runs on first explicit switch and does not
+ * accidentally run more than once per handoff.
+ */
 void test_simple_create_and_run(void) {
   tealet_t *t;
   init_test();
@@ -97,6 +116,9 @@ static tealet_t *test_create_previous_run(tealet_t *t1, void *arg) {
   return g_main;
 }
 
+/* Verify that previous() inside first run points at main creator and does not
+ * accidentally report stale previous state.
+ */
 void test_create_previous(void) {
   tealet_t *t;
   init_test();
@@ -120,6 +142,9 @@ static tealet_t *test_previous_manual_delete_run(tealet_t *t1, void *arg) {
   return t1->main;
 }
 
+/* Verify that deleting the previous tealet clears main->previous and does not
+ * accidentally retain a dangling pointer.
+ */
 void test_previous_cleared_on_manual_delete(void) {
   tealet_t *t;
 
@@ -167,6 +192,9 @@ static tealet_t *test_switch_new_2(tealet_t *t2, void *arg) {
   return g_main;
 }
 
+/* Verify that switch ordering remains correct across stack-depth changes and
+ * does not accidentally corrupt transfer sequencing.
+ */
 void test_switch_new(void) {
   tealet_t *tealet1;
   tealet_t *tealet2;
