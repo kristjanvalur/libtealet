@@ -426,7 +426,7 @@ static tealet_t *test_stack_far_isolation_parent(tealet_t *current, void *arg) {
    */
   assert(shared.value == 11);
 
-  /* Resume child: it confirms its private value, then returns/exits to main. */
+  /* Resume child: it confirms its private value, then returns/exits to parent. */
   tealet_switch(child, NULL, TEALET_SWITCH_DEFAULT);
 
   /* Child has exited; explicit delete is still required. */
@@ -568,7 +568,7 @@ static tealet_t *test_lock_transition_run(tealet_t *current, void *arg) {
   lock_snapshot_take(&g_lock_exit_before);
   g_lock_phase = LOCK_PHASE_DONE;
   tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -607,7 +607,7 @@ static tealet_t *test_lock_transition_stub_run(tealet_t *current, void *arg) {
   lock_snapshot_take(&g_lock_exit_before);
   g_lock_phase = LOCK_PHASE_DONE;
   tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -664,7 +664,7 @@ void test_lock_transitions_fork(void) {
   assert(result == 0);
   tealet_test_lock_assert_unheld(&g_lock_state);
   tealet_exit(other, NULL, 0);
-  assert(0);
+  abort();
 }
 
 void test_simple_create(void) {
@@ -772,7 +772,7 @@ tealet_t *test_exit_run(tealet_t *t1, void *arg) {
   assert(t1 != g_main);
   status += 1;
   result = tealet_exit(g_main, NULL, (int)(intptr_t)arg);
-  assert(0);
+  abort();
   assert(result == 0);
   return (tealet_t *)-1;
 }
@@ -1011,7 +1011,7 @@ tealet_t *random_new_tealet(tealet_t *cur, void *arg) {
   }
   got_index = i;
   tealet_exit(tealetarray[i], NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1054,7 +1054,7 @@ tealet_t *random2_tealet(tealet_t *cur, void *arg) {
   random2_run(index);
   tealetarray[index] = NULL;
   tealet_exit(tealetarray[0], NULL, TEALET_EXIT_DELETE); /* switch to main */
-  assert(0);
+  abort();
   return NULL;
 }
 void random2_new(int index) {
@@ -1222,7 +1222,7 @@ tealet_t *mem_error_tealet(tealet_t *t1, void *arg) {
   res = tealet_switch(peer, &myarg, TEALET_SWITCH_DEFAULT);
   assert(res == TEALET_ERR_MEM);
   tealet_exit(peer, myarg, TEALET_EXIT_DELETE);
-  assert(0); // never runs
+  abort(); // never runs
   return NULL;
 }
 
@@ -1248,7 +1248,7 @@ static tealet_t *oom_force_to_main_run(tealet_t *current, void *arg) {
 
   /* FORCE should continue by defuncting current and transferring out. */
   result = tealet_switch(current->main, NULL, TEALET_SWITCH_FORCE);
-  assert(0);
+  abort();
   assert(result == 0);
   return NULL;
 }
@@ -1317,7 +1317,7 @@ static tealet_t *oom_force_peer_to_main_panic_run(tealet_t *current, void *arg) 
   /* Clear allocator fault so this switch-out can complete. */
   talloc_fail = 0;
   result = tealet_switch(current->main, NULL, TEALET_SWITCH_PANIC);
-  assert(0);
+  abort();
   assert(result == TEALET_ERR_PANIC);
   return NULL;
 }
@@ -1330,7 +1330,7 @@ static tealet_t *oom_force_to_peer_run(tealet_t *current, void *arg) {
 
   talloc_fail = 1;
   result = tealet_switch(oom_w2, NULL, TEALET_SWITCH_FORCE);
-  assert(0);
+  abort();
   assert(result == 0);
   (void)current;
   return NULL;
@@ -1376,7 +1376,7 @@ static tealet_t *test_exit_self_invalid_run(tealet_t *current, void *arg) {
   assert(result == TEALET_ERR_INVAL);
 
   tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1406,7 +1406,7 @@ static tealet_t *test_exit_defunct_fail_run(tealet_t *current, void *arg) {
   assert(result == TEALET_ERR_DEFUNCT);
 
   tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1441,7 +1441,7 @@ static tealet_t *test_explicit_panic_exit_run(tealet_t *current, void *arg) {
 
   assert(current != g_main);
   tealet_exit(target, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_PANIC);
-  assert(0);
+  abort();
   return NULL;
 }
 
@@ -1516,7 +1516,7 @@ static tealet_t *test_invalid_caller_check_child_run(tealet_t *current, void *ar
   assert(result == 0);
 
   tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  assert(0);
+  abort();
   return NULL;
 }
 

@@ -1001,15 +1001,15 @@ tealet_delete(t);
 - Cannot delete the currently executing tealet (use `tealet_exit()` instead)
 - Cannot delete the main tealet (use `tealet_finalize()`)
 - Tealets remain allocated when their run function returns
-- Only call on tealets you've kept alive explicitly
+- Only call on tealets that are still allocated
 
 **When to Use:**
 - Deleting tealets that never ran (`TEALET_STATUS_INITIAL`)
 - Cleaning up tealets kept alive with `TEALET_EXIT_DEFAULT`
+- Cleaning up tealets that returned normally
 - Manual resource management
 
 **When Not Needed:**
-- Run function returns normally → explicit `tealet_delete()` required
 - `tealet_exit()` with `TEALET_EXIT_DELETE` → automatic deletion
 
 ---

@@ -208,7 +208,7 @@ int main(void) {
 
 - `TEALET_EXIT_DEFAULT` (0): **Keep tealet allocated**; tealet must be manually deleted with `tealet_delete()`
 - `TEALET_EXIT_DELETE`: **Auto-delete on exit**; any tealet pointers to the exiting tealet become invalid after transfer
-- `TEALET_EXIT_DEFER`: **Defer deletion to run function return** (advanced; see API docs)
+- `TEALET_EXIT_DEFER`: **Defer exit transfer policy to run function return** (advanced; see API docs)
 
 **Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 
