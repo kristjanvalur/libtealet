@@ -371,7 +371,9 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * #TEALET_ERR_PANIC on its resumed switch return path.
  *
  * #TEALET_SWITCH_NOFAIL applies retry/fallback policy: first attempt with
- * FORCE and panic+force fallback to main on remaining failures.
+ * FORCE, then panic+force fallback to main only on #TEALET_ERR_MEM/
+ * #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
+ * Unknown switch flag bits are API misuse and asserted in debug builds.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
  */
@@ -409,16 +411,15 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
  *
  * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
- * #TEALET_EXIT_DEFER.
+ * #TEALET_EXIT_DEFER (debug builds assert this flag combination).
  *
  * #TEALET_EXIT_NOFAIL enables automatic retry policy:
- * 1) requested target (fail-fast),
- * 2) requested target with #TEALET_EXIT_FORCE after #TEALET_ERR_MEM,
- * 3) panic+force fallback to main when retries still cannot complete.
+ * 1) requested target with #TEALET_EXIT_FORCE,
+ * 2) panic+force fallback to main only on #TEALET_ERR_MEM/
+ *    #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
  *
  * `return p;` from run() uses an implicit policy rooted in
- * `tealet_exit(p, NULL, TEALET_EXIT_DELETE)`, with retries for memory/defunct
- * failures and a panic+force fallback to main.
+ * `tealet_exit(p, NULL, TEALET_EXIT_DEFAULT | TEALET_EXIT_NOFAIL)`.
  */
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);

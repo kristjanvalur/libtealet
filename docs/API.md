@@ -409,7 +409,7 @@ the trade-off for forward progress under memory pressure.
 
 `TEALET_SWITCH_NOFAIL` applies a robust retry/fallback policy: first try the
 requested target with `TEALET_SWITCH_FORCE`, then panic+force fallback to main
-for defunct or remaining failures.
+for `TEALET_ERR_MEM` / `TEALET_ERR_DEFUNCT` failures.
 See the detailed policy discussion and conceptual retry flow under
 `tealet_exit()` / `TEALET_EXIT_NOFAIL` below; `TEALET_SWITCH_NOFAIL` follows
 the same shape with switch flags.
@@ -418,6 +418,9 @@ the same shape with switch flags.
 legitimate switch-back signal (not a transfer failure to retry). In typical
 usage, panic-tagged fallbacks target main, so this check is usually needed on
 the main tealet's switch return path.
+
+**Debug invariant:** unknown `tealet_switch()` flag bits are treated as API
+misuse and asserted in debug builds.
 
 **Usage:**
 ```c
@@ -520,7 +523,10 @@ This function does not return on successful transfer.
 - Negative error code on failure
     - `TEALET_ERR_MEM` when save/restore cannot complete and `TEALET_EXIT_FORCE` is not set
     - `TEALET_ERR_DEFUNCT` when the requested target is defunct
-    - `TEALET_ERR_INVAL` for invalid flag combinations (for example `TEALET_EXIT_DEFER | TEALET_EXIT_PANIC`)
+    - `TEALET_ERR_INVAL` for invalid target/state
+
+**Debug invariant:** `TEALET_EXIT_DEFER | TEALET_EXIT_PANIC` (or unknown flag
+bits) is treated as API misuse and asserted in debug builds.
 
 `tealet_exit()` does not implicitly reroute to another target.
 
@@ -535,7 +541,9 @@ continue would require main-stack growth that fails under memory pressure.
 `TEALET_EXIT_NOFAIL` applies the same robust fallback policy used by implicit
 run-function return handling:
 - try requested target with `TEALET_EXIT_FORCE`
-- reroute to main with `TEALET_EXIT_PANIC | TEALET_EXIT_FORCE` when transfer still cannot complete
+- reroute to main with `TEALET_EXIT_PANIC | TEALET_EXIT_FORCE` only on
+    `TEALET_ERR_MEM` / `TEALET_ERR_DEFUNCT`
+- return other errors unchanged
 Main is never marked defunct, so this edge case remains a hard memory failure.
 
 This means a successful forced exit can make other tealets become defunct as

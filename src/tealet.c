@@ -1819,8 +1819,7 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
   int result;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
 
-  if ((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC | TEALET_SWITCH_NOFAIL)) != 0)
-    return TEALET_ERR_INVAL;
+  assert((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC | TEALET_SWITCH_NOFAIL)) == 0);
 
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
@@ -1832,7 +1831,7 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
     retry_flags = flags_used | TEALET_SWITCH_FORCE;
 
     result = tealet_switch_inner(stub, parg, retry_flags);
-    if (result < 0 && result != TEALET_ERR_PANIC) {
+    if (result == TEALET_ERR_MEM || result == TEALET_ERR_DEFUNCT) {
       retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
       result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
     }
@@ -1875,6 +1874,8 @@ static int tealet_exit_inner(tealet_t *target, void *arg, int flags) {
   g_target->stack_far = stack_far;
   g_current->stack = NULL;
   g_current->flags &= ~(TEALET_TFLAGS_EXITING | TEALET_TFLAGS_AUTODELETE | TEALET_TFLAGS_EXITFORCE);
+  /* verify that we don't get the switch-back code PANIC */
+  assert(result != TEALET_ERR_PANIC); /* panic should be handled by caller if requested */
   return result;
 }
 
@@ -1929,16 +1930,16 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
     retry_flags = flags_used | TEALET_EXIT_FORCE;
 
     result = tealet_exit_inner(target, arg, retry_flags);
-    if (result < 0) {
+    if (result == TEALET_ERR_MEM || result == TEALET_ERR_DEFUNCT) {
       retry_flags = flags_used | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
       result = tealet_exit_inner((tealet_t *)g_main, arg, retry_flags);
     }
   } else {
     result = tealet_exit_inner(target, arg, flags_used);
-    assert(result < 0);
   }
 
   tealet_unlock_switch(g_main);
+  assert(result < 0);
   return result;
 }
 
