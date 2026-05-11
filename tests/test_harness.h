@@ -19,5 +19,8 @@ void lock_snapshot_assert_delta_one(const lock_snapshot_t *before);
 void test_lock_assert_unheld(void);
 
 tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far);
+int tealet_test_new_dispatch(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far);
+
+tealet_t *test_simple_run(tealet_t *t1, void *arg);
 
 #endif
