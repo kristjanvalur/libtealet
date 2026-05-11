@@ -511,11 +511,11 @@ unsigned int tealet_get_origin(tealet_t *tealet);
 /* Status code: active tealet. */
 #define TEALET_STATUS_ACTIVE 0
 /* Status code: new/unbound tealet (created via tealet_new()). */
-#define TEALET_STATUS_NEW 2
+#define TEALET_STATUS_NEW 1
 /* Status code: exited tealet. */
-#define TEALET_STATUS_EXITED 1
+#define TEALET_STATUS_EXITED 2
 /* Status code: defunct tealet. */
-#define TEALET_STATUS_DEFUNCT -2
+#define TEALET_STATUS_DEFUNCT 3
 TEALET_API
 int tealet_status(tealet_t *tealet);
 
