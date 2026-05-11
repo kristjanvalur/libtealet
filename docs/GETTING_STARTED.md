@@ -161,10 +161,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     printf("Doing work...\n");
     
     /* ✅ Recommended: Explicit exit */
-    tealet_exit(current->main, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_NOFAIL);
-    
-    /* Should not reach here */
-    return current->main;  /* Fallback only */
+    tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
 }
 ```
 
@@ -174,43 +171,15 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 - Required for main-lineage fork flows (see Advanced section)
 - Clearer intent in complex switching scenarios
 
-### ⚠️ Auto-Delete Danger
+### Cleanup on return
 
-When a run function returns (or calls `tealet_exit()` with `TEALET_EXIT_DELETE`), the tealet is **automatically deleted**. This can cause dangling pointer issues:
+When a run function returns normally, the tealet remains allocated. You must delete it explicitly when done.
+
+**Note:** This does not apply if the run function explicitly exits with `tealet_exit(..., TEALET_EXIT_DELETE)`. In particular, with `TEALET_RUN_SWITCH`, that exit path can free the tealet before `tealet_run()` returns, so the original handle is no longer safe to inspect, reuse, or delete.
 
 ```c
-/* ❌ DANGER: Race condition */
 tealet_t *worker_run(tealet_t *current, void *arg) {
     printf("Quick work\n");
-    return current->main;  /* Auto-deletes this tealet */
-}
-
-int main(void) {
-    tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
-    tealet_t *main = tealet_initialize(&alloc, 0);
-    
-    void *arg = NULL;
-    tealet_t *worker = NULL;
-    worker = tealet_new(main);
-    tealet_run(worker, worker_run, &arg, NULL, TEALET_RUN_SWITCH);
-    /* worker may already be deleted here! */
-    
-    int status = tealet_status(worker);  /* ❌ Dangling pointer! */
-    
-    tealet_finalize(main);
-    return 0;
-}
-```
-
-**What happened?** `tealet_run(..., TEALET_RUN_SWITCH)` starts the worker immediately. The worker completes and deletes itself before control returns. Now `worker` is a dangling pointer.
-
-### ✅ Safe Pattern: Prevent Auto-Delete
-
-```c
-tealet_t *worker_run(tealet_t *current, void *arg) {
-    printf("Work done\n");
-    /* Exit without auto-delete */
-    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT | TEALET_EXIT_NOFAIL);
     return current->main;
 }
 
@@ -222,13 +191,13 @@ int main(void) {
     tealet_t *worker = NULL;
     worker = tealet_new(main);
     tealet_run(worker, worker_run, &arg, NULL, TEALET_RUN_SWITCH);
-    /* worker still exists and can be queried */
+    /* worker is still valid here */
     
-    int status = tealet_status(worker);  /* ✅ Safe */
+    int status = tealet_status(worker);
     printf("Worker status: %d\n", status);
-    
-    /* Manual cleanup */
+
     tealet_delete(worker);
+    
     tealet_finalize(main);
     return 0;
 }
@@ -236,10 +205,10 @@ int main(void) {
 
 ### Exit Flags
 
-- `TEALET_EXIT_DEFAULT` (0): **Prevent auto-delete**; tealet must be manually deleted with `tealet_delete()`
-- `TEALET_EXIT_DELETE`: **Auto-delete on exit**; same as returning from the run function (the default behavior)
-- `TEALET_EXIT_DEFER`: **Defer deletion to run function return** (advanced; see API docs)
-- `TEALET_EXIT_NOFAIL`: **Enable robust fallback retries** when you intentionally do not check `tealet_exit()` return values
+- `TEALET_EXIT_DEFAULT` (0): **Keep tealet allocated**; tealet must be manually deleted with `tealet_delete()`
+- `TEALET_EXIT_DELETE`: **Auto-delete on exit**; any tealet pointers to the exiting tealet become invalid after transfer
+- `TEALET_EXIT_DEFER`: **Defer exit transfer policy to run function return** (advanced; see API docs)
+- `TEALET_EXIT_NOFAIL`: **Enable robust fallback retries** without manual recovery logic
 
 **Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 
@@ -255,12 +224,12 @@ There is no supported way to decouple this order.
 
 ### When to Use Each
 
-**Auto-delete (default):**
+**Explicit auto-delete with `TEALET_EXIT_DELETE`:**
 ```c
 tealet_t *fire_and_forget(tealet_t *current, void *arg) {
     /* Do work that doesn't need caller intervention */
     printf("Task complete\n");
-    return current->main;  /* Auto-deletes */
+    tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
 }
 ```
 

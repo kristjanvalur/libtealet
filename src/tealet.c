@@ -1429,7 +1429,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     /* Resolve any deferred-exit state explicitly so implicit return uses one
      * consistent (target,arg,flags) policy.
      */
-    exit_flags = TEALET_EXIT_DELETE;
+    exit_flags = TEALET_EXIT_DEFAULT;
     exit_arg = NULL;
     if (g_main->g_flags & TEALET_EXIT_DEFER) {
       exit_flags = g_main->g_flags & (~TEALET_EXIT_DEFER);

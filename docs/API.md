@@ -200,7 +200,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 }
 ```
 
-The run function executes until it returns or calls `tealet_exit()`. Upon return, the tealet is automatically deleted and execution transfers to the returned tealet.
+The run function executes until it returns or calls `tealet_exit()`. On return, execution transfers to the returned tealet and, by default, the current tealet remains allocated until explicitly deleted. However, a prior deferred `tealet_exit()` request with `TEALET_EXIT_DELETE` can still cause the tealet to be deleted when the run function returns.
 
 ---
 
@@ -414,6 +414,9 @@ See the detailed policy discussion and conceptual retry flow under
 `tealet_exit()` / `TEALET_EXIT_NOFAIL` below; `TEALET_SWITCH_NOFAIL` follows
 the same shape with switch flags.
 
+When the requested target is `main`, `TEALET_SWITCH_NOFAIL` is guaranteed to
+succeed (transfer starts), because main is never allowed to become defunct.
+
 `TEALET_SWITCH_NOFAIL` can still return `TEALET_ERR_PANIC`, because panic is a
 legitimate switch-back signal (not a transfer failure to retry). In typical
 usage, panic-tagged fallbacks target main, so this check is usually needed on
@@ -476,7 +479,7 @@ Exit current tealet and transfer control to target.
 
 **Flags:**
 - `TEALET_EXIT_DEFAULT` (0): Don't auto-delete, manual cleanup required
-- `TEALET_EXIT_DELETE`: Auto-delete tealet on exit (same as return behavior)
+- `TEALET_EXIT_DELETE`: Auto-delete tealet on exit; outstanding pointers to the exiting tealet become invalid after transfer
 - `TEALET_EXIT_DEFER`:  Store flags and argument, return to caller.  Will be used when
   tealet exits later.
 - `TEALET_EXIT_FORCE`: Force the requested transfer despite save-time memory pressure by defuncting affected non-main stacks as needed
@@ -499,7 +502,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```c
 tealet_t *my_run(tealet_t *current, void *arg) {
     if (should_exit) {
-        /* store exit target and flags /*
+        /* store exit target and flags */
         tealet_exit(current->main, &result, TEALET_EXIT_DEFER);
         /* Returns here, can do cleanup */
         cleanup_resources();
@@ -507,9 +510,9 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     
     /* return value ignored.
      * exit value from earlier will be used.
-     * Tealet is not auto-deleted
+     * Tealet is not auto-deleted unless TEALET_EXIT_DELETE is requested
      */
-    return nullptr;
+    return NULL;
 }
 ```
 
@@ -540,12 +543,15 @@ run-function return handling:
 - return other errors unchanged
 Main is never marked defunct, so this edge case remains a hard memory failure.
 
+When the requested target is `main`, `TEALET_EXIT_NOFAIL` is guaranteed to
+succeed (transfer starts), because main is never allowed to become defunct.
+
 This means a successful forced exit can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
 
-**Note:** Returning from the run function automatically deletes the tealet using
-an implicit `tealet_exit()` policy:
-- run `TEALET_EXIT_NOFAIL` with delete semantics
+**Note:** Returning from the run function does not auto-delete by default; it
+uses `TEALET_EXIT_DEFAULT` semantics unless `TEALET_EXIT_DELETE` was requested
+explicitly (for example via deferred exit flags).
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
@@ -1017,16 +1023,16 @@ tealet_delete(t);
 **Important:**
 - Cannot delete the currently executing tealet (use `tealet_exit()` instead)
 - Cannot delete the main tealet (use `tealet_finalize()`)
-- Tealets are automatically deleted when their run function returns
-- Only call on tealets you've kept alive explicitly
+- Tealets remain allocated when their run function returns
+- Only call on tealets that are still allocated
 
 **When to Use:**
 - Deleting tealets that never ran (`TEALET_STATUS_INITIAL`)
 - Cleaning up tealets kept alive with `TEALET_EXIT_DEFAULT`
+- Cleaning up tealets that returned normally
 - Manual resource management
 
 **When Not Needed:**
-- Run function returns normally → automatic deletion
 - `tealet_exit()` with `TEALET_EXIT_DELETE` → automatic deletion
 
 ---
@@ -1358,7 +1364,7 @@ Switch result signaling explicit panic-tagged resume.
 ```c
 /* Exit flags (new names) */
 #define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
-#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
+#define TEALET_EXIT_DELETE  1  /* Auto-delete on exit; pointers to exiting tealet become invalid */
 #define TEALET_EXIT_DEFER   2  /* Defer exit to return */
 #define TEALET_EXIT_FORCE   4  /* Force exit despite save-time memory failures */
 #define TEALET_EXIT_PANIC   8  /* Mark receiving tealet as panic-resumed */
@@ -1414,8 +1420,11 @@ tealet_run(t, my_func, &arg, NULL, TEALET_RUN_SWITCH);
 **Return from run function:**
 - Normal completion
 - Simplest code path
-- Automatic cleanup (tealet is deleted)
+- Keeps tealet allocated by default; delete it later with `tealet_delete()`
 - Can only specify exit target tealet, no flags.
+
+**Note:** A prior deferred exit request with `TEALET_EXIT_DELETE` can still
+cause deletion when the run function eventually returns.
 
 **Use `tealet_exit()` with `TEALET_EXIT_DELETE`:**
 - Need to exit from nested function calls

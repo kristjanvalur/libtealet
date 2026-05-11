@@ -242,10 +242,9 @@ tealet_t *tealet_new(tealet_t *tealet);
  * starts on a later tealet_switch() to that target.
  *
  * @warning With #TEALET_RUN_SWITCH, @p run may return/exit before
- * tealet_run() returns to the caller. If that path uses auto-delete
- * (implicit return policy or tealet_exit(..., #TEALET_EXIT_DELETE)),
- * the @p tealet handle can become invalid before tealet_run() returns.
- * Keep the tealet alive explicitly when post-call handle reuse is required.
+ * tealet_run() returns to the caller. If that path uses
+ * tealet_exit(..., #TEALET_EXIT_DELETE), the @p tealet handle can become
+ * invalid before tealet_run() returns.
  */
 TEALET_API
 int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far, int flags);
@@ -373,6 +372,8 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * #TEALET_SWITCH_NOFAIL applies retry/fallback policy: first attempt with
  * FORCE, then panic+force fallback to main only on #TEALET_ERR_MEM/
  * #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
+ * When @p target is main, #TEALET_SWITCH_NOFAIL is guaranteed to succeed,
+ * because main is never allowed to become defunct.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
  */
@@ -387,7 +388,7 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
 
 /* Exit flags */
 #define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
-#define TEALET_EXIT_DELETE 1  /* Auto-delete on exit */
+#define TEALET_EXIT_DELETE 1  /* Auto-delete on exit; pointers to exiting tealet become invalid */
 #define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
 #define TEALET_EXIT_FORCE 4   /* Force exit switch despite save-time memory failures */
 #define TEALET_EXIT_PANIC 8   /* Mark the receiving tealet as panic-resumed */
@@ -416,9 +417,12 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
  * 1) requested target with #TEALET_EXIT_FORCE,
  * 2) panic+force fallback to main only on #TEALET_ERR_MEM/
  *    #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
+ * When @p target is main, #TEALET_EXIT_NOFAIL is guaranteed to succeed,
+ * because main is never allowed to become defunct.
  *
  * `return p;` from run() uses an implicit policy rooted in
- * `tealet_exit(p, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_NOFAIL)`.
+ * `tealet_exit(p, NULL, TEALET_EXIT_DEFAULT)`, with retries for memory/defunct
+ * failures and a panic+force fallback to main.
  */
 TEALET_API
 int tealet_exit(tealet_t *target, void *arg, int flags);

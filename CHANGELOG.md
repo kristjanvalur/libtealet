@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     progress under memory pressure/defunct-target conditions.
 
 ### Changed
+- **Run-return lifecycle now keeps tealets alive by default**
+  - Returning from a tealet run function now follows `TEALET_EXIT_DEFAULT`
+    semantics (tealet remains allocated) instead of implicit delete.
+  - Automatic deletion remains available via explicit
+    `tealet_exit(..., TEALET_EXIT_DELETE)`.
+  - Tests and examples were updated to perform explicit `tealet_delete()`
+    cleanup where ownership remains with the caller.
+  - API/docs now clarify that `TEALET_EXIT_DELETE` invalidates outstanding
+    pointers to the exiting tealet after transfer.
+
 - **Creation semantics now use explicit allocation + bind/start steps**
   - `tealet_new()` now allocates and returns a NEW/unbound tealet handle.
   - `tealet_run()` is the bind/start primitive, with:
