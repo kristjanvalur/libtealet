@@ -68,6 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `TEALET_XFER_*` occupies the low 8-bit transfer flag space; exit-only flags
     begin at `0x100` to reserve headroom for future transfer-flag growth.
 
+- **Build now tracks generated header dependencies automatically**
+  - Make rules now emit and include compiler-generated dependency files for C
+    objects.
+  - Header edits now trigger the correct object rebuilds without requiring a
+    manual clean step.
+
 ### Removed
 - **Legacy creation API surface removed from core**
   - Removed core `tealet_create()` and the old create-and-start `tealet_new(...)`

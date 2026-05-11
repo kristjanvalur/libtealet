@@ -1059,14 +1059,14 @@ static int tealet_stack_grow_list(tealet_main_t *main, tealet_stack_t *list, cha
  * save and restore logic using previously defined functions
  */
 
-  /** main->g_target contains the tealet we are switching to:
+/** main->g_target contains the tealet we are switching to:
  * target->stack_far is the limit to which we must save the old stack
  * target->stack can be NULL, indicating that the target stack
  * needs not be restored.
-   *
-   * One-shot transfer signals consumed here:
-   * - current->SAVEFORCE: read once for this save operation, then cleared.
-   * - current->EXITING/AUTODELETE: consumed when exiting path is taken.
+ *
+ * One-shot transfer signals consumed here:
+ * - current->SAVEFORCE: read once for this save operation, then cleared.
+ * - current->EXITING/AUTODELETE: consumed when exiting path is taken.
  */
 static int tealet_save_state(tealet_main_t *g_main, void *old_stack_pointer) {
   tealet_sub_t *g_target = g_main->g_target;
@@ -1263,10 +1263,10 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
 
   /* Locking is owned by top-level switching APIs (new/create/switch/exit/fork).
    * This helper assumes the caller already established the desired lock scope.
-    *
-    * PANIC is a one-shot transfer signal (set before calling this helper).
-    * This helper always consumes/clears PANIC before returning, on both
-    * success and error paths.
+   *
+   * PANIC is a one-shot transfer signal (set before calling this helper).
+   * This helper always consumes/clears PANIC before returning, on both
+   * success and error paths.
    */
 
   if (target->flags & TEALET_TFLAGS_EXITED) {
@@ -1332,7 +1332,7 @@ static int tealet_switchstack(tealet_main_t *g_main, tealet_sub_t *target, void 
 #if TEALET_WITH_STACK_GUARD
     tealet_guard_protect_current(g_main);
 #endif
-  g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
+    g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
     return TEALET_ERR_MEM;
   }
   g_main->g_target = NULL;
