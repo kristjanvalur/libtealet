@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     switch) are returned unchanged.
 
 ### Changed
+- **Transfer internals now use one-shot signaling flags with explicit consumption points**
+  - Renamed the internal transient per-tealet force bit from `EXITFORCE` to
+    `SAVEFORCE` to reflect that it applies to save behavior generally, not only
+    exit flows.
+  - Clarified internal ownership/lifecycle: transfer prep sets one-shot signals
+    (`SAVEFORCE`, `PANIC`) before the handoff, and low-level transfer helpers
+    consume and clear them during the same operation.
+
+- **Switch/exit transfer paths are now factored around shared kinship**
+  - Refactored `tealet_switch()` and `tealet_exit()` to leverage a shared
+    internal transfer helper (`tealet_xfer_inner`) for common transfer
+    mechanics, while preserving each API's mode-specific behavior.
+  - Kept mode-specific semantics explicit (for example exit-mode invariants and
+    retry policy orchestration) while reducing duplicate transfer plumbing.
+
 - **Run-return lifecycle now keeps tealets alive by default**
   - Returning from a tealet run function now follows `TEALET_EXIT_DEFAULT`
     semantics (tealet remains allocated) instead of implicit delete.
@@ -38,11 +53,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
     mode flags.
 
-- **Transfer flags are unified across switch and exit**
-  - Shared transfer behavior now uses `TEALET_XFER_*` flags.
-  - `tealet_switch()` accepts only `TEALET_XFER_*`.
-  - `tealet_exit()` accepts `TEALET_XFER_*` plus exit-only
-    `TEALET_EXIT_DELETE` / `TEALET_EXIT_DEFER`.
+- **Public transfer flags were renamed to `TEALET_XFER_*`**
+  - User-facing switch/exit transfer behavior now uses shared
+    `TEALET_XFER_*` names.
+  - `tealet_switch()` now uses:
+    - `TEALET_XFER_FORCE` (was `TEALET_SWITCH_FORCE`)
+    - `TEALET_XFER_PANIC` (was `TEALET_SWITCH_PANIC`)
+    - `TEALET_XFER_NOFAIL` (was `TEALET_SWITCH_NOFAIL`)
+  - `tealet_exit()` now uses:
+    - `TEALET_XFER_FORCE` (was `TEALET_EXIT_FORCE`)
+    - `TEALET_XFER_PANIC` (was `TEALET_EXIT_PANIC`)
+    - `TEALET_XFER_NOFAIL` (was `TEALET_EXIT_NOFAIL`)
+    - plus exit-only `TEALET_EXIT_DELETE` / `TEALET_EXIT_DEFER`.
   - `TEALET_XFER_*` occupies the low 8-bit transfer flag space; exit-only flags
     begin at `0x100` to reserve headroom for future transfer-flag growth.
 
