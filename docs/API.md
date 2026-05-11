@@ -419,11 +419,6 @@ legitimate switch-back signal (not a transfer failure to retry). In typical
 usage, panic-tagged fallbacks target main, so this check is usually needed on
 the main tealet's switch return path.
 
-Unknown `tealet_switch()` flag bits return `TEALET_ERR_INVAL`.
-
-**Debug invariant:** unknown `tealet_switch()` flag bits are also asserted in
-debug builds.
-
 **Usage:**
 ```c
 void *arg = my_data;
@@ -527,12 +522,6 @@ This function does not return on successful transfer.
     - `TEALET_ERR_DEFUNCT` when the requested target is defunct
     - `TEALET_ERR_INVAL` for invalid target/state
 
-`TEALET_EXIT_DEFER | TEALET_EXIT_PANIC` (and unknown exit flag bits) return
-`TEALET_ERR_INVAL`.
-
-**Debug invariant:** these invalid flag combinations/bits are also asserted in
-debug builds.
-
 `tealet_exit()` does not implicitly reroute to another target.
 
 `TEALET_EXIT_FORCE` mirrors `TEALET_SWITCH_FORCE` behavior:
@@ -556,8 +545,7 @@ the trade-off for forward progress under memory pressure.
 
 **Note:** Returning from the run function automatically deletes the tealet using
 an implicit `tealet_exit()` policy:
-- first run `TEALET_EXIT_NOFAIL` with delete semantics
-- if that still fails for any reason, panic+force to main
+- run `TEALET_EXIT_NOFAIL` with delete semantics
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
