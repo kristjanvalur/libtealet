@@ -256,6 +256,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\tests\tests.c" />
+    <ClCompile Include="..\tests\test_lifecycle.c" />
+    <ClCompile Include="..\tests\test_locking.c" />
+    <ClCompile Include="..\tests\test_resilience.c" />
+    <ClCompile Include="..\tests\test_stack.c" />
+    <ClCompile Include="..\tests\test_stats_extra.c" />
+    <ClCompile Include="..\tests\test_stress.c" />
+    <ClCompile Include="..\tests\test_transfer.c" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="tealet.vcxproj">
