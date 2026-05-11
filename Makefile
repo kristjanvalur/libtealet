@@ -242,11 +242,14 @@ tests/test_transfer.o: tests/test_transfer.c src/tealet.h
 tests/test_stress.o: tests/test_stress.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_stress.c
 
-bin/test-static: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o bin/libtealet.a
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o ${DEBUG} -ltealet
+tests/test_resilience.o: tests/test_resilience.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_resilience.c
 
-bin/test-dynamic: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o ${DEBUG} -ltealet
+bin/test-static: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o bin/libtealet.a
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o ${DEBUG} -ltealet
+
+bin/test-dynamic: bin tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o tests/test_locking.o tests/test_transfer.o tests/test_stress.o tests/test_resilience.o ${DEBUG} -ltealet
 
 # Sanitizer tests - run on single platform for sanity checking
 .PHONY: test-sanitizers test-ubsan test-valgrind
