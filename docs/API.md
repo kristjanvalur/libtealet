@@ -1414,8 +1414,11 @@ tealet_run(t, my_func, &arg, NULL, TEALET_RUN_SWITCH);
 **Return from run function:**
 - Normal completion
 - Simplest code path
-- Automatic cleanup (tealet is deleted)
+- Keeps tealet allocated by default; delete it later with `tealet_delete()`
 - Can only specify exit target tealet, no flags.
+
+**Note:** A prior deferred exit request with `TEALET_EXIT_DELETE` can still
+cause deletion when the run function eventually returns.
 
 **Use `tealet_exit()` with `TEALET_EXIT_DELETE`:**
 - Need to exit from nested function calls
