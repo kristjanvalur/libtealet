@@ -551,8 +551,8 @@ exit from nested calls within the run function.
 
 **Robust retry policy used by `TEALET_EXIT_NOFAIL` (conceptual flow):**
 ```c
-/* Non-returning helper. abort() documents unreachable return. */
-static void exit_nofail_policy(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
+/* Conceptual helper: return non-robustness failures unchanged. */
+static int exit_nofail_policy(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
     int r;
 
     /* 1) First attempt: requested target, FORCE enabled. */
@@ -565,7 +565,7 @@ static void exit_nofail_policy(tealet_t *self, tealet_t *target, void *arg, int 
     }
 
     /* 3) Other failures are returned unchanged by NOFAIL. */
-    return;
+    return r;
 }
 ```
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **NOFAIL transfer policies for both exit and switch APIs**
+  - Added `TEALET_EXIT_NOFAIL` and `TEALET_SWITCH_NOFAIL` to provide a
+    robustness-oriented transfer mode for callers that prioritize forward
+    progress under memory pressure/defunct-target conditions.
+
 ### Changed
 - **Creation semantics now use explicit allocation + bind/start steps**
   - `tealet_new()` now allocates and returns a NEW/unbound tealet handle.
@@ -17,10 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
     mode flags.
 
-- **Added NOFAIL transfer policies for both exit and switch APIs**
-  - Added `TEALET_EXIT_NOFAIL` and `TEALET_SWITCH_NOFAIL` to provide a
-    robustness-oriented transfer mode for callers that prioritize forward
-    progress under memory pressure/defunct-target conditions.
+- **NOFAIL transfer policy behavior and internals**
   - Both NOFAIL paths now use FORCE-first transfer attempts.
   - Fallback to `PANIC|FORCE` main transfer is limited to expected runtime
     failure classes (`TEALET_ERR_MEM` / `TEALET_ERR_DEFUNCT`).
