@@ -139,13 +139,13 @@ static tealet_t *run_write_to_target(tealet_t *current, void *arg) {
   original = *target;
   *target ^= 0x5Au;
 
-  switch_result = tealet_switch(command->return_to, NULL, TEALET_SWITCH_DEFAULT);
+  switch_result = tealet_switch(command->return_to, NULL, TEALET_XFER_DEFAULT);
   if (command->first_switch_result)
     *command->first_switch_result = switch_result;
 
   if (switch_result == TEALET_ERR_INTEGRITY) {
     *target = original;
-    switch_result = tealet_switch(command->return_to, NULL, TEALET_SWITCH_DEFAULT);
+    switch_result = tealet_switch(command->return_to, NULL, TEALET_XFER_DEFAULT);
   }
 
   if (command->recovery_switch_result)
@@ -287,13 +287,13 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg) {
   original = *target;
   *target ^= 0x5Au;
 
-  switch_result = tealet_switch(command->return_to, NULL, TEALET_SWITCH_DEFAULT);
+  switch_result = tealet_switch(command->return_to, NULL, TEALET_XFER_DEFAULT);
   if (command->first_switch_result)
     *command->first_switch_result = switch_result;
 
   if (switch_result == TEALET_ERR_INTEGRITY) {
     *target = original;
-    switch_result = tealet_switch(command->return_to, NULL, TEALET_SWITCH_DEFAULT);
+    switch_result = tealet_switch(command->return_to, NULL, TEALET_XFER_DEFAULT);
   }
 
   if (command->recovery_switch_result)
@@ -351,7 +351,7 @@ static int run_integrity_switch_case(int fail_policy, int write_inside, int *fir
   command->recovery_switch_result = &second_switch_result;
 
   arg = command;
-  result = tealet_switch(writer, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(writer, &arg, TEALET_XFER_DEFAULT);
   assert(result == 0);
   tealet_free(main_tealet, outside_target);
   tealet_free(main_tealet, command);
@@ -417,7 +417,7 @@ static int run_mprotect_split_case(int write_guard_page, int *first_result, int 
   command->recovery_switch_result = &second_switch_result;
 
   arg = command;
-  result = tealet_switch(writer, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(writer, &arg, TEALET_XFER_DEFAULT);
   if (write_guard_page) {
     if (first_result)
       *first_result = first_switch_result;
@@ -615,7 +615,7 @@ static void test_set_while_snapshot_active_resizes(void) {
   assert(worker != NULL);
 
   arg = command;
-  result = tealet_switch(worker, &arg, TEALET_SWITCH_DEFAULT);
+  result = tealet_switch(worker, &arg, TEALET_XFER_DEFAULT);
   assert(result == 0);
   assert(command->configure_result == 0);
 

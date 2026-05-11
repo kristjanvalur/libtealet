@@ -20,6 +20,7 @@ CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1 \
 	-DTEALET_WITH_STACK_SNAPSHOT=$(TEALET_WITH_STACK_SNAPSHOT) \
 	-DTEALET_WITH_TESTING=$(TEALET_WITH_TESTING)
 CFLAGS += -fPIC -Wall $(PLATFORMFLAGS)
+DEPFLAGS = -MMD -MP
 LDFLAGS += -Lbin $(PLATFORMFLAGS)
 
 # Handle cross-compilation
@@ -58,10 +59,10 @@ coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tealet_extras.o
 
 src/tealet.o: src/tealet.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tealet.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ src/tealet.c
 
 src/tealet_extras.o: src/tealet_extras.c src/tealet_extras.h src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/tealet_extras.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ src/tealet_extras.c
 
 bin:
 	mkdir -p bin
@@ -78,7 +79,7 @@ bin/libtealet.a: bin $(allobj)
 	@rm -rf bin/tmp_ar
 
 clean:
-	rm -f src/*.o tests/*.o *.out *.so
+	rm -f src/*.o src/*.d tests/*.o tests/*.d *.out *.so
 	rm -rf bin/*
 
 .PHONY: abiname
@@ -190,38 +191,47 @@ bin/test-chunks: bin tests/test_chunks.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_chunks.o -ltealet
 
 tests/test_chunks.o: tests/test_chunks.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_chunks.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_chunks.c
 
 # Stochastic switching test
 bin/test-stochastic: bin tests/test_stochastic.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_stochastic.o -ltealet
 
 tests/test_stochastic.o: tests/test_stochastic.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_stochastic.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_stochastic.c
 
 # Fork test
 bin/test-fork: bin tests/test_fork.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_fork.o -ltealet
 
 tests/test_fork.o: tests/test_fork.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_fork.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_fork.c
 
 # Configure API test
 bin/test-config: bin tests/test_config.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_config.o -ltealet
 
 tests/test_config.o: tests/test_config.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_config.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_config.c
 
 # Current tealet test
 bin/test-current: bin tests/test_current.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_current.o -ltealet
 
 tests/test_current.o: tests/test_current.c src/tealet.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ tests/test_current.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_current.c
+
+# Load compiler-generated header dependencies when present.
+-include $(wildcard src/*.d tests/*.d)
+
+tests/setcontext.o: tests/setcontext.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/setcontext.c
 
 bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} -ltealet
+
+tests/tests.o: tests/tests.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/tests.c
 
 bin/test-static: bin tests/tests.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} -ltealet

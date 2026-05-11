@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **NOFAIL transfer policies for both exit and switch APIs**
-  - Added `TEALET_EXIT_NOFAIL` and `TEALET_SWITCH_NOFAIL` to provide a
+  - Added `TEALET_XFER_NOFAIL` to provide a
     robustness-oriented transfer mode for callers that prioritize forward
     progress under memory pressure/defunct-target conditions.
   - NOFAIL attempts the requested transfer with FORCE first.
@@ -19,9 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     switch) are returned unchanged.
 
 ### Changed
+- **Transfer internals now use one-shot signaling flags with explicit consumption points**
+  - Renamed the internal transient per-tealet force bit from `EXITFORCE` to
+    `SAVEFORCE` to reflect that it applies to save behavior generally, not only
+    exit flows.
+  - Clarified internal ownership/lifecycle: transfer prep sets one-shot signals
+    (`SAVEFORCE`, `PANIC`) before the handoff, and low-level transfer helpers
+    consume and clear them during the same operation.
+
+- **Switch/exit transfer paths are now factored around shared kinship**
+  - Refactored `tealet_switch()` and `tealet_exit()` to leverage a shared
+    internal transfer helper (`tealet_xfer_inner`) for common transfer
+    mechanics, while preserving each API's mode-specific behavior.
+  - Kept mode-specific semantics explicit (for example exit-mode invariants and
+    retry policy orchestration) while reducing duplicate transfer plumbing.
+
 - **Run-return lifecycle now keeps tealets alive by default**
-  - Returning from a tealet run function now follows `TEALET_EXIT_DEFAULT`
-    semantics (tealet remains allocated) instead of implicit delete.
+  - Returning from a tealet run function now follows default non-delete exit
+    semantics (equivalent to `TEALET_XFER_DEFAULT` transfer behavior for
+    `tealet_exit()`), so the tealet remains allocated instead of being
+    implicitly deleted.
   - Automatic deletion remains available via explicit
     `tealet_exit(..., TEALET_EXIT_DELETE)`.
   - Tests and examples were updated to perform explicit `tealet_delete()`
@@ -38,12 +55,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
     mode flags.
 
+- **Public transfer flags were renamed to `TEALET_XFER_*`**
+  - User-facing switch/exit transfer behavior now uses shared
+    `TEALET_XFER_*` names.
+  - `tealet_switch()` now uses:
+    - `TEALET_XFER_FORCE` (was `TEALET_SWITCH_FORCE`)
+    - `TEALET_XFER_PANIC` (was `TEALET_SWITCH_PANIC`)
+    - `TEALET_XFER_NOFAIL` (was `TEALET_SWITCH_NOFAIL`)
+  - `tealet_exit()` now uses:
+    - `TEALET_XFER_FORCE` (was `TEALET_EXIT_FORCE`)
+    - `TEALET_XFER_PANIC` (was `TEALET_EXIT_PANIC`)
+    - `TEALET_XFER_NOFAIL` (was `TEALET_EXIT_NOFAIL`)
+    - plus exit-only `TEALET_EXIT_DELETE` / `TEALET_EXIT_DEFER`.
+  - `TEALET_XFER_*` occupies the low 8-bit transfer flag space; exit-only flags
+    begin at `0x100` to reserve headroom for future transfer-flag growth.
+
+- **Build now tracks generated header dependencies automatically**
+  - Make rules now emit and include compiler-generated dependency files for C
+    objects.
+  - Header edits now trigger the correct object rebuilds without requiring a
+    manual clean step.
+
 ### Removed
 - **Legacy creation API surface removed from core**
   - Removed core `tealet_create()` and the old create-and-start `tealet_new(...)`
     out-parameter signature.
   - Removed legacy `TEALET_FORK_DEFAULT` / `TEALET_FORK_SWITCH` flags in favor
     of `TEALET_RUN_*`.
+
+- **Separate switch/exit transfer-flag names removed**
+  - Removed `TEALET_SWITCH_DEFAULT` / `TEALET_SWITCH_FORCE` /
+    `TEALET_SWITCH_PANIC` / `TEALET_SWITCH_NOFAIL`.
+  - Removed `TEALET_EXIT_DEFAULT` / `TEALET_EXIT_FORCE` /
+    `TEALET_EXIT_PANIC` / `TEALET_EXIT_NOFAIL`.
 
 ### Documentation
 - Updated `README.md`, `docs/GETTING_STARTED.md`, `docs/API.md`,

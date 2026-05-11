@@ -76,7 +76,7 @@ tealet_finalize(main);
 tealet_t *g = tealet_new(main);
 tealet_run(g, run_func, NULL, NULL, TEALET_RUN_DEFAULT);
 void *arg = my_data;
-tealet_switch(g, &arg, TEALET_SWITCH_DEFAULT);
+tealet_switch(g, &arg, TEALET_XFER_DEFAULT);
 
 // Pattern 2: Create and switch atomically
 tealet_t *g = tealet_new(main);
@@ -96,7 +96,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 ```c
 // In run function:
 tealet_exit(target, arg, TEALET_EXIT_DELETE);  // Delete current tealet
-tealet_exit(target, arg, TEALET_EXIT_DEFAULT);     // Keep tealet alive
+tealet_exit(target, arg, TEALET_XFER_DEFAULT);     // Keep tealet alive
 tealet_exit(target, arg, TEALET_EXIT_DEFER);    // Defer to return statement
 ```
 
@@ -108,7 +108,7 @@ tealet_exit(target, arg, TEALET_EXIT_DEFER);    // Defer to return statement
 - Types: `*_t` suffix (e.g., `tealet_t`, `tealet_run_t`)
 - Error codes: Negative integers (`TEALET_ERR_*`)
 - Status codes: `TEALET_STATUS_*`
-- Flags: `TEALET_EXIT_*`, `TEALET_SWITCH_*`, `TEALET_RUN_*`
+- Flags: `TEALET_XFER_*`, `TEALET_EXIT_*`, `TEALET_RUN_*`
 
 ### C Standards
 - Written in C89/C90 compatible style

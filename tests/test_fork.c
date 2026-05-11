@@ -88,7 +88,7 @@ static void test_basic_fork(void *far_marker) {
     printf("  Parent: switching to child...\n");
 
     /* Switch to child */
-    result = tealet_switch(other, NULL, TEALET_SWITCH_DEFAULT);
+    result = tealet_switch(other, NULL, TEALET_XFER_DEFAULT);
     assert(result == 0);
     assert(testvalue == 0); /* Parent value should be preserved after child modifies it */
 
@@ -253,13 +253,13 @@ static void test_multiple_forks(void *far_marker) {
   /* Switch to child1 */
   visited++;
   printf("  Parent: switching to child1 (visited=%d)\n", visited);
-  tealet_switch(child1, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(child1, NULL, TEALET_XFER_DEFAULT);
   printf("  Parent: returned from child1\n");
 
   /* Switch to child2 */
   visited++;
   printf("  Parent: switching to child2 (visited=%d)\n", visited);
-  tealet_switch(child2, NULL, TEALET_SWITCH_DEFAULT);
+  tealet_switch(child2, NULL, TEALET_XFER_DEFAULT);
   printf("  Parent: returned from child2\n");
 
   assert(visited == 2);
@@ -305,7 +305,7 @@ static void test_fork_switch_arg(void *far_marker) {
     /* Switch back to parent with a value */
     childarg = (void *)0x12345678;
     printf("  Child: started.switching back with value %p\n", childarg);
-    tealet_switch(other, &childarg, TEALET_SWITCH_DEFAULT);
+    tealet_switch(other, &childarg, TEALET_XFER_DEFAULT);
     /* parent switched back, arg should be updated */
     assert(childarg == (void *)0xdeadbeef);
     printf("  Child: switched back from parent with arg=%p\n", childarg);
@@ -326,7 +326,7 @@ static void test_fork_switch_arg(void *far_marker) {
     parentarg = (void *)0xdeadbeef;
     /* switch back to child with a different arg, for the child to exit*/
     printf("  Parent: switching back to child with arg=%p\n", parentarg);
-    result = tealet_switch(other, &parentarg, TEALET_SWITCH_DEFAULT);
+    result = tealet_switch(other, &parentarg, TEALET_XFER_DEFAULT);
     printf("  Parent: returned from child switch, arg=%p, result=%d\n", parentarg, result);
     /* child should have exited, and passed the final arg to us*/
     assert(result == 0);
@@ -372,7 +372,7 @@ static void test_fork_default_arg(void *far_marker) {
 
     /* Switch to child with a value */
     parentarg = (void *)0xABCDEF00;
-    result = tealet_switch(child, &parentarg, TEALET_SWITCH_DEFAULT);
+    result = tealet_switch(child, &parentarg, TEALET_XFER_DEFAULT);
     assert(result == 0);
 
     /* Child should have switched back with a different value */
@@ -395,7 +395,7 @@ static void test_fork_default_arg(void *far_marker) {
 
     /* Switch back to parent with a different value */
     childarg = (void *)0xDEADBEEF;
-    tealet_switch(child, &childarg, TEALET_SWITCH_DEFAULT); /* child pointer is parent from child's perspective */
+    tealet_switch(child, &childarg, TEALET_XFER_DEFAULT); /* child pointer is parent from child's perspective */
 
     printf("  Child: this should never print\n");
     assert(0);
@@ -443,7 +443,7 @@ static void test_ping_pong(void *far_marker) {
 
     /* Ping-pong a few times */
     while (counter <= 5) {
-      tealet_switch(child_saved, NULL, TEALET_SWITCH_DEFAULT);
+      tealet_switch(child_saved, NULL, TEALET_XFER_DEFAULT);
       counter++;
       /* Parent increments by 1 each iteration (but only first 4) */
       if (counter <= 5) {
@@ -475,7 +475,7 @@ static void test_ping_pong(void *far_marker) {
       /* Child increments by 10 each iteration (counter goes 1,2,3,4 -> indices
        * 0,1,2,3) */
       data[counter - 1] += 10;
-      tealet_switch(child, NULL, TEALET_SWITCH_DEFAULT); /* child pointer is parent from child's perspective */
+      tealet_switch(child, NULL, TEALET_XFER_DEFAULT); /* child pointer is parent from child's perspective */
       counter++;
       printf("  Child: counter=%d, data=[%d,%d,%d,%d,%d], switching to parent\n", counter, data[0], data[1], data[2],
              data[3], data[4]);
