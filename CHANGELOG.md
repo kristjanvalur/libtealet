@@ -35,8 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     retry policy orchestration) while reducing duplicate transfer plumbing.
 
 - **Run-return lifecycle now keeps tealets alive by default**
-  - Returning from a tealet run function now follows `TEALET_EXIT_DEFAULT`
-    semantics (tealet remains allocated) instead of implicit delete.
+  - Returning from a tealet run function now follows default non-delete exit
+    semantics (equivalent to `TEALET_XFER_DEFAULT` transfer behavior for
+    `tealet_exit()`), so the tealet remains allocated instead of being
+    implicitly deleted.
   - Automatic deletion remains available via explicit
     `tealet_exit(..., TEALET_EXIT_DELETE)`.
   - Tests and examples were updated to perform explicit `tealet_delete()`
