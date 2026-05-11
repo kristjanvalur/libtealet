@@ -960,6 +960,12 @@ Configure optional lock/unlock callbacks for a main-tealet domain.
 
 The descriptor is copied into internal main-tealet state. Pass `NULL` to clear it.
 
+Returns:
+- `0` on success.
+- `<0` on error.
+- `TEALET_ERR_INVAL` when `locking` is non-`NULL` and `locking->mode` is not
+    `TEALET_LOCK_OFF` or `TEALET_LOCK_SWITCH`.
+
 **Recommendation:** Call this immediately after `tealet_initialize()` and before sharing tealet handles across threads. This avoids races where foreign-thread delete operations run before lock callbacks are installed.
 
 Mode behavior:

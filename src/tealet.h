@@ -597,7 +597,7 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * @brief Configure optional locking callbacks for a main-tealet domain.
  * @param tealet Any tealet in the domain.
  * @param locking Lock callback descriptor to copy; pass NULL to clear (no-op mode).
- * @return 0 on success.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
  *
  * This stores callback pointers and argument on the domain's main tealet.
  * It does not acquire or release locks itself.
@@ -607,6 +607,9 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * Automatic locking mode is selected by locking->mode:
  * - #TEALET_LOCK_OFF: no internal auto-locking,
  * - #TEALET_LOCK_SWITCH: auto-locking for the five switching APIs only.
+ *
+ * Returns #TEALET_ERR_INVAL when locking is non-NULL and locking->mode is not
+ * #TEALET_LOCK_OFF or #TEALET_LOCK_SWITCH.
  *
  * Non-switch APIs (for example tealet_delete(), tealet_duplicate(), and
  * query/status helpers) remain caller-synchronized when foreign-thread access
