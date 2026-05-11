@@ -1894,25 +1894,25 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   int retry_flags;
   int result;
 
-  assert((flags & ~(TEALET_EXIT_DELETE | TEALET_EXIT_DEFER | TEALET_EXIT_FORCE | TEALET_EXIT_PANIC | TEALET_EXIT_NOFAIL)) ==
-         0);
+  assert((flags &
+          ~(TEALET_EXIT_DELETE | TEALET_EXIT_DEFER | TEALET_EXIT_FORCE | TEALET_EXIT_PANIC | TEALET_EXIT_NOFAIL)) == 0);
   assert(!((flags & TEALET_EXIT_DEFER) && (flags & TEALET_EXIT_PANIC)));
 
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
-  
+
   tealet_lock_switch(g_main);
-  
+
   if (flags & TEALET_EXIT_DEFER) {
     /* setting up arg and flags for the run() return value */
     /* We temporarily borrow g_flags/g_arg storage on main until the
-    * deferred exit is consummated.
-    */
-   assert(g_main->g_flags == 0);
-   g_main->g_arg = arg;
-   g_main->g_flags = flags;
-   tealet_unlock_switch(g_main);
-   return 0; /* deferred exit, we are done here */
+     * deferred exit is consummated.
+     */
+    assert(g_main->g_flags == 0);
+    g_main->g_arg = arg;
+    g_main->g_flags = flags;
+    tealet_unlock_switch(g_main);
+    return 0; /* deferred exit, we are done here */
   }
   if (g_main->g_flags & TEALET_EXIT_DEFER) {
     /* Called second time (e.g. from return of run())
