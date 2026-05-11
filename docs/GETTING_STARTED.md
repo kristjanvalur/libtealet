@@ -176,7 +176,9 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 
 ### Cleanup on return
 
-When a run function returns, the tealet remains allocated. You must delete it explicitly when done.
+When a run function returns normally, the tealet remains allocated. You must delete it explicitly when done.
+
+**Note:** This does not apply if the run function explicitly exits with `tealet_exit(..., TEALET_EXIT_DELETE)`. In particular, with `TEALET_RUN_SWITCH`, that exit path can free the tealet before `tealet_run()` returns, so the original handle is no longer safe to inspect, reuse, or delete.
 
 ```c
 tealet_t *worker_run(tealet_t *current, void *arg) {
