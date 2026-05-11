@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `TEALET_EXIT_NOFAIL` and `TEALET_SWITCH_NOFAIL` to provide a
     robustness-oriented transfer mode for callers that prioritize forward
     progress under memory pressure/defunct-target conditions.
+  - NOFAIL attempts the requested transfer with FORCE first.
+  - On expected runtime transfer failures (`TEALET_ERR_MEM` /
+    `TEALET_ERR_DEFUNCT`), NOFAIL falls back to `PANIC|FORCE` transfer to main.
+  - Other errors (for example `TEALET_ERR_INVAL`, and `TEALET_ERR_PANIC` on
+    switch) are returned unchanged.
 
 ### Changed
 - **Run-return lifecycle now keeps tealets alive by default**
@@ -32,24 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       equivalent in effect to `TEALET_RUN_DEFAULT` + `tealet_switch()`.
   - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
     mode flags.
-
-- **NOFAIL transfer policy behavior and internals**
-  - Both NOFAIL paths now use FORCE-first transfer attempts.
-  - Fallback to `PANIC|FORCE` main transfer is limited to expected runtime
-    failure classes (`TEALET_ERR_MEM` / `TEALET_ERR_DEFUNCT`).
-  - Other errors (for example `TEALET_ERR_INVAL`, and `TEALET_ERR_PANIC` on
-    switch) are returned unchanged.
-  - Added internal invariant asserts in exit paths to document impossible
-    panic-return states from inner exit transfer helpers.
-
-- **Switch/exit NOFAIL implementation cleanup and docs alignment**
-  - Refactored switch flow around an internal helper (`tealet_switch_inner()`) to
-    keep retry/fallback behavior within a single lock scope.
-  - Added regression coverage for NOFAIL behavior under OOM/defunct scenarios in
-    `tests/tests.c`.
-  - Updated API docs (`src/tealet.h`, `docs/API.md`,
-    `docs/GETTING_STARTED.md`) to describe current NOFAIL behavior and clarify
-    assert-based debug invariants for API-misuse flag combinations/bits.
 
 ### Removed
 - **Legacy creation API surface removed from core**

@@ -210,8 +210,6 @@ int main(void) {
 - `TEALET_EXIT_DEFER`: **Defer exit transfer policy to run function return** (advanced; see API docs)
 - `TEALET_EXIT_NOFAIL`: **Enable robust fallback retries** without manual recovery logic
 
-**Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
-
 ### Shutdown Order Requirement
 
 At shutdown, always delete non-main tealets before calling `tealet_finalize(main)`.

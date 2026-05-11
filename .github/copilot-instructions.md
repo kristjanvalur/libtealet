@@ -108,7 +108,7 @@ tealet_exit(target, arg, TEALET_EXIT_DEFER);    // Defer to return statement
 - Types: `*_t` suffix (e.g., `tealet_t`, `tealet_run_t`)
 - Error codes: Negative integers (`TEALET_ERR_*`)
 - Status codes: `TEALET_STATUS_*`
-- Flags: `TEALET_FLAG_*`
+- Flags: `TEALET_EXIT_*`, `TEALET_SWITCH_*`, `TEALET_RUN_*`
 
 ### C Standards
 - Written in C89/C90 compatible style
