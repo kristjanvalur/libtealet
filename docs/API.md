@@ -385,7 +385,7 @@ Suspend current tealet and resume target tealet.
 **Parameters:**
 - `target`: Tealet to switch to
 - `parg`: Pointer to argument pointer (passed to target, updated with return value)
-- `flags`: Switch control flags (`TEALET_SWITCH_DEFAULT`, `TEALET_SWITCH_FORCE`, `TEALET_SWITCH_PANIC`)
+- `flags`: Switch control flags (`TEALET_SWITCH_DEFAULT`, `TEALET_SWITCH_FORCE`, `TEALET_SWITCH_PANIC`, `TEALET_SWITCH_NOFAIL`)
 
 **Returns:** 
 - `0` on success
@@ -406,6 +406,14 @@ Main is never marked defunct, so this edge case remains a hard memory failure.
 
 This means a successful forced switch can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
+
+`TEALET_SWITCH_NOFAIL` applies a robust retry/fallback policy: try the
+requested target with caller flags, retry the requested target with
+`TEALET_SWITCH_FORCE` on `TEALET_ERR_MEM`, and panic+force fallback to main
+for defunct or remaining failures.
+See the detailed policy discussion and conceptual retry flow under
+`tealet_exit()` / `TEALET_EXIT_NOFAIL` below; `TEALET_SWITCH_NOFAIL` follows
+the same shape with switch flags.
 
 **Usage:**
 ```c

@@ -1777,26 +1777,19 @@ done:
  * the lock internally.
  */
 
-int tealet_switch(tealet_t *stub, void **parg, int flags) {
+static int tealet_switch_inner(tealet_t *stub, void **parg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)stub;
-  tealet_sub_t *g_current;
+  tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
+  tealet_sub_t *g_current = g_main->g_current;
   int force_requested;
   int panic_requested;
   int result;
-  tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
-
-  if ((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC)) != 0)
-    return TEALET_ERR_INVAL;
 
   if ((g_target->flags & TEALET_TFLAGS_BOUND) == 0)
     return TEALET_ERR_INVAL;
 
   force_requested = ((flags & TEALET_SWITCH_FORCE) != 0);
   panic_requested = ((flags & TEALET_SWITCH_PANIC) != 0);
-
-  tealet_lock_switch(g_main);
-  g_current = g_main->g_current;
-  tealet_verify_current_matches_caller(g_current);
 
   if (force_requested)
     g_current->flags |= TEALET_TFLAGS_EXITFORCE;
@@ -1814,6 +1807,47 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
     g_main->g_flags &= ~TEALET_MFLAGS_PANIC;
   if (force_requested)
     g_current->flags &= ~TEALET_TFLAGS_EXITFORCE;
+
+  return result;
+}
+
+int tealet_switch(tealet_t *stub, void **parg, int flags) {
+  tealet_sub_t *g_target = (tealet_sub_t *)stub;
+  tealet_sub_t *g_current;
+  int flags_used;
+  int retry_flags;
+  int result;
+  tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
+
+  if ((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC | TEALET_SWITCH_NOFAIL)) != 0)
+    return TEALET_ERR_INVAL;
+
+  g_current = g_main->g_current;
+  tealet_verify_current_matches_caller(g_current);
+  tealet_lock_switch(g_main);
+
+  flags_used = flags;
+  if (flags_used & TEALET_SWITCH_NOFAIL) {
+    flags_used &= ~TEALET_SWITCH_NOFAIL;
+
+    result = tealet_switch_inner(stub, parg, flags_used);
+    if (result == TEALET_ERR_DEFUNCT) {
+      retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
+      result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
+    } else if (result == TEALET_ERR_MEM) {
+      retry_flags = flags_used | TEALET_SWITCH_FORCE;
+      result = tealet_switch_inner(stub, parg, retry_flags);
+      if (result < 0) {
+        retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
+        result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
+      }
+    } else if (result < 0) {
+      retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
+      result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
+    }
+  } else {
+    result = tealet_switch_inner(stub, parg, flags_used);
+  }
 
   tealet_unlock_switch(g_main);
   return result;
