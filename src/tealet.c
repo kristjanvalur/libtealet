@@ -2147,7 +2147,7 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary) {
 
   /* Only the main tealet can have its far boundary set */
   if (!TEALET_IS_MAIN(_tealet))
-    return -1;
+    return TEALET_ERR_INVAL;
 
   /* Set the far boundary */
   tealet->stack_far = (char *)far_boundary;
@@ -2232,7 +2232,7 @@ int tealet_configure_set(tealet_t *_tealet, tealet_config_t *config) {
   return 0;
 }
 
-int tealet_config_set_locking(tealet_t *_tealet, const tealet_lock_t *locking) {
+int tealet_configure_set_locking(tealet_t *_tealet, const tealet_lock_t *locking) {
   tealet_sub_t *tealet = (tealet_sub_t *)_tealet;
   tealet_main_t *g_main = TEALET_GET_MAIN(tealet);
 

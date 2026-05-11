@@ -667,6 +667,24 @@ void test_lock_transitions_fork(void) {
   abort();
 }
 
+/* Verify that tealet_set_far() rejects non-main tealets. */
+void test_set_far_non_main_invalid(void) {
+  tealet_t *child;
+  int result;
+  char far_marker = 0;
+
+  init_test();
+
+  child = tealet_new(g_main);
+  assert(child != NULL);
+
+  result = tealet_set_far(child, &far_marker);
+  assert(result == TEALET_ERR_INVAL);
+
+  tealet_delete(child);
+  fini_test();
+}
+
 void test_simple_create(void) {
   tealet_t *t;
   init_test();
@@ -1683,6 +1701,7 @@ static test_entry_t test_list[] = {
     {"test_lock_transitions", test_lock_transitions},
     {"test_lock_transitions_stub", test_lock_transitions_stub},
     {"test_lock_transitions_fork", test_lock_transitions_fork},
+    {"test_set_far_non_main_invalid", test_set_far_non_main_invalid},
     {"test_simple_create", test_simple_create},
     {"test_simple_create_and_run", test_simple_create_and_run},
     {"test_create_previous", test_create_previous},
