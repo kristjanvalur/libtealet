@@ -407,13 +407,17 @@ Main is never marked defunct, so this edge case remains a hard memory failure.
 This means a successful forced switch can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
 
-`TEALET_SWITCH_NOFAIL` applies a robust retry/fallback policy: try the
-requested target with caller flags, retry the requested target with
-`TEALET_SWITCH_FORCE` on `TEALET_ERR_MEM`, and panic+force fallback to main
+`TEALET_SWITCH_NOFAIL` applies a robust retry/fallback policy: first try the
+requested target with `TEALET_SWITCH_FORCE`, then panic+force fallback to main
 for defunct or remaining failures.
 See the detailed policy discussion and conceptual retry flow under
 `tealet_exit()` / `TEALET_EXIT_NOFAIL` below; `TEALET_SWITCH_NOFAIL` follows
 the same shape with switch flags.
+
+`TEALET_SWITCH_NOFAIL` can still return `TEALET_ERR_PANIC`, because panic is a
+legitimate switch-back signal (not a transfer failure to retry). In typical
+usage, panic-tagged fallbacks target main, so this check is usually needed on
+the main tealet's switch return path.
 
 **Usage:**
 ```c
@@ -530,18 +534,17 @@ continue would require main-stack growth that fails under memory pressure.
 
 `TEALET_EXIT_NOFAIL` applies the same robust fallback policy used by implicit
 run-function return handling:
-- try requested target in fail-fast mode
-- retry requested target with `TEALET_EXIT_FORCE` on `TEALET_ERR_MEM`
-- reroute to main with `TEALET_EXIT_PANIC | TEALET_EXIT_FORCE` when retries still cannot complete
+- try requested target with `TEALET_EXIT_FORCE`
+- reroute to main with `TEALET_EXIT_PANIC | TEALET_EXIT_FORCE` when transfer still cannot complete
 Main is never marked defunct, so this edge case remains a hard memory failure.
 
 This means a successful forced exit can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
 
 **Note:** Returning from the run function automatically deletes the tealet using
-an implicit `tealet_exit()` policy: try requested target, panic+force to main
-if target is defunct, retry requested target with FORCE on memory failure, and
-if FORCE still fails (including the main-stack edge above), panic+force to main.
+an implicit `tealet_exit()` policy: try requested target with FORCE and, if that
+fails (including defunct target or the main-stack memory edge above), panic+force
+to main.
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
@@ -551,27 +554,11 @@ exit from nested calls within the run function.
 static void exit_nofail_policy(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
     int r;
 
-    /* 1) Fast path: requested target, caller policy flags. */
-    r = tealet_exit(target, arg, base_flags);
-
-    /* 2) Defunct target: panic+force fallback to main. */
-    if (r == TEALET_ERR_DEFUNCT) {
-        (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
-        abort();
-    }
-
-    /* 3) Memory pressure: retry requested target with FORCE. */
-    if (r == TEALET_ERR_MEM) {
-        r = tealet_exit(target, arg, base_flags | TEALET_EXIT_FORCE);
-        if (r < 0) {
-            /* 4) Any remaining failure: panic+force to main. */
-            (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
-            abort();
-        }
-    }
+    /* 1) First attempt: requested target, FORCE enabled. */
+    r = tealet_exit(target, arg, base_flags | TEALET_EXIT_FORCE);
 
     if (r < 0) {
-        /* 5) Non-mem/non-defunct failures also route to panic+force main. */
+        /* 2) Any failure: panic+force fallback to main. */
         (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
         abort();
     }

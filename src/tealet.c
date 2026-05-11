@@ -1829,19 +1829,10 @@ int tealet_switch(tealet_t *stub, void **parg, int flags) {
   flags_used = flags;
   if (flags_used & TEALET_SWITCH_NOFAIL) {
     flags_used &= ~TEALET_SWITCH_NOFAIL;
+    retry_flags = flags_used | TEALET_SWITCH_FORCE;
 
-    result = tealet_switch_inner(stub, parg, flags_used);
-    if (result == TEALET_ERR_DEFUNCT) {
-      retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
-      result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
-    } else if (result == TEALET_ERR_MEM) {
-      retry_flags = flags_used | TEALET_SWITCH_FORCE;
-      result = tealet_switch_inner(stub, parg, retry_flags);
-      if (result < 0) {
-        retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
-        result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
-      }
-    } else if (result < 0) {
+    result = tealet_switch_inner(stub, parg, retry_flags);
+    if (result < 0 && result != TEALET_ERR_PANIC) {
       retry_flags = flags_used | TEALET_SWITCH_PANIC | TEALET_SWITCH_FORCE;
       result = tealet_switch_inner((tealet_t *)g_main, parg, retry_flags);
     }
@@ -1935,19 +1926,10 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   flags_used = flags;
   if (flags_used & TEALET_EXIT_NOFAIL) {
     flags_used &= ~TEALET_EXIT_NOFAIL;
+    retry_flags = flags_used | TEALET_EXIT_FORCE;
 
-    result = tealet_exit_inner(target, arg, flags_used);
-    if (result == TEALET_ERR_DEFUNCT) {
-      retry_flags = flags_used | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
-      result = tealet_exit_inner((tealet_t *)g_main, arg, retry_flags);
-    } else if (result == TEALET_ERR_MEM) {
-      retry_flags = flags_used | TEALET_EXIT_FORCE;
-      result = tealet_exit_inner(target, arg, retry_flags);
-      if (result < 0) {
-        retry_flags = flags_used | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
-        result = tealet_exit_inner((tealet_t *)g_main, arg, retry_flags);
-      }
-    } else if (result < 0) {
+    result = tealet_exit_inner(target, arg, retry_flags);
+    if (result < 0) {
       retry_flags = flags_used | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
       result = tealet_exit_inner((tealet_t *)g_main, arg, retry_flags);
     }

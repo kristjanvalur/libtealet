@@ -371,8 +371,7 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * #TEALET_ERR_PANIC on its resumed switch return path.
  *
  * #TEALET_SWITCH_NOFAIL applies retry/fallback policy: first attempt with
- * caller flags, retry with FORCE on #TEALET_ERR_MEM, and on remaining failures
- * panic+force fallback to main.
+ * FORCE and panic+force fallback to main on remaining failures.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
  */
