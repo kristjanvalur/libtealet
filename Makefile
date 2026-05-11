@@ -224,8 +224,14 @@ tests/test_current.o: tests/test_current.c src/tealet.h
 # Load compiler-generated header dependencies when present.
 -include $(wildcard src/*.d tests/*.d)
 
+tests/setcontext.o: tests/setcontext.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/setcontext.c
+
 bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} -ltealet
+
+tests/tests.o: tests/tests.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/tests.c
 
 bin/test-static: bin tests/tests.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} -ltealet
