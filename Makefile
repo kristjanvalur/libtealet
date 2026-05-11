@@ -233,11 +233,14 @@ bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
 tests/tests.o: tests/tests.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/tests.c
 
-bin/test-static: bin tests/tests.o bin/libtealet.a
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o ${DEBUG} -ltealet
+tests/test_locking.o: tests/test_locking.c src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_locking.c
 
-bin/test-dynamic: bin tests/tests.o bin/libtealet.so
-	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o ${DEBUG} -ltealet
+bin/test-static: bin tests/tests.o tests/test_locking.o bin/libtealet.a
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/tests.o tests/test_locking.o ${DEBUG} -ltealet
+
+bin/test-dynamic: bin tests/tests.o tests/test_locking.o bin/libtealet.so
+	$(CC) $(LDFLAGS) -g -o $@ tests/tests.o tests/test_locking.o ${DEBUG} -ltealet
 
 # Sanitizer tests - run on single platform for sanity checking
 .PHONY: test-sanitizers test-ubsan test-valgrind

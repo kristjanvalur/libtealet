@@ -8,7 +8,9 @@
 
 #include "tealet.h"
 #include "tealet_extras.h"
+#include "test_harness.h"
 #include "test_lock_helpers.h"
+#include "test_locking.h"
 
 #if TEALET_WITH_TESTING
 /* Internal test hook from tealet.c (not part of public API). */
@@ -18,11 +20,11 @@ int tealet_debug_swap_far(tealet_t *tealet, void *new_far, void **old_far);
 int tealet_debug_force_defunct(tealet_t *tealet);
 #endif
 
-static int status = 0;
-static tealet_t *g_main = NULL;
+int status = 0;
+tealet_t *g_main = NULL;
 static tealet_t *the_stub = NULL;
 static int newmode = 0;
-static tealet_test_lock_state_t g_lock_state;
+tealet_test_lock_state_t g_lock_state;
 
 /* Runtime detection of stats support */
 static int g_stats_enabled = 0;
@@ -149,24 +151,21 @@ static void print_final_stats(void) {
 static tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
 static int talloc_fail = 0;
 
-typedef struct lock_snapshot_t {
-  int lock_calls;
-  int unlock_calls;
-} lock_snapshot_t;
-
 /* Capture cumulative callback counters so we can assert transition deltas
  * around a single API operation.
  */
-static void lock_snapshot_take(lock_snapshot_t *snap) {
+void lock_snapshot_take(lock_snapshot_t *snap) {
   snap->lock_calls = g_lock_state.lock_calls;
   snap->unlock_calls = g_lock_state.unlock_calls;
 }
 
 /* Assert one lock/unlock pair occurred since the snapshot. */
-static void lock_snapshot_assert_delta_one(const lock_snapshot_t *before) {
+void lock_snapshot_assert_delta_one(const lock_snapshot_t *before) {
   assert(g_lock_state.lock_calls - before->lock_calls == 1);
   assert(g_lock_state.unlock_calls - before->unlock_calls == 1);
 }
+
+void test_lock_assert_unheld(void) { tealet_test_lock_assert_unheld(&g_lock_state); }
 
 void *failmalloc(size_t size, void *context) {
   if (talloc_fail)
@@ -248,7 +247,7 @@ static int tealet_new_x(tealet_t *m, tealet_t **out, tealet_run_t run, void **pa
   return 0;
 }
 
-static tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far) {
+tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far) {
   tealet_t *r = NULL;
   int rc = tealet_spawn(m, &r, run, parg, stack_far, TEALET_RUN_SWITCH);
   if (rc != 0)
@@ -529,142 +528,6 @@ void test_simple(void) {
   assert(status == 1);
   tealet_delete(t);
   fini_test();
-}
-
-typedef enum lock_transition_phase_e {
-  LOCK_PHASE_NONE = 0,
-  LOCK_PHASE_NEW_START = 1,
-  LOCK_PHASE_WAIT_RESUME = 2,
-  LOCK_PHASE_SWITCH_RESUME = 3,
-  LOCK_PHASE_STUB_RUN_START = 4,
-  LOCK_PHASE_DONE = 5,
-} lock_transition_phase_t;
-
-static lock_transition_phase_t g_lock_phase = LOCK_PHASE_NONE;
-static lock_snapshot_t g_lock_new_before;
-static lock_snapshot_t g_lock_switch_before;
-static lock_snapshot_t g_lock_exit_before;
-static lock_snapshot_t g_lock_stub_new_before;
-static lock_snapshot_t g_lock_stub_run_before;
-static lock_snapshot_t g_lock_fork_before;
-
-/* Transition accounting test for tealet_new + switch + exit.
- * Verifies expected lock/unlock deltas at each phase boundary.
- */
-static tealet_t *test_lock_transition_run(tealet_t *current, void *arg) {
-  (void)arg;
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
-  assert(g_lock_phase == LOCK_PHASE_NEW_START);
-  lock_snapshot_assert_delta_one(&g_lock_new_before);
-
-  g_lock_phase = LOCK_PHASE_WAIT_RESUME;
-  tealet_switch(g_main, NULL, TEALET_XFER_DEFAULT);
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
-  assert(g_lock_phase == LOCK_PHASE_SWITCH_RESUME);
-  lock_snapshot_assert_delta_one(&g_lock_switch_before);
-
-  lock_snapshot_take(&g_lock_exit_before);
-  g_lock_phase = LOCK_PHASE_DONE;
-  tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  abort();
-  return NULL;
-}
-
-/* Validate lock transition counts in the direct creation/switch path. */
-void test_lock_transitions(void) {
-  tealet_t *t;
-  int result;
-
-  init_test();
-
-  g_lock_phase = LOCK_PHASE_NEW_START;
-  lock_snapshot_take(&g_lock_new_before);
-  t = tealet_new_native(g_main, test_lock_transition_run, NULL, NULL);
-  assert(t != NULL);
-  assert(g_lock_phase == LOCK_PHASE_WAIT_RESUME);
-
-  lock_snapshot_take(&g_lock_switch_before);
-  g_lock_phase = LOCK_PHASE_SWITCH_RESUME;
-  result = tealet_switch(t, NULL, TEALET_XFER_DEFAULT);
-  assert(result == 0);
-  assert(g_lock_phase == LOCK_PHASE_DONE);
-
-  lock_snapshot_assert_delta_one(&g_lock_exit_before);
-
-  fini_test();
-}
-
-/* Transition accounting helper for tealet_stub_run() path. */
-static tealet_t *test_lock_transition_stub_run(tealet_t *current, void *arg) {
-  (void)arg;
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
-  assert(g_lock_phase == LOCK_PHASE_STUB_RUN_START);
-  lock_snapshot_assert_delta_one(&g_lock_stub_run_before);
-
-  lock_snapshot_take(&g_lock_exit_before);
-  g_lock_phase = LOCK_PHASE_DONE;
-  tealet_exit(g_main, NULL, TEALET_EXIT_DELETE);
-  abort();
-  return NULL;
-}
-
-/* Validate lock transition counts for stub create and first run. */
-void test_lock_transitions_stub(void) {
-  tealet_t *stub;
-  int result;
-
-  init_test();
-
-  lock_snapshot_take(&g_lock_stub_new_before);
-  result = tealet_stub_new(g_main, &stub, NULL);
-  assert(result == 0);
-  assert(stub != NULL);
-  lock_snapshot_assert_delta_one(&g_lock_stub_new_before);
-
-  lock_snapshot_take(&g_lock_stub_run_before);
-  g_lock_phase = LOCK_PHASE_STUB_RUN_START;
-  result = tealet_stub_run(stub, test_lock_transition_stub_run, NULL);
-  assert(result == 0);
-  assert(g_lock_phase == LOCK_PHASE_DONE);
-
-  lock_snapshot_assert_delta_one(&g_lock_exit_before);
-
-  fini_test();
-}
-
-/* Validate lock transition count for tealet_fork(). */
-void test_lock_transitions_fork(void) {
-  tealet_t *other = NULL;
-  int result;
-  char far_marker = 0;
-
-  init_test();
-
-  result = tealet_set_far(g_main, &far_marker);
-  assert(result == 0);
-
-  other = tealet_new(g_main);
-  assert(other != NULL);
-
-  lock_snapshot_take(&g_lock_fork_before);
-  result = tealet_fork(other, &other, NULL, TEALET_RUN_DEFAULT);
-  lock_snapshot_assert_delta_one(&g_lock_fork_before);
-
-  if (result == 1) {
-    assert(other != NULL);
-    tealet_delete(other);
-    fini_test();
-    return;
-  }
-
-  /* If we execute as child, this path should not continue after exit. */
-  assert(result == 0);
-  tealet_test_lock_assert_unheld(&g_lock_state);
-  tealet_exit(other, NULL, 0);
-  abort();
 }
 
 void test_simple_create(void) {
