@@ -625,7 +625,7 @@ void tealet_reset_peak_stats(tealet_t *t);
  *
  * Returns:
  *   0 on success
- *   -1 if called from a non-main tealet
+ *   TEALET_ERR_INVAL if called from a non-main tealet
  */
 TEALET_API
 int tealet_set_far(tealet_t *tealet, void *far_boundary);

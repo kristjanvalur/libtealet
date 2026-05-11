@@ -2147,7 +2147,7 @@ int tealet_set_far(tealet_t *_tealet, void *far_boundary) {
 
   /* Only the main tealet can have its far boundary set */
   if (!TEALET_IS_MAIN(_tealet))
-    return -1;
+    return TEALET_ERR_INVAL;
 
   /* Set the far boundary */
   tealet->stack_far = (char *)far_boundary;
