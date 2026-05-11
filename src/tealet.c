@@ -1367,6 +1367,7 @@ static void tealet_unlock_switch(tealet_main_t *g_main) {
 static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet_sub_t *g_target, tealet_run_t run,
                               void **parg, void *stack_far) {
   int result;
+  int fallback_flags;
   tealet_sub_t *g_exit_target;
   int exit_flags;
   void *exit_arg;
@@ -1439,6 +1440,13 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     }
 
     result = tealet_exit((tealet_t *)g_exit_target, exit_arg, exit_flags | TEALET_EXIT_NOFAIL);
+    if (result < 0) {
+      /* Preserve implicit-return robustness: if requested transfer still
+       * fails (for example invalid target), panic+force to main.
+       */
+      fallback_flags = (exit_flags & ~TEALET_EXIT_NOFAIL) | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE;
+      result = tealet_exit((tealet_t *)g_main, exit_arg, fallback_flags);
+    }
     (void)result;
     assert(!"Implicit return transfer failed");
     abort();
@@ -1814,12 +1822,16 @@ static int tealet_switch_inner(tealet_t *stub, void **parg, int flags) {
 int tealet_switch(tealet_t *stub, void **parg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)stub;
   tealet_sub_t *g_current;
+  int allowed_flags;
   int flags_used;
   int retry_flags;
   int result;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
 
-  assert((flags & ~(TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC | TEALET_SWITCH_NOFAIL)) == 0);
+  allowed_flags = TEALET_SWITCH_FORCE | TEALET_SWITCH_PANIC | TEALET_SWITCH_NOFAIL;
+  assert((flags & ~allowed_flags) == 0);
+  if ((flags & ~allowed_flags) != 0)
+    return TEALET_ERR_INVAL;
 
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
@@ -1891,13 +1903,18 @@ int tealet_exit(tealet_t *target, void *arg, int flags) {
   tealet_sub_t *g_target = (tealet_sub_t *)target;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_target);
   tealet_sub_t *g_current;
+  int allowed_flags;
   int flags_used;
   int retry_flags;
   int result;
 
-  assert((flags &
-          ~(TEALET_EXIT_DELETE | TEALET_EXIT_DEFER | TEALET_EXIT_FORCE | TEALET_EXIT_PANIC | TEALET_EXIT_NOFAIL)) == 0);
+  allowed_flags = TEALET_EXIT_DELETE | TEALET_EXIT_DEFER | TEALET_EXIT_FORCE | TEALET_EXIT_PANIC | TEALET_EXIT_NOFAIL;
+  assert((flags & ~allowed_flags) == 0);
   assert(!((flags & TEALET_EXIT_DEFER) && (flags & TEALET_EXIT_PANIC)));
+  if ((flags & ~allowed_flags) != 0)
+    return TEALET_ERR_INVAL;
+  if ((flags & TEALET_EXIT_DEFER) && (flags & TEALET_EXIT_PANIC))
+    return TEALET_ERR_INVAL;
 
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);

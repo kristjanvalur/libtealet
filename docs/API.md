@@ -419,8 +419,10 @@ legitimate switch-back signal (not a transfer failure to retry). In typical
 usage, panic-tagged fallbacks target main, so this check is usually needed on
 the main tealet's switch return path.
 
-**Debug invariant:** unknown `tealet_switch()` flag bits are treated as API
-misuse and asserted in debug builds.
+Unknown `tealet_switch()` flag bits return `TEALET_ERR_INVAL`.
+
+**Debug invariant:** unknown `tealet_switch()` flag bits are also asserted in
+debug builds.
 
 **Usage:**
 ```c
@@ -525,8 +527,11 @@ This function does not return on successful transfer.
     - `TEALET_ERR_DEFUNCT` when the requested target is defunct
     - `TEALET_ERR_INVAL` for invalid target/state
 
-**Debug invariant:** `TEALET_EXIT_DEFER | TEALET_EXIT_PANIC` (or unknown flag
-bits) is treated as API misuse and asserted in debug builds.
+`TEALET_EXIT_DEFER | TEALET_EXIT_PANIC` (and unknown exit flag bits) return
+`TEALET_ERR_INVAL`.
+
+**Debug invariant:** these invalid flag combinations/bits are also asserted in
+debug builds.
 
 `tealet_exit()` does not implicitly reroute to another target.
 
@@ -550,9 +555,9 @@ This means a successful forced exit can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
 
 **Note:** Returning from the run function automatically deletes the tealet using
-an implicit `tealet_exit()` policy: try requested target with FORCE and, if that
-fails (including defunct target or the main-stack memory edge above), panic+force
-to main.
+an implicit `tealet_exit()` policy:
+- first run `TEALET_EXIT_NOFAIL` with delete semantics
+- if that still fails for any reason, panic+force to main
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
@@ -565,13 +570,14 @@ static void exit_nofail_policy(tealet_t *self, tealet_t *target, void *arg, int 
     /* 1) First attempt: requested target, FORCE enabled. */
     r = tealet_exit(target, arg, base_flags | TEALET_EXIT_FORCE);
 
-    if (r < 0) {
-        /* 2) Any failure: panic+force fallback to main. */
+    if (r == TEALET_ERR_MEM || r == TEALET_ERR_DEFUNCT) {
+        /* 2) Robustness failures: panic+force fallback to main. */
         (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
         abort();
     }
 
-    abort();
+    /* 3) Other failures are returned unchanged by NOFAIL. */
+    return;
 }
 ```
 
