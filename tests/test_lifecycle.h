@@ -2,6 +2,7 @@
 #define TEST_LIFECYCLE_H
 
 void test_main_current(void);
+void test_set_far_non_main_invalid(void);
 void test_add_unbound_phase1(void);
 void test_simple(void);
 void test_simple_create(void);

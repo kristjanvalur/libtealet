@@ -263,88 +263,23 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  *
  * @warning For forks originating from main-lineage execution (main tealet or a clone
  * of main), exit explicitly via tealet_exit() and do not use #TEALET_EXIT_DEFER.
-
- * This function duplicates the currently executing tealet, including its entire
- * execution stack. Both the parent and child tealets will resume execution from
- * the same point (immediately after tealet_fork returns).
  *
- * This function duplicates the currently executing tealet, including its entire
- * execution stack. Both the parent and child tealets will resume execution from
- * the same point (immediately after tealet_fork returns).
+ * tealet_fork() clones the currently active execution context into @p tealet.
+ * Both parent and child resume from the call site:
+ * - parent receives return value 1,
+ * - child receives return value 0.
  *
- * The function returns different values to distinguish parent from child:
- * - In the parent tealet: returns 1
- * - In the child tealet: returns 0
- * - On error: returns -1 (or other negative TEALET_ERR_* code)
- *
- * If pother is non-NULL, it will be filled with a pointer to the other tealet:
- * - In the parent: points to the newly created child tealet
- * - In the child: points to the parent tealet
- * This allows both parent and child to reference each other for switching.
- *
- * The parg parameter allows passing a pointer value to whichever side of the
- * fork initially gets suspended (similar to tealet_run() with
- * #TEALET_RUN_SWITCH). Can be NULL if no
- * argument passing is desired. If non-NULL:
- * - With TEALET_RUN_DEFAULT: The parent continues, child is suspended.
- *   When the parent later switches to the child, the child receives the
- *   value via *parg.
- * - With TEALET_RUN_SWITCH: The parent is suspended, child continues.
- *   When the child later switches back, the parent receives the value
- *   via *parg.
- * See tealet_run() documentation for more details on argument passing
- * semantics.
+ * If @p pother is non-NULL, each side receives a pointer to the opposite
+ * tealet. If @p parg is non-NULL, it carries one pointer value to the side
+ * that resumes later (matching #TEALET_RUN_DEFAULT / #TEALET_RUN_SWITCH
+ * suspension behavior).
  *
  * Prerequisites:
- * - The current tealet must be either:
- *   a) A regular function-scoped tealet, OR
- *   b) The main tealet (or a clone of main) with a bounded stack
- *      (far boundary set via tealet_set_far()).
- * - The current tealet must be active (not suspended)
+ * - @p tealet must be NEW/unbound.
+ * - The current tealet must be active.
+ * - For main-lineage execution, set a far boundary first via tealet_set_far().
  *
- * Flags:
- * - TEALET_RUN_DEFAULT (0): Child is created suspended; parent continues
- * - TEALET_RUN_SWITCH (1): Immediately switch to child after creation
- *
- * Memory considerations:
- * - The child tealet has its own stack copy (heap-allocated)
- * - Both parent and child share the same main tealet
- * - The child inherits the current tealet far boundary (`stack_far`)
- *   at fork time. For main-lineage forks, this means the configured
- *   main boundary propagates to the child clone.
- * - Stack-allocated data is duplicated, heap data is shared
- * - Use tealet_current() to get the current tealet pointer after forking
- *
- * Exit behavior depends on what was forked:
- * - Forking main-lineage execution (main tealet or a clone of main) creates a
- *   continuation without a normal run-function return path. In that case,
- *   exit via tealet_exit() with an explicit target and do not use
- *   TEALET_EXIT_DEFER.
- * - Forking a regular function-scoped tealet duplicates that existing call
- *   chain. The forked tealet can generally return through the same run-function
- *   path as the original tealet.
- *
- * Example:
- *   tealet_t *child = tealet_new(current);
- *   int result = tealet_fork(child, &child, NULL, TEALET_RUN_DEFAULT);
- *   if (result == 0) {
- *       // This is the child tealet
- *       // ... child-specific code ...
- *   } else if (result > 0) {
- *       // This is the parent tealet
- *       // ... parent-specific code ...
- *       tealet_switch(child, &arg, TEALET_XFER_DEFAULT); // Switch to child when ready
- *   } else {
- *       // Error occurred (result < 0)
- *   }
- *
- * Returns:
- *   Parent: 1
- *   Child: 0
- *   Error: negative error code:
- *     TEALET_ERR_UNFORKABLE if current tealet has unbounded stack
- *     TEALET_ERR_MEM if memory allocation failed
- *     TEALET_ERR_DEFUNCT if current tealet is not active
+ * The child inherits the current far boundary at fork time.
  */
 TEALET_API
 int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
@@ -428,19 +363,14 @@ int tealet_exit(tealet_t *target, void *arg, int flags);
  * @param tealet Source tealet (must not be current/main).
  * @return Duplicated tealet, or NULL on failure.
  *
- * Duplicate starts with copied stack snapshot and copied internal flags.
- * Extra payload area (`extra`) is copied when configured.
+ * Duplicate starts with copied tealet metadata/flags and duplicated saved
+ * stack ownership (shared stack chunks are reference-counted internally).
  *
- * Duplicate a tealet. The active tealet is duplicated
- * along with its stack contents.
- * This can be used, for example, to create "stubs" that can be duplicated
- * and re-used to run with different arguments.
- * Use this with care, because initially the duplicate will share the same
- * stack data as the original.  This includes any local variables, even the
- * "current" argument passed to the original "run" function which may
- * be obsolete by the time the duplicate is run.  Use the argument passing
- * mechanism to provide the copy with fresh data.
- * Any extra data is left uncopied, the application must do that.
+ * The extra payload area (`extra`) is copied when configured.
+ *
+ * Use with care: copied stack locals reflect the source tealet snapshot and may
+ * be stale relative to current program state. Prefer passing fresh data through
+ * normal switch argument flow.
  */
 TEALET_API
 tealet_t *tealet_duplicate(tealet_t *tealet);
@@ -511,11 +441,11 @@ unsigned int tealet_get_origin(tealet_t *tealet);
 /* Status code: active tealet. */
 #define TEALET_STATUS_ACTIVE 0
 /* Status code: new/unbound tealet (created via tealet_new()). */
-#define TEALET_STATUS_NEW 2
+#define TEALET_STATUS_NEW 1
 /* Status code: exited tealet. */
-#define TEALET_STATUS_EXITED 1
+#define TEALET_STATUS_EXITED 2
 /* Status code: defunct tealet. */
-#define TEALET_STATUS_DEFUNCT -2
+#define TEALET_STATUS_DEFUNCT 3
 TEALET_API
 int tealet_status(tealet_t *tealet);
 
@@ -625,7 +555,7 @@ void tealet_reset_peak_stats(tealet_t *t);
  *
  * Returns:
  *   0 on success
- *   -1 if called from a non-main tealet
+ *   TEALET_ERR_INVAL if called from a non-main tealet
  */
 TEALET_API
 int tealet_set_far(tealet_t *tealet, void *far_boundary);
@@ -667,7 +597,7 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * @brief Configure optional locking callbacks for a main-tealet domain.
  * @param tealet Any tealet in the domain.
  * @param locking Lock callback descriptor to copy; pass NULL to clear (no-op mode).
- * @return 0 on success.
+ * @return 0 on success, negative #TEALET_ERR_* on failure.
  *
  * This stores callback pointers and argument on the domain's main tealet.
  * It does not acquire or release locks itself.
@@ -677,6 +607,9 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * Automatic locking mode is selected by locking->mode:
  * - #TEALET_LOCK_OFF: no internal auto-locking,
  * - #TEALET_LOCK_SWITCH: auto-locking for the five switching APIs only.
+ *
+ * Returns #TEALET_ERR_INVAL when locking is non-NULL and locking->mode is not
+ * #TEALET_LOCK_OFF or #TEALET_LOCK_SWITCH.
  *
  * Non-switch APIs (for example tealet_delete(), tealet_duplicate(), and
  * query/status helpers) remain caller-synchronized when foreign-thread access
@@ -690,7 +623,7 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  * Do not assume either state.
  */
 TEALET_API
-int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+int tealet_configure_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
 
 /**
  * @brief Enable stack-integrity checking with practical defaults.

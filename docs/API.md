@@ -633,19 +633,23 @@ Get the current status of a tealet.
 - `t`: Tealet to inspect
 
 **Returns:** Status code:
-- `TEALET_STATUS_INITIAL` (0): Created but not yet started
-- `TEALET_STATUS_ACTIVE` (1): Started and can be switched to
-- `TEALET_STATUS_DEFUNCT` (-1): Corrupt or returned from run function
+- `TEALET_STATUS_ACTIVE` (0): Active tealet
+- `TEALET_STATUS_NEW` (1): New/unbound tealet (from `tealet_new()`)
+- `TEALET_STATUS_EXITED` (2): Exited tealet
+- `TEALET_STATUS_DEFUNCT` (3): Defunct tealet
 
 **Usage:**
 ```c
 int status = tealet_status(t);
 switch (status) {
-    case TEALET_STATUS_INITIAL:
-        /* Can switch to it for first time */
-        break;
     case TEALET_STATUS_ACTIVE:
         /* Can switch to it */
+        break;
+    case TEALET_STATUS_NEW:
+        /* Not yet bound/runnable */
+        break;
+    case TEALET_STATUS_EXITED:
+        /* Exited and no longer runnable */
         break;
     case TEALET_STATUS_DEFUNCT:
         /* Cannot use, should delete */
@@ -940,10 +944,10 @@ This helper is intended as a simple one-way "enable checks" API; use `tealet_con
 
 ---
 
-### tealet_config_set_locking()
+### tealet_configure_set_locking()
 
 ```c
-int tealet_config_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
+int tealet_configure_set_locking(tealet_t *tealet, const tealet_lock_t *locking);
 ```
 
 Configure optional lock/unlock callbacks for a main-tealet domain.
@@ -955,6 +959,12 @@ Configure optional lock/unlock callbacks for a main-tealet domain.
 - `void *arg`
 
 The descriptor is copied into internal main-tealet state. Pass `NULL` to clear it.
+
+Returns:
+- `0` on success.
+- `<0` on error.
+- `TEALET_ERR_INVAL` when `locking` is non-`NULL` and `locking->mode` is not
+    `TEALET_LOCK_OFF` or `TEALET_LOCK_SWITCH`.
 
 **Recommendation:** Call this immediately after `tealet_initialize()` and before sharing tealet handles across threads. This avoids races where foreign-thread delete operations run before lock callbacks are installed.
 
@@ -1187,7 +1197,7 @@ operation.
 
 ### Automatic vs manual locking
 
-Locking mode is configured via `tealet_config_set_locking()` and
+Locking mode is configured via `tealet_configure_set_locking()` and
 `tealet_lock_t.mode`:
 
 - `TEALET_LOCK_SWITCH`: libtealet automatically acquires/releases the lock for
@@ -1352,9 +1362,10 @@ Switch result signaling explicit panic-tagged resume.
 ### Status Codes
 
 ```c
-#define TEALET_STATUS_INITIAL  0   /* Created, not started */
-#define TEALET_STATUS_ACTIVE   1   /* Running, can switch to */
-#define TEALET_STATUS_DEFUNCT  (-1) /* Completed or corrupt */
+#define TEALET_STATUS_ACTIVE   0  /* Active tealet */
+#define TEALET_STATUS_NEW      1  /* New/unbound tealet */
+#define TEALET_STATUS_EXITED   2  /* Exited tealet */
+#define TEALET_STATUS_DEFUNCT  3  /* Defunct tealet */
 ```
 
 ---

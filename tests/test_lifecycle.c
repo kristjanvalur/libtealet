@@ -17,6 +17,26 @@ void test_main_current(void) {
   fini_test();
 }
 
+/* Verify that tealet_set_far rejects non-main tealets and does not
+ * accidentally return success for child handles.
+ */
+void test_set_far_non_main_invalid(void) {
+  tealet_t *child;
+  int result;
+  char far_marker = 0;
+
+  init_test();
+
+  child = tealet_new(g_main);
+  assert(child != NULL);
+
+  result = tealet_set_far(child, &far_marker);
+  assert(result == TEALET_ERR_INVAL);
+
+  tealet_delete(child);
+  fini_test();
+}
+
 /* Verify that unbound tealets reject switching and duplicate correctly, and do
  * not accidentally expose a runnable state.
  */
