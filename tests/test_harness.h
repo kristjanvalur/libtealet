@@ -23,8 +23,7 @@ void check_stats(int verbose);
 void print_final_stats(void);
 
 tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far);
+int tealet_new_descend(tealet_t *t, tealet_t **out, int level, tealet_run_t run, void **parg, void *stack_far);
 int tealet_test_new_dispatch(tealet_t *t, tealet_t **out, tealet_run_t run, void **parg, void *stack_far);
-
-tealet_t *test_simple_run(tealet_t *t1, void *arg);
 
 #endif

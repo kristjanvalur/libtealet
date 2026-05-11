@@ -122,6 +122,12 @@ void test_switch(void) {
   fini_test();
 }
 
+static tealet_t *switch_self_panic_runner(tealet_t *current, void *arg) {
+  (void)arg;
+  status = 1;
+  return current->main;
+}
+
 void test_switch_self_panic(void) {
   tealet_t *runner;
   int result;
@@ -136,7 +142,7 @@ void test_switch_self_panic(void) {
   assert(result == TEALET_ERR_PANIC);
 
   /* Ensure panic flag is not left armed for a later unrelated switch. */
-  runner = tealet_new_native_call(g_main, test_simple_run, NULL, NULL);
+  runner = tealet_new_native_call(g_main, switch_self_panic_runner, NULL, NULL);
   assert(runner != NULL);
   assert(status == 1);
   tealet_delete(runner);
