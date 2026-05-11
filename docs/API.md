@@ -323,7 +323,7 @@ int main(void) {
         
         /* CRITICAL: Forked tealets MUST use tealet_exit() */
         void *return_value = (void*)0x1234;
-        tealet_exit(other, return_value, 0);  /* Switch back to parent */
+        tealet_exit(other, return_value, TEALET_EXIT_NOFAIL);  /* Switch back to parent */
         
         /* Should not reach here */
         abort();
@@ -469,6 +469,7 @@ Exit current tealet and transfer control to target.
   tealet exits later.
 - `TEALET_EXIT_FORCE`: Force the requested transfer despite save-time memory pressure by defuncting affected non-main stacks as needed
 - `TEALET_EXIT_PANIC`: Tag the receiving tealet's resumed switch return as `TEALET_ERR_PANIC`
+- `TEALET_EXIT_NOFAIL`: Apply automatic retries (`FORCE`, then `PANIC|FORCE` to main fallback)
 
 **Usage:**
 ```c
@@ -476,7 +477,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     /* Do work */
     
     /* Exit and delete this tealet */
-    tealet_exit(current->main, &result, TEALET_EXIT_DELETE);
+    tealet_exit(current->main, &result, TEALET_EXIT_DELETE | TEALET_EXIT_NOFAIL);
     
     /* Never reached */
 }
@@ -518,6 +519,12 @@ This function does not return on successful transfer.
 
 `TEALET_EXIT_FORCE` can still return `TEALET_ERR_MEM` when the only way to
 continue would require main-stack growth that fails under memory pressure.
+
+`TEALET_EXIT_NOFAIL` applies the same robust fallback policy used by implicit
+run-function return handling:
+- try requested target in fail-fast mode
+- retry requested target with `TEALET_EXIT_FORCE` on `TEALET_ERR_MEM`
+- reroute to main with `TEALET_EXIT_PANIC | TEALET_EXIT_FORCE` when retries still cannot complete
 Main is never marked defunct, so this edge case remains a hard memory failure.
 
 This means a successful forced exit can make other tealets become defunct as
@@ -530,10 +537,10 @@ if FORCE still fails (including the main-stack edge above), panic+force to main.
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
-**Manual robust `tealet_exit()` pattern (equivalent intent):**
+**Robust retry policy used by `TEALET_EXIT_NOFAIL` (conceptual flow):**
 ```c
 /* Non-returning helper. abort() documents unreachable return. */
-static void robust_exit(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
+static void exit_nofail_policy(tealet_t *self, tealet_t *target, void *arg, int base_flags) {
     int r;
 
     /* 1) Fast path: requested target, caller policy flags. */
@@ -548,16 +555,28 @@ static void robust_exit(tealet_t *self, tealet_t *target, void *arg, int base_fl
     /* 3) Memory pressure: retry requested target with FORCE. */
     if (r == TEALET_ERR_MEM) {
         r = tealet_exit(target, arg, base_flags | TEALET_EXIT_FORCE);
-
-        /* 4) FORCE may still fail in main-stack growth edge case. */
-        if (r == TEALET_ERR_MEM || r == TEALET_ERR_DEFUNCT) {
+        if (r < 0) {
+            /* 4) Any remaining failure: panic+force to main. */
             (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
             abort();
         }
     }
 
+    if (r < 0) {
+        /* 5) Non-mem/non-defunct failures also route to panic+force main. */
+        (void)tealet_exit(self->main, arg, base_flags | TEALET_EXIT_PANIC | TEALET_EXIT_FORCE);
+        abort();
+    }
+
     abort();
 }
+```
+
+In normal code, prefer the built-in helper policy directly:
+
+```c
+tealet_exit(target, arg, base_flags | TEALET_EXIT_NOFAIL);
+/* Non-returning on success */
 ```
 
 ---
@@ -1344,6 +1363,9 @@ Switch result signaling explicit panic-tagged resume.
 #define TEALET_EXIT_DEFAULT 0  /* Don't auto-delete */
 #define TEALET_EXIT_DELETE  1  /* Auto-delete on exit */
 #define TEALET_EXIT_DEFER   2  /* Defer exit to return */
+#define TEALET_EXIT_FORCE   4  /* Force exit despite save-time memory failures */
+#define TEALET_EXIT_PANIC   8  /* Mark receiving tealet as panic-resumed */
+#define TEALET_EXIT_NOFAIL 16  /* Retry with FORCE, then panic+force to main */
 
 /* Switch flags */
 #define TEALET_SWITCH_DEFAULT 0  /* Default switch behavior */
@@ -1423,7 +1445,7 @@ tealet_t *nested_run(tealet_t *current, void *arg) {
 void helper(tealet_t *current) {
     if (error_condition) {
         void *error = make_error();
-        tealet_exit(current->main, &error, TEALET_EXIT_DELETE);
+        tealet_exit(current->main, &error, TEALET_EXIT_DELETE | TEALET_EXIT_NOFAIL);
         /* Never returns */
     }
 }

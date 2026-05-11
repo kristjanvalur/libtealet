@@ -161,7 +161,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
     printf("Doing work...\n");
     
     /* ✅ Recommended: Explicit exit */
-    tealet_exit(current->main, NULL, TEALET_EXIT_DELETE);
+    tealet_exit(current->main, NULL, TEALET_EXIT_DELETE | TEALET_EXIT_NOFAIL);
     
     /* Should not reach here */
     return current->main;  /* Fallback only */
@@ -210,7 +210,7 @@ int main(void) {
 tealet_t *worker_run(tealet_t *current, void *arg) {
     printf("Work done\n");
     /* Exit without auto-delete */
-    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT);
+    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT | TEALET_EXIT_NOFAIL);
     return current->main;
 }
 
@@ -239,6 +239,7 @@ int main(void) {
 - `TEALET_EXIT_DEFAULT` (0): **Prevent auto-delete**; tealet must be manually deleted with `tealet_delete()`
 - `TEALET_EXIT_DELETE`: **Auto-delete on exit**; same as returning from the run function (the default behavior)
 - `TEALET_EXIT_DEFER`: **Defer deletion to run function return** (advanced; see API docs)
+- `TEALET_EXIT_NOFAIL`: **Enable robust fallback retries** when you intentionally do not check `tealet_exit()` return values
 
 **Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 
@@ -270,7 +271,7 @@ tealet_t *controlled_worker(tealet_t *current, void *arg) {
         do_work();
         tealet_switch(current->main, NULL, TEALET_SWITCH_DEFAULT);  /* Yield back */
     }
-    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT);  /* Don't auto-delete */
+    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT | TEALET_EXIT_NOFAIL);  /* Don't auto-delete */
     return current->main;
 }
 
