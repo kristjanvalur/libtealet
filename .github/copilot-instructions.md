@@ -134,6 +134,26 @@ tealet_exit(target, arg, TEALET_EXIT_DEFER);    // Defer to return statement
 - In reviews, prioritize correctness of the demonstrated concept and API usage
   over full defensive handling of every failure mode.
 
+### Validation and undefined behavior policy (review-critical)
+- Do not propose broad runtime argument/flag validation by default.
+- `TEALET_ERR_INVAL` exists primarily for application logic errors (for example,
+  wrong tealet object, wrong ownership/domain assumptions, or impossible call
+  context), not as a general "flag sanitizer" for every invalid bit pattern.
+- Unknown flag bits and undocumented flag combinations are intentionally
+  **undefined behavior** unless explicitly documented otherwise.
+- Keep public API docs focused on defined/supported behavior; do not expand API
+  docs to enumerate undefined behavior cases.
+- In reviews, avoid requesting extra checks or docs for undefined flag misuse
+  unless maintainers explicitly choose to define those semantics.
+
+### Test assertions policy (review-critical)
+- Files under `tests/` (including `tests/tests.c`) are run in debug-oriented
+  builds as part of this project's validation workflow.
+- In test code, `assert(0)` used to mark logically unreachable control-flow
+  paths is intentional and acceptable.
+- Do not request replacing such `assert(0)` calls with `abort()` by default;
+  treat them as test invariants unless maintainers explicitly ask otherwise.
+
 ## Important Warnings
 
 ### Stack Data Safety

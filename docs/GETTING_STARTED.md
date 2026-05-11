@@ -208,6 +208,7 @@ int main(void) {
 - `TEALET_EXIT_DEFAULT` (0): **Keep tealet allocated**; tealet must be manually deleted with `tealet_delete()`
 - `TEALET_EXIT_DELETE`: **Auto-delete on exit**; any tealet pointers to the exiting tealet become invalid after transfer
 - `TEALET_EXIT_DEFER`: **Defer exit transfer policy to run function return** (advanced; see API docs)
+- `TEALET_EXIT_NOFAIL`: **Enable robust fallback retries** without manual recovery logic
 
 **Note:** The old `TEALET_FLAG_*` names are still available for backwards compatibility.
 
@@ -239,7 +240,7 @@ tealet_t *controlled_worker(tealet_t *current, void *arg) {
         do_work();
         tealet_switch(current->main, NULL, TEALET_SWITCH_DEFAULT);  /* Yield back */
     }
-    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT);  /* Don't auto-delete */
+    tealet_exit(current->main, NULL, TEALET_EXIT_DEFAULT | TEALET_EXIT_NOFAIL);  /* Don't auto-delete */
     return current->main;
 }
 

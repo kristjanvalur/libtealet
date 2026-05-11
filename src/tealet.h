@@ -354,7 +354,7 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * @param target Tealet to switch to; must share the same main tealet and thread.
  * @param parg In/out argument pointer passed across switches; may be NULL.
  * @param flags Switch behavior bits: #TEALET_SWITCH_DEFAULT, #TEALET_SWITCH_FORCE,
- * #TEALET_SWITCH_PANIC.
+ * #TEALET_SWITCH_PANIC, #TEALET_SWITCH_NOFAIL.
  * @retval 0 Success.
  * @retval TEALET_ERR_MEM Save/restore failed due to memory pressure.
  * @retval TEALET_ERR_DEFUNCT Target tealet/stack is defunct.
@@ -369,6 +369,10 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * #TEALET_SWITCH_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path.
  *
+ * #TEALET_SWITCH_NOFAIL applies retry/fallback policy: first attempt with
+ * FORCE, then panic+force fallback to main only on #TEALET_ERR_MEM/
+ * #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
+ *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
  */
 TEALET_API
@@ -378,6 +382,7 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
 #define TEALET_SWITCH_DEFAULT 0 /* default switch behavior */
 #define TEALET_SWITCH_FORCE 4   /* force switch despite save-time memory failures */
 #define TEALET_SWITCH_PANIC 8   /* mark the receiving tealet as panic-resumed */
+#define TEALET_SWITCH_NOFAIL 16 /* retry with FORCE and panic-to-main fallback */
 
 /* Exit flags */
 #define TEALET_EXIT_DEFAULT 0 /* Don't auto-delete */
@@ -385,13 +390,15 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
 #define TEALET_EXIT_DEFER 2   /* Defer exit to return statement */
 #define TEALET_EXIT_FORCE 4   /* Force exit switch despite save-time memory failures */
 #define TEALET_EXIT_PANIC 8   /* Mark the receiving tealet as panic-resumed */
+#define TEALET_EXIT_NOFAIL 16 /* Retry with FORCE and panic-to-main fallback */
 
 /**
  * @brief Exit current tealet and transfer control to @p target.
  * @param target Requested target tealet.
  * @param arg Optional argument to deliver to @p target.
  * @param flags Exit behavior bits: #TEALET_EXIT_DEFAULT, #TEALET_EXIT_DELETE,
- * #TEALET_EXIT_DEFER, #TEALET_EXIT_FORCE, #TEALET_EXIT_PANIC.
+ * #TEALET_EXIT_DEFER, #TEALET_EXIT_FORCE, #TEALET_EXIT_PANIC,
+ * #TEALET_EXIT_NOFAIL.
  * @return 0 only for deferred setup path; otherwise returns a negative error code if transfer cannot start.
  *
  * Without #TEALET_EXIT_FORCE, memory pressure while saving state returns #TEALET_ERR_MEM.
@@ -402,7 +409,12 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
  *
  * #TEALET_EXIT_PANIC requests panic delivery to the receiving tealet as
  * #TEALET_ERR_PANIC on its resumed switch return path. It is invalid with
- * #TEALET_EXIT_DEFER.
+ * #TEALET_EXIT_DEFER (debug builds assert this flag combination).
+ *
+ * #TEALET_EXIT_NOFAIL enables automatic retry policy:
+ * 1) requested target with #TEALET_EXIT_FORCE,
+ * 2) panic+force fallback to main only on #TEALET_ERR_MEM/
+ *    #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
  *
  * `return p;` from run() uses an implicit policy rooted in
  * `tealet_exit(p, NULL, TEALET_EXIT_DEFAULT)`, with retries for memory/defunct
