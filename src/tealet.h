@@ -372,6 +372,8 @@ int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
  * #TEALET_SWITCH_NOFAIL applies retry/fallback policy: first attempt with
  * FORCE, then panic+force fallback to main only on #TEALET_ERR_MEM/
  * #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
+ * When @p target is main, #TEALET_SWITCH_NOFAIL is guaranteed to succeed,
+ * because main is never allowed to become defunct.
  *
  * @warning Do not pass stack-allocated cross-tealet payloads through @p parg.
  */
@@ -415,6 +417,8 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
  * 1) requested target with #TEALET_EXIT_FORCE,
  * 2) panic+force fallback to main only on #TEALET_ERR_MEM/
  *    #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
+ * When @p target is main, #TEALET_EXIT_NOFAIL is guaranteed to succeed,
+ * because main is never allowed to become defunct.
  *
  * `return p;` from run() uses an implicit policy rooted in
  * `tealet_exit(p, NULL, TEALET_EXIT_DEFAULT)`, with retries for memory/defunct

@@ -414,6 +414,9 @@ See the detailed policy discussion and conceptual retry flow under
 `tealet_exit()` / `TEALET_EXIT_NOFAIL` below; `TEALET_SWITCH_NOFAIL` follows
 the same shape with switch flags.
 
+When the requested target is `main`, `TEALET_SWITCH_NOFAIL` is guaranteed to
+succeed (transfer starts), because main is never allowed to become defunct.
+
 `TEALET_SWITCH_NOFAIL` can still return `TEALET_ERR_PANIC`, because panic is a
 legitimate switch-back signal (not a transfer failure to retry). In typical
 usage, panic-tagged fallbacks target main, so this check is usually needed on
@@ -539,6 +542,9 @@ run-function return handling:
     `TEALET_ERR_MEM` / `TEALET_ERR_DEFUNCT`
 - return other errors unchanged
 Main is never marked defunct, so this edge case remains a hard memory failure.
+
+When the requested target is `main`, `TEALET_EXIT_NOFAIL` is guaranteed to
+succeed (transfer starts), because main is never allowed to become defunct.
 
 This means a successful forced exit can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
