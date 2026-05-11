@@ -200,7 +200,7 @@ tealet_t *my_run(tealet_t *current, void *arg) {
 }
 ```
 
-The run function executes until it returns or calls `tealet_exit()`. On return, execution transfers to the returned tealet and the current tealet remains allocated until explicitly deleted.
+The run function executes until it returns or calls `tealet_exit()`. On return, execution transfers to the returned tealet and, by default, the current tealet remains allocated until explicitly deleted. However, a prior deferred `tealet_exit()` request with `TEALET_EXIT_DELETE` can still cause the tealet to be deleted when the run function returns.
 
 ---
 
