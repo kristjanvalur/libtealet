@@ -336,7 +336,35 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\tests.c"
+				RelativePath="..\tests\tests.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_lifecycle.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_locking.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_resilience.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_stack.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_stats_extra.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_stress.c"
+				>
+			</File>
+			<File
+				RelativePath="..\tests\test_transfer.c"
 				>
 			</File>
 		</Filter>

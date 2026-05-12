@@ -52,6 +52,7 @@ jobs:
             emulator: qemu-riscv64 -L /usr/riscv64-linux-gnu
     
     env:
+      TEALET_WITH_TESTING: 1
       PLATFORMFLAGS: ${{matrix.platformflags}}
       PLATFORM_PREFIX: ${{matrix.platformtools}}
       EMULATOR: ${{matrix.emulator}}
@@ -93,6 +94,8 @@ jobs:
   
   sanitizer-tests:
     runs-on: ubuntu-latest
+    env:
+      TEALET_WITH_TESTING: 1
     steps:
     - uses: actions/checkout@v6
 
@@ -122,6 +125,8 @@ jobs:
             abi: darwin_x86_64
           - os: macos-latest
             abi: darwin_arm64
+    env:
+      TEALET_WITH_TESTING: 1
     
     steps:
     - uses: actions/checkout@v6
@@ -158,7 +163,6 @@ jobs:
           - platform: ARM64
             folder: ARM64
             abi: win_arm64
-    
     steps:
     - uses: actions/checkout@v6
     
