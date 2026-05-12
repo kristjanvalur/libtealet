@@ -1702,12 +1702,12 @@ done:
  * the lock internally.
  */
 
-int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
+int tealet_fork(tealet_t *_tealet, void **parg, int flags) {
   tealet_sub_t *g_child = (tealet_sub_t *)_tealet;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_child);
   tealet_sub_t *g_current;
   tealet_sub_t *previous;
-  int result, is_parent;
+  int result;
   int switch_now;
   int api_result;
 
@@ -1750,7 +1750,6 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   if (switch_now) {
     /* save parent, switch to child*/
     result = tealet_switchstack(g_main, g_child, NULL, parg);
-    is_parent = result == 0;
   } else {
     /* we are just saving the child's stack for later.
      *Save the stack in the child, don't modify 'previous'
@@ -1763,7 +1762,6 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
      */
     if (result == 1)
       g_main->g_previous = previous;
-    is_parent = result == 1;
   }
 
   if (result < 0) {
@@ -1777,9 +1775,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
     goto done;
   }
 
-  if (pother)
-    *pother = (tealet_t *)(is_parent ? g_child : g_current);
-  api_result = is_parent;
+  api_result = 0;
 
 done:
   /* we are now back.  If successful, we are either conceptually the same stack as when we called,

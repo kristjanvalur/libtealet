@@ -125,6 +125,7 @@ void test_lock_transitions_stub(void) {
 void test_lock_transitions_fork(void) {
   tealet_t *other = NULL;
   int result;
+  int is_child;
   char far_marker = 0;
 
   init_test();
@@ -136,10 +137,13 @@ void test_lock_transitions_fork(void) {
   assert(other != NULL);
 
   lock_snapshot_take(&g_lock_fork_before);
-  result = tealet_fork(other, &other, NULL, TEALET_RUN_DEFAULT);
+  result = tealet_fork(other, NULL, TEALET_RUN_DEFAULT);
+  assert(result == 0);
   lock_snapshot_assert_delta_one(&g_lock_fork_before);
 
-  if (result == 1) {
+  is_child = (tealet_current(other) == other);
+
+  if (!is_child) {
     assert(other != NULL);
     tealet_delete(other);
     fini_test();
@@ -147,7 +151,8 @@ void test_lock_transitions_fork(void) {
   }
 
   /* If we execute as child, this path should not continue after exit. */
-  assert(result == 0);
+  assert(is_child);
+  other = tealet_previous(g_main);
   test_lock_assert_unheld();
   tealet_exit(other, NULL, 0);
   abort();

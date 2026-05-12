@@ -239,10 +239,11 @@ int main(void) {
 void run_program(void *far_marker) {
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main = tealet_initialize(&alloc, 0);
+    tealet_t *child = tealet_new(main);
     tealet_set_far(main, far_marker);
     
     int local_data = 0;  /* This WILL be saved when forking */
-    tealet_fork(main, &child, NULL, 0);
+    tealet_fork(child, NULL, TEALET_RUN_DEFAULT);
     /* local_data and other locals are safely in the saved stack */
     
     tealet_finalize(main);
@@ -255,10 +256,11 @@ void my_main(void) {
     int far_marker;  /* MUST be declared FIRST */
     tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
     tealet_t *main = tealet_initialize(&alloc, 0);
+    tealet_t *child = tealet_new(main);
     tealet_set_far(main, &far_marker);
     
     int local_data = 0;  /* Declared AFTER far_marker */
-    tealet_fork(main, &child, NULL, 0);
+    tealet_fork(child, NULL, TEALET_RUN_DEFAULT);
     /* local_data is safely below far_marker on stack */
 }
 ```
@@ -277,30 +279,29 @@ You can also obtain a call-site boundary marker with `tealet_new_probe()` when y
 ### tealet_fork()
 
 ```c
-int tealet_fork(tealet_t *child, tealet_t **pother, void **parg, int flags);
+int tealet_fork(tealet_t *child, void **parg, int flags);
 ```
 
 Fork the current tealet into a NEW child tealet, duplicating execution state.
 
 **Parameters:**
 - `child`: NEW/unbound tealet (from `tealet_new()`) that receives forked child state
-- `pother`: Pointer to receive the "other" tealet pointer:
-  - In parent: receives pointer to child
-  - In child: receives pointer to parent
 - `parg`: Pointer to argument pointer for passing values to the suspended side. Can be NULL if no argument passing is desired (similar to `tealet_run()` and `tealet_switch()`)
-    - With `TEALET_RUN_DEFAULT`: Parent continues, child is suspended. When parent switches to child, child receives value via `*parg`
-    - With `TEALET_RUN_SWITCH`: Child continues, parent is suspended. When child switches back, parent receives value via `*parg`
-    - See `tealet_run()` for detailed argument passing semantics
+        - With `TEALET_RUN_DEFAULT`: Parent continues, child is suspended. When parent switches to child, child receives value via `*parg`
+        - With `TEALET_RUN_SWITCH`: Child continues, parent is suspended. When child switches back, parent receives value via `*parg`
+        - See `tealet_run()` for detailed argument passing semantics
 - `flags`: Fork mode flags:
     - `TEALET_RUN_DEFAULT` (0): Child created suspended, parent continues
     - `TEALET_RUN_SWITCH` (1): Immediately switch to child after creation
 
 **Returns:**
-- Parent: `1` (default mode) - you are the parent
-- Child: `0` - you are the child  
+- `0` on success
 - Error: negative error code
   - `TEALET_ERR_UNFORKABLE`: Current tealet has unbounded stack (call `tealet_set_far()` first)
   - `TEALET_ERR_MEM`: Memory allocation failed
+
+Determine side after a successful call with:
+- `is_child = (tealet_current(child) == child)`
 
 **Usage:**
 ```c
@@ -313,35 +314,35 @@ int main(void) {
     tealet_set_far(main, &stack_marker);
     
     tealet_t *child = tealet_new(main);
-    tealet_t *other = NULL;
+    int is_child;
     void *arg = NULL;
-    int result = tealet_fork(child, &other, &arg, TEALET_RUN_DEFAULT);
+    int result = tealet_fork(child, &arg, TEALET_RUN_DEFAULT);
+    is_child = (tealet_current(child) == child);
     
-    if (result == 0) {
+    if (result < 0) {
+        fprintf(stderr, "Fork failed: %d\n", result);
+    } else if (is_child) {
         /* This is the CHILD */
-        printf("Child: parent is %p, received arg=%p\n", other, arg);
+        printf("Child: parent is %p, received arg=%p\n", main, arg);
         
         /* CRITICAL: Forked tealets MUST use tealet_exit() */
         void *return_value = (void*)0x1234;
-        tealet_exit(other, return_value, TEALET_XFER_NOFAIL);  /* Switch back to parent */
+        tealet_exit(main, return_value, TEALET_XFER_NOFAIL);  /* Switch back to parent */
         
         /* Should not reach here */
         abort();
         
-    } else if (result > 0) {
+    } else {
         /* This is the PARENT */
-        printf("Parent: child is %p\n", other);
+        printf("Parent: child is %p\n", child);
         
         /* Switch to child with an argument */
         arg = (void*)0x5678;
-        tealet_switch(other, &arg, TEALET_XFER_DEFAULT);
+        tealet_switch(child, &arg, TEALET_XFER_DEFAULT);
         printf("Parent: child returned with arg=%p\n", arg);
         
         /* Clean up */
-        tealet_delete(other);
-    } else {
-        /* Error occurred */
-        fprintf(stderr, "Fork failed: %d\n", result);
+        tealet_delete(child);
     }
     
     tealet_finalize(main);
@@ -359,6 +360,7 @@ int main(void) {
     - Forks of regular function-scoped tealets can generally return through the same run-function path as the original tealet.
 4. **No DEFER for main-lineage forks:** Do not use `TEALET_EXIT_DEFER` in that mode.
 5. **Stay within bounds:** All switching must occur within the stack region bounded by `far_boundary` where a boundary is in effect.
+6. **Finding the opposite side:** In main-lineage examples, child can usually target `main` directly. In generalized fork flows, use `tealet_previous(main)` at first resume to capture the opposite tealet.
 
 **Philosophical note:**
 

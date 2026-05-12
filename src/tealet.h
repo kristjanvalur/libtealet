@@ -252,11 +252,9 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
 /**
  * @brief Fork the active tealet by duplicating its execution state.
  * @param tealet NEW/unbound tealet (from tealet_new()) to become the fork child.
- * @param pother Optional out-pointer to the opposite side (parent gets child, child gets parent).
  * @param parg Optional in/out argument pointer passed to whichever side resumes later.
  * @param flags Fork mode: #TEALET_RUN_DEFAULT or #TEALET_RUN_SWITCH.
- * @retval 1 Parent side.
- * @retval 0 Child side.
+ * @retval 0 Success.
  * @retval TEALET_ERR_UNFORKABLE Current stack is unbounded (set far boundary first).
  * @retval TEALET_ERR_MEM Memory failure during stack save/restore.
  * @retval TEALET_ERR_INVAL Invalid target tealet or flags.
@@ -265,14 +263,17 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  * of main), exit explicitly via tealet_exit() and do not use #TEALET_EXIT_DEFER.
  *
  * tealet_fork() clones the currently active execution context into @p tealet.
- * Both parent and child resume from the call site:
- * - parent receives return value 1,
- * - child receives return value 0.
+ * Both parent and child resume from the call site.
  *
- * If @p pother is non-NULL, each side receives a pointer to the opposite
- * tealet. If @p parg is non-NULL, it carries one pointer value to the side
+ * If @p parg is non-NULL, it carries one pointer value to the side
  * that resumes later (matching #TEALET_RUN_DEFAULT / #TEALET_RUN_SWITCH
  * suspension behavior).
+ *
+ * To detect side on return, use:
+ * - child side: tealet_current(tealet) == tealet
+ * - parent side: tealet_current(tealet) != tealet
+ *
+ * To obtain the opposite side at first resume, use tealet_previous().
  *
  * Prerequisites:
  * - @p tealet must be NEW/unbound.
@@ -282,7 +283,7 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  * The child inherits the current far boundary at fork time.
  */
 TEALET_API
-int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
+int tealet_fork(tealet_t *tealet, void **parg, int flags);
 
 /**
  * @brief Suspend current tealet and resume @p target.
@@ -532,7 +533,7 @@ void tealet_reset_peak_stats(tealet_t *t);
  *       tealet_set_far(main, far_marker);
  *
  *       int local_var = 0;
- *       tealet_fork(child, &child, 0, TEALET_RUN_DEFAULT);
+ *       tealet_fork(child, 0, TEALET_RUN_DEFAULT);
  *   }
  *
  * Alternative (far_boundary from same function, requires care):
@@ -544,7 +545,7 @@ void tealet_reset_peak_stats(tealet_t *t);
  *       tealet_set_far(main, &far_marker);
  *
  *       int local_var = 0;
- *       tealet_fork(child, &child, 0, TEALET_RUN_DEFAULT);
+ *       tealet_fork(child, 0, TEALET_RUN_DEFAULT);
  *   }
  *
  * By providing this address, you promise that no stack data beyond (further
