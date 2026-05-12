@@ -1,5 +1,5 @@
 PROJECT_NAME           = "libtealet"
-PROJECT_NUMBER         = 0.6.0
+PROJECT_NUMBER         = 0.7.0
 OUTPUT_DIRECTORY       = docs/_build/doxygen
 CREATE_SUBDIRS         = NO
 ALLOW_UNICODE_NAMES    = YES

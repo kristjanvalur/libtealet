@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-12
+
 ### Added
 - **NOFAIL transfer policies for both exit and switch APIs**
   - Added `TEALET_XFER_NOFAIL` to provide a
@@ -533,7 +535,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kristjanvalur/libtealet/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kristjanvalur/libtealet/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kristjanvalur/libtealet/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kristjanvalur/libtealet/compare/v0.4.3...v0.5.0

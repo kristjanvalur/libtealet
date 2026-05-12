@@ -6,7 +6,7 @@
 #
 
 # Version
-VERSION = 0.6.0
+VERSION = 0.7.0
 STACKMAN_VERSION = 1.2.1
 
 # Stack-integrity compile-time defaults (can be overridden from shell).
