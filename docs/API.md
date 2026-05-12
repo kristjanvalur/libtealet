@@ -94,23 +94,23 @@ Bind an unbound tealet to a run function and initialize its initial saved stack 
 **Parameters:**
 - `tealet`: NEW/unbound target tealet (typically from `tealet_new()`)
 - `run`: Function to execute in the tealet context
-- `parg`: Optional in/out argument pointer used with `TEALET_RUN_SWITCH`
+- `parg`: Optional in/out argument pointer used with `TEALET_START_SWITCH`
 - `stack_far`: Optional far-boundary requirement for the initial stack snapshot (`NULL` uses default)
-- `flags`: `TEALET_RUN_DEFAULT` or `TEALET_RUN_SWITCH`
+- `flags`: `TEALET_START_DEFAULT` or `TEALET_START_SWITCH`
 
 **Returns:**
 - `0` on success
 - negative `TEALET_ERR_*` on failure
 
-`TEALET_RUN_DEFAULT` captures initial state and returns without switching. Start later with `tealet_switch()`.
+`TEALET_START_DEFAULT` captures initial state and returns without switching. Start later with `tealet_switch()`.
 
-`TEALET_RUN_SWITCH` captures state and immediately switches to the target tealet.
-Conceptually, this is equivalent to `TEALET_RUN_DEFAULT` followed by `tealet_switch()`, but implemented as a single optimized path that avoids redundant internal state transitions.
+`TEALET_START_SWITCH` captures state and immediately switches to the target tealet.
+Conceptually, this is equivalent to `TEALET_START_DEFAULT` followed by `tealet_switch()`, but implemented as a single optimized path that avoids redundant internal state transitions.
 
 **Usage (deferred start):**
 ```c
 tealet_t *t = tealet_new(main);
-tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT);
+tealet_run(t, my_run, NULL, NULL, TEALET_START_DEFAULT);
 
 void *arg = my_data;
 tealet_switch(t, &arg, TEALET_XFER_DEFAULT);
@@ -120,7 +120,7 @@ tealet_switch(t, &arg, TEALET_XFER_DEFAULT);
 ```c
 void *arg = my_data;
 tealet_t *t = tealet_new(main);
-tealet_run(t, my_run, &arg, NULL, TEALET_RUN_SWITCH);
+tealet_run(t, my_run, &arg, NULL, TEALET_START_SWITCH);
 ```
 
 ### Example: include additional caller stack data
@@ -151,7 +151,7 @@ void bar(tealet_t *main) {
     stack_far = tealet_stack_further(&local_state, &local_state + 1);
 
     worker = tealet_new(main);
-    tealet_run(worker, my_run, &arg, stack_far, TEALET_RUN_SWITCH);
+    tealet_run(worker, my_run, &arg, stack_far, TEALET_START_SWITCH);
     (void)worker;
 }
 ```
@@ -243,7 +243,7 @@ void run_program(void *far_marker) {
     tealet_set_far(main, far_marker);
     
     int local_data = 0;  /* This WILL be saved when forking */
-    tealet_fork(child, NULL, TEALET_RUN_DEFAULT);
+    tealet_fork(child, NULL, TEALET_START_DEFAULT);
     /* local_data and other locals are safely in the saved stack */
     
     tealet_finalize(main);
@@ -260,7 +260,7 @@ void my_main(void) {
     tealet_set_far(main, &far_marker);
     
     int local_data = 0;  /* Declared AFTER far_marker */
-    tealet_fork(child, NULL, TEALET_RUN_DEFAULT);
+    tealet_fork(child, NULL, TEALET_START_DEFAULT);
     /* local_data is safely below far_marker on stack */
 }
 ```
@@ -287,12 +287,12 @@ Fork the current tealet into a NEW child tealet, duplicating execution state.
 **Parameters:**
 - `child`: NEW/unbound tealet (from `tealet_new()`) that receives forked child state
 - `parg`: Pointer to argument pointer for passing values to the suspended side. Can be NULL if no argument passing is desired (similar to `tealet_run()` and `tealet_switch()`)
-        - With `TEALET_RUN_DEFAULT`: Parent continues, child is suspended. When parent switches to child, child receives value via `*parg`
-        - With `TEALET_RUN_SWITCH`: Child continues, parent is suspended. When child switches back, parent receives value via `*parg`
+        - With `TEALET_START_DEFAULT`: Parent continues, child is suspended. When parent switches to child, child receives value via `*parg`
+        - With `TEALET_START_SWITCH`: Child continues, parent is suspended. When child switches back, parent receives value via `*parg`
         - See `tealet_run()` for detailed argument passing semantics
 - `flags`: Fork mode flags:
-    - `TEALET_RUN_DEFAULT` (0): Child created suspended, parent continues
-    - `TEALET_RUN_SWITCH` (1): Immediately switch to child after creation
+    - `TEALET_START_DEFAULT` (0): Child created suspended, parent continues
+    - `TEALET_START_SWITCH` (1): Immediately switch to child after creation
 
 **Returns:**
 - `0` on success
@@ -316,7 +316,7 @@ int main(void) {
     tealet_t *child = tealet_new(main);
     int is_child;
     void *arg = NULL;
-    int result = tealet_fork(child, &arg, TEALET_RUN_DEFAULT);
+    int result = tealet_fork(child, &arg, TEALET_START_DEFAULT);
     is_child = (tealet_current(child) == child);
     
     if (result < 0) {
@@ -369,8 +369,8 @@ Traditional tealet creation (`tealet_new()` + `tealet_run()`) maintains clean fu
 This feature mirrors functionality from Stackless Python but was historically omitted from libtealet to keep the API simple and safe. Use it when you need advanced patterns like continuation capture or coroutine cloning.
 
 **Flags:**
-- `TEALET_RUN_DEFAULT`: Child suspended, parent continues (Unix fork-like)
-- `TEALET_RUN_SWITCH`: Immediately become the child, parent suspended
+- `TEALET_START_DEFAULT`: Child suspended, parent continues (Unix fork-like)
+- `TEALET_START_SWITCH`: Immediately become the child, parent suspended
 
 ---
 
@@ -1025,7 +1025,7 @@ Explicitly delete a tealet and free its resources.
 ```c
 tealet_t *t = NULL;
 t = tealet_new(main);
-if (tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT) != 0) {
+if (tealet_run(t, my_run, NULL, NULL, TEALET_START_DEFAULT) != 0) {
     /* Handle create failure */
 }
 /* Use t... */
@@ -1264,7 +1264,7 @@ Forced transfer note (`tealet_switch(..., TEALET_XFER_FORCE)` and
 
 For `tealet_run()`:
 - `TEALET_ERR_MEM` is the bind/start failure case.
-- `TEALET_ERR_PANIC` signals an unexpected panic-tagged switch-back during `TEALET_RUN_SWITCH` startup.
+- `TEALET_ERR_PANIC` signals an unexpected panic-tagged switch-back during `TEALET_START_SWITCH` startup.
 
 Practical note for switch/exit failures:
 - In non-main tealets, the usual recovery path is to perform local cleanup and then exit to `main`.
@@ -1299,7 +1299,7 @@ Memory allocation failed.
 **Example:**
 ```c
 tealet_t *t = tealet_new(main);
-if (tealet_run(t, my_run, NULL, NULL, TEALET_RUN_DEFAULT) != 0) {
+if (tealet_run(t, my_run, NULL, NULL, TEALET_START_DEFAULT) != 0) {
     fprintf(stderr, "Out of memory\n");
     return TEALET_ERR_MEM;
 }
@@ -1394,12 +1394,12 @@ Used with `tealet_switch()` and `tealet_exit()`.
 
 ### When to Use Deferred vs Immediate Start
 
-**Use `tealet_new()` + `tealet_run(..., TEALET_RUN_DEFAULT)`:**
+**Use `tealet_new()` + `tealet_run(..., TEALET_START_DEFAULT)`:**
 - Setting up multiple coroutines before starting any
 - Need to pass tealet pointer to other setup code
 - Separating creation from execution for clarity
 
-**Use `tealet_new()` + `tealet_run(..., TEALET_RUN_SWITCH)`:**
+**Use `tealet_new()` + `tealet_run(..., TEALET_START_SWITCH)`:**
 - Start execution immediately
 - Don't need the tealet pointer before it runs
 - More concise code
@@ -1409,8 +1409,8 @@ Used with `tealet_switch()` and `tealet_exit()`.
 /* Pattern 1: Deferred start (more control) */
 tealet_t *t1 = tealet_new(main);
 tealet_t *t2 = tealet_new(main);
-tealet_run(t1, func1, NULL, NULL, TEALET_RUN_DEFAULT);
-tealet_run(t2, func2, NULL, NULL, TEALET_RUN_DEFAULT);
+tealet_run(t1, func1, NULL, NULL, TEALET_START_DEFAULT);
+tealet_run(t2, func2, NULL, NULL, TEALET_START_DEFAULT);
 setup_relationship(t1, t2);  /* Both exist but not started */
 void *arg = t2;
 tealet_switch(t1, &arg, TEALET_XFER_DEFAULT);  /* Now start t1 */
@@ -1418,7 +1418,7 @@ tealet_switch(t1, &arg, TEALET_XFER_DEFAULT);  /* Now start t1 */
 /* Pattern 2: Immediate start (more concise) */
 void *arg = my_data;
 tealet_t *t = tealet_new(main);
-tealet_run(t, my_func, &arg, NULL, TEALET_RUN_SWITCH);
+tealet_run(t, my_func, &arg, NULL, TEALET_START_SWITCH);
 /* Already started, arg contains first return value */
 ```
 
@@ -1567,7 +1567,7 @@ int main(void) {
     
     /* Create counter tealet */
     tealet_t *counter = tealet_new(main);
-    if (tealet_run(counter, counter_run, NULL, NULL, TEALET_RUN_DEFAULT) != 0) {
+    if (tealet_run(counter, counter_run, NULL, NULL, TEALET_START_DEFAULT) != 0) {
         fprintf(stderr, "Failed to create counter\n");
         tealet_finalize(main);
         return 1;

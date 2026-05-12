@@ -81,7 +81,7 @@ int main(void) {
     tealet_finalize(g_main);
     return 1;
   }
-  if (tealet_run(t1, worker_run, NULL, NULL, TEALET_RUN_SWITCH) != 0) {
+  if (tealet_run(t1, worker_run, NULL, NULL, TEALET_START_SWITCH) != 0) {
     fprintf(stderr, "Failed to start tealet\n");
     tealet_delete(t1);
     tealet_test_lock_assert_balanced(&g_lock_state);

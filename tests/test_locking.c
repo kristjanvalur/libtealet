@@ -137,7 +137,7 @@ void test_lock_transitions_fork(void) {
   assert(other != NULL);
 
   lock_snapshot_take(&g_lock_fork_before);
-  result = tealet_fork(other, NULL, TEALET_RUN_DEFAULT);
+  result = tealet_fork(other, NULL, TEALET_START_DEFAULT);
   assert(result == 0);
   lock_snapshot_assert_delta_one(&g_lock_fork_before);
 

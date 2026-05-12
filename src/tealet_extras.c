@@ -40,7 +40,7 @@ int tealet_spawn(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *
   tealet_t *created;
   int result;
 
-  if ((flags & ~TEALET_RUN_SWITCH) != 0)
+  if ((flags & ~TEALET_START_SWITCH) != 0)
     return TEALET_ERR_INVAL;
   if (run == NULL)
     return TEALET_ERR_INVAL;
@@ -91,7 +91,7 @@ static tealet_t *_tealet_stub_main(tealet_t *current, void *arg) {
 
 /* create a stub and return it */
 int tealet_stub_new(tealet_t *t, tealet_t **pstub, void *stack_far) {
-  return tealet_spawn(t, pstub, _tealet_stub_main, NULL, stack_far, TEALET_RUN_DEFAULT);
+  return tealet_spawn(t, pstub, _tealet_stub_main, NULL, stack_far, TEALET_START_DEFAULT);
 }
 
 /*

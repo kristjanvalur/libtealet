@@ -222,7 +222,7 @@ static int tealet_new_x(tealet_t *m, tealet_t **out, tealet_run_t run, void **pa
   counter += 1;
   if (counter % 2) {
     r = NULL;
-    rc = tealet_spawn(m, &r, run, parg, stack_far, TEALET_RUN_SWITCH);
+    rc = tealet_spawn(m, &r, run, parg, stack_far, TEALET_START_SWITCH);
     if (rc != 0)
       return rc;
     *out = r;
@@ -230,7 +230,7 @@ static int tealet_new_x(tealet_t *m, tealet_t **out, tealet_run_t run, void **pa
   }
 
   r = NULL;
-  rc = tealet_spawn(m, &r, run, NULL, stack_far, TEALET_RUN_DEFAULT);
+  rc = tealet_spawn(m, &r, run, NULL, stack_far, TEALET_START_DEFAULT);
   if (rc != 0)
     return rc;
   i = tealet_switch(r, parg, TEALET_XFER_DEFAULT);
@@ -244,7 +244,7 @@ static int tealet_new_x(tealet_t *m, tealet_t **out, tealet_run_t run, void **pa
 
 tealet_t *tealet_new_native_call(tealet_t *m, tealet_run_t run, void **parg, void *stack_far) {
   tealet_t *r = NULL;
-  int rc = tealet_spawn(m, &r, run, parg, stack_far, TEALET_RUN_SWITCH);
+  int rc = tealet_spawn(m, &r, run, parg, stack_far, TEALET_START_SWITCH);
   if (rc != 0)
     return NULL;
   return r;

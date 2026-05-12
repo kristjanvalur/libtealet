@@ -187,7 +187,7 @@ static int worker_recursive(tealet_t *current, int depth) {
       void *arg = NULL;
       tealet_t *created = tealet_new(current);
       if (created != NULL) {
-        if (tealet_run(created, worker_entry, &arg, NULL, TEALET_RUN_SWITCH) != 0)
+        if (tealet_run(created, worker_entry, &arg, NULL, TEALET_START_SWITCH) != 0)
           tealet_delete(created);
       }
       continue;
