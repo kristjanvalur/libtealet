@@ -66,7 +66,7 @@ int main(void) {
     tealet_finalize(tmain);
     return 1;
   }
-  if (tealet_run(loop, loop_func, &data, NULL, TEALET_RUN_SWITCH) != 0) {
+  if (tealet_run(loop, loop_func, &data, NULL, TEALET_START_SWITCH) != 0) {
     tealet_delete(loop);
     tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(tmain);

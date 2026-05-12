@@ -32,7 +32,7 @@ static int prepare_worker(tealet_t *main_tealet, tealet_t **pworker, tealet_run_
   if (worker == NULL)
     return TEALET_ERR_MEM;
 
-  result = tealet_run(worker, run, NULL, NULL, TEALET_RUN_DEFAULT);
+  result = tealet_run(worker, run, NULL, NULL, TEALET_START_DEFAULT);
   if (result != 0) {
     tealet_delete(worker);
     return result;

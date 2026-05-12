@@ -219,29 +219,29 @@ void tealet_finalize(tealet_t *tealet);
 TEALET_API
 tealet_t *tealet_new(tealet_t *tealet);
 
-/* tealet_run flags */
-#define TEALET_RUN_DEFAULT 0 /* capture initial stack state, do not switch to target */
-#define TEALET_RUN_SWITCH 1  /* capture initial stack state and immediately switch to target */
+/* start mode flags shared by tealet_run() and tealet_fork() */
+#define TEALET_START_DEFAULT 0 /* capture initial stack state, do not switch to target */
+#define TEALET_START_SWITCH 1  /* capture initial stack state and immediately switch to target */
 
 /**
  * @brief Run a callable on a NEW tealet, immediately or by binding for later resume.
  * @param tealet NEW/unbound target tealet (typically from tealet_new()).
  * @param run Callable entry function for the target.
- * @param parg Optional in/out switch argument pointer; used when #TEALET_RUN_SWITCH is set.
+ * @param parg Optional in/out switch argument pointer; used when #TEALET_START_SWITCH is set.
  * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
- * @param flags Run mode: #TEALET_RUN_DEFAULT or #TEALET_RUN_SWITCH.
+ * @param flags Start mode: #TEALET_START_DEFAULT or #TEALET_START_SWITCH.
  * @return 0 on success, negative #TEALET_ERR_* on failure.
  *
  * This API installs @p run on a NEW tealet and captures its initial saved
  * stack state.
- * With #TEALET_RUN_SWITCH, it switches to the target immediately.
- * Conceptually, #TEALET_RUN_SWITCH is equivalent to
- * #TEALET_RUN_DEFAULT followed by tealet_switch(), but uses an optimized
+ * With #TEALET_START_SWITCH, it switches to the target immediately.
+ * Conceptually, #TEALET_START_SWITCH is equivalent to
+ * #TEALET_START_DEFAULT followed by tealet_switch(), but uses an optimized
  * single path that avoids redundant internal state transitions.
- * With #TEALET_RUN_DEFAULT, it returns to caller after capture; execution
+ * With #TEALET_START_DEFAULT, it returns to caller after capture; execution
  * starts on a later tealet_switch() to that target.
  *
- * @warning With #TEALET_RUN_SWITCH, @p run may return/exit before
+ * @warning With #TEALET_START_SWITCH, @p run may return/exit before
  * tealet_run() returns to the caller. If that path uses
  * tealet_exit(..., #TEALET_EXIT_DELETE), the @p tealet handle can become
  * invalid before tealet_run() returns.
@@ -252,11 +252,9 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
 /**
  * @brief Fork the active tealet by duplicating its execution state.
  * @param tealet NEW/unbound tealet (from tealet_new()) to become the fork child.
- * @param pother Optional out-pointer to the opposite side (parent gets child, child gets parent).
  * @param parg Optional in/out argument pointer passed to whichever side resumes later.
- * @param flags Fork mode: #TEALET_RUN_DEFAULT or #TEALET_RUN_SWITCH.
- * @retval 1 Parent side.
- * @retval 0 Child side.
+ * @param flags Fork mode: #TEALET_START_DEFAULT or #TEALET_START_SWITCH.
+ * @retval 0 Success.
  * @retval TEALET_ERR_UNFORKABLE Current stack is unbounded (set far boundary first).
  * @retval TEALET_ERR_MEM Memory failure during stack save/restore.
  * @retval TEALET_ERR_INVAL Invalid target tealet or flags.
@@ -265,14 +263,17 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  * of main), exit explicitly via tealet_exit() and do not use #TEALET_EXIT_DEFER.
  *
  * tealet_fork() clones the currently active execution context into @p tealet.
- * Both parent and child resume from the call site:
- * - parent receives return value 1,
- * - child receives return value 0.
+ * Both parent and child resume from the call site.
  *
- * If @p pother is non-NULL, each side receives a pointer to the opposite
- * tealet. If @p parg is non-NULL, it carries one pointer value to the side
- * that resumes later (matching #TEALET_RUN_DEFAULT / #TEALET_RUN_SWITCH
+ * If @p parg is non-NULL, it carries one pointer value to the side
+ * that resumes later (matching #TEALET_START_DEFAULT / #TEALET_START_SWITCH
  * suspension behavior).
+ *
+ * To detect side on return, use:
+ * - child side: tealet_current(tealet) == tealet
+ * - parent side: tealet_current(tealet) != tealet
+ *
+ * To obtain the opposite side at first resume, use tealet_previous().
  *
  * Prerequisites:
  * - @p tealet must be NEW/unbound.
@@ -282,7 +283,7 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
  * The child inherits the current far boundary at fork time.
  */
 TEALET_API
-int tealet_fork(tealet_t *tealet, tealet_t **pother, void **parg, int flags);
+int tealet_fork(tealet_t *tealet, void **parg, int flags);
 
 /**
  * @brief Suspend current tealet and resume @p target.
@@ -532,7 +533,7 @@ void tealet_reset_peak_stats(tealet_t *t);
  *       tealet_set_far(main, far_marker);
  *
  *       int local_var = 0;
- *       tealet_fork(child, &child, 0, TEALET_RUN_DEFAULT);
+ *       tealet_fork(child, 0, TEALET_START_DEFAULT);
  *   }
  *
  * Alternative (far_boundary from same function, requires care):
@@ -544,7 +545,7 @@ void tealet_reset_peak_stats(tealet_t *t);
  *       tealet_set_far(main, &far_marker);
  *
  *       int local_var = 0;
- *       tealet_fork(child, &child, 0, TEALET_RUN_DEFAULT);
+ *       tealet_fork(child, 0, TEALET_START_DEFAULT);
  *   }
  *
  * By providing this address, you promise that no stack data beyond (further

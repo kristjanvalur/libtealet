@@ -34,7 +34,7 @@ int main(void) {
     
     void *arg = NULL;
     tealet_t *coro = tealet_new(main);
-    tealet_run(coro, worker, &arg, NULL, TEALET_RUN_SWITCH);
+    tealet_run(coro, worker, &arg, NULL, TEALET_START_SWITCH);
     tealet_delete(coro);
     
     tealet_finalize(main);

@@ -1391,14 +1391,14 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
   tealet_sub_t *g_exit_target;
   int exit_flags;
   void *exit_arg;
-  int run_on_switch = g_new == g_target; /* true for tealet_run(..., TEALET_RUN_SWITCH) */
+  int run_on_switch = g_new == g_target; /* true for tealet_run(..., TEALET_START_SWITCH) */
   void *run_arg, *switch_arg;
   void *initial_run_arg;
   assert(g_new->stack == NULL); /* it is fresh */
   assert(run);
 
   if (run_on_switch) {
-    /* TEALET_RUN_SWITCH case */
+    /* TEALET_START_SWITCH case */
     assert(parg != NULL);
     /* Capture *parg before switching stacks.  After the switch, the
      * creator's stack region may be snapshot-checked and/or page-guarded,
@@ -1407,7 +1407,7 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
      */
     initial_run_arg = *parg;
   } else {
-    /* TEALET_RUN_DEFAULT case */
+    /* TEALET_START_DEFAULT case */
     assert(parg == NULL);
     initial_run_arg = NULL;
   }
@@ -1432,14 +1432,14 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
      * returning here on a switch, to run the tealet
      */
 
-    /* the following assertion may be invalid, if a TEALET_RUN_DEFAULT tealet
+    /* the following assertion may be invalid, if a TEALET_START_DEFAULT tealet
      * was duplicated.  We may now be a copy
      */
     if (run_on_switch) {
-      assert(g_main->g_current == g_new); /* only valid for TEALET_RUN_SWITCH */
+      assert(g_main->g_current == g_new); /* only valid for TEALET_START_SWITCH */
       run_arg = initial_run_arg;          /* captured before stack switch */
     } else {
-      run_arg = switch_arg; /* TEALET_RUN_DEFAULT: use the arg from the switch */
+      run_arg = switch_arg; /* TEALET_START_DEFAULT: use the arg from the switch */
     }
     assert(g_main->g_current->stack == NULL); /* running */
 
@@ -1465,10 +1465,10 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
     abort();
   } else {
     /* Either just a default-mode capture with no run, or a switch back
-     * into the TEALET_RUN_SWITCH caller.
+     * into the TEALET_START_SWITCH caller.
      */
     if (run_on_switch) {
-      /* TEALET_RUN_SWITCH case, switch back - return the switch arg */
+      /* TEALET_START_SWITCH case, switch back - return the switch arg */
       *parg = switch_arg;
     }
   }
@@ -1651,12 +1651,12 @@ int tealet_run(tealet_t *tealet, tealet_run_t run, void **parg, void *stack_far,
   tealet_sub_t *current;
 
   assert(run != NULL);
-  assert((flags & ~TEALET_RUN_SWITCH) == 0);
+  assert((flags & ~TEALET_START_SWITCH) == 0);
 
   if (result->flags != 0)
     return TEALET_ERR_INVAL;
 
-  switch_now = ((flags & TEALET_RUN_SWITCH) != 0);
+  switch_now = ((flags & TEALET_START_SWITCH) != 0);
 
   current = g_main->g_current;
   tealet_verify_current_matches_caller(current);
@@ -1702,21 +1702,21 @@ done:
  * the lock internally.
  */
 
-int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
+int tealet_fork(tealet_t *_tealet, void **parg, int flags) {
   tealet_sub_t *g_child = (tealet_sub_t *)_tealet;
   tealet_main_t *g_main = TEALET_GET_MAIN(g_child);
   tealet_sub_t *g_current;
   tealet_sub_t *previous;
-  int result, is_parent;
+  int result;
   int switch_now;
   int api_result;
 
   g_current = g_main->g_current;
   tealet_verify_current_matches_caller(g_current);
 
-  assert((flags & ~TEALET_RUN_SWITCH) == 0);
+  assert((flags & ~TEALET_START_SWITCH) == 0);
 
-  switch_now = ((flags & TEALET_RUN_SWITCH) != 0);
+  switch_now = ((flags & TEALET_START_SWITCH) != 0);
 
   /* Fork target must be a NEW/unbound tealet */
   if (g_child->flags != 0) {
@@ -1750,7 +1750,6 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
   if (switch_now) {
     /* save parent, switch to child*/
     result = tealet_switchstack(g_main, g_child, NULL, parg);
-    is_parent = result == 0;
   } else {
     /* we are just saving the child's stack for later.
      *Save the stack in the child, don't modify 'previous'
@@ -1763,7 +1762,6 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
      */
     if (result == 1)
       g_main->g_previous = previous;
-    is_parent = result == 1;
   }
 
   if (result < 0) {
@@ -1777,9 +1775,7 @@ int tealet_fork(tealet_t *_tealet, tealet_t **pother, void **parg, int flags) {
     goto done;
   }
 
-  if (pother)
-    *pother = (tealet_t *)(is_parent ? g_child : g_current);
-  api_result = is_parent;
+  api_result = 0;
 
 done:
   /* we are now back.  If successful, we are either conceptually the same stack as when we called,

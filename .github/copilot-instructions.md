@@ -74,13 +74,13 @@ tealet_finalize(main);
 ```c
 // Pattern 1: Create/bind then switch
 tealet_t *g = tealet_new(main);
-tealet_run(g, run_func, NULL, NULL, TEALET_RUN_DEFAULT);
+tealet_run(g, run_func, NULL, NULL, TEALET_START_DEFAULT);
 void *arg = my_data;
 tealet_switch(g, &arg, TEALET_XFER_DEFAULT);
 
 // Pattern 2: Create and switch atomically
 tealet_t *g = tealet_new(main);
-tealet_run(g, run_func, &arg, NULL, TEALET_RUN_SWITCH);
+tealet_run(g, run_func, &arg, NULL, TEALET_START_SWITCH);
 ```
 
 ### Run Function Pattern
@@ -332,7 +332,7 @@ Use this when you need to [specific use case].
 \`\`\`c
 // Practical example
 tealet_t *t = tealet_new(main);
-tealet_run(t, my_func, &arg, NULL, TEALET_RUN_SWITCH);
+tealet_run(t, my_func, &arg, NULL, TEALET_START_SWITCH);
 \`\`\`
 
 **Note:** Platform-specific behavior or limitations.
