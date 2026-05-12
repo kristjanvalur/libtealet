@@ -222,7 +222,7 @@ Set a stack boundary on a tealet, limiting how far its stack can extend.
 
 **Returns:**
 - `0` on success
-- `-1` if called from non-main tealet or if tealet is not currently active
+- `TEALET_ERR_INVAL` if called on a non-main tealet
 
 **Best Practice - Use Parent Function's Stack Variable:**
 
@@ -1037,7 +1037,7 @@ tealet_delete(t);
 - Only call on tealets that are still allocated
 
 **When to Use:**
-- Deleting tealets that never ran (`TEALET_STATUS_INITIAL`)
+- Deleting tealets that never ran (`TEALET_STATUS_NEW`)
 - Cleaning up tealets kept alive with `TEALET_XFER_DEFAULT`
 - Cleaning up tealets that returned normally
 - Manual resource management
