@@ -380,7 +380,7 @@ void test_exit_defunct_target_returns_error(void) {
   init_test();
 
   victim = NULL;
-  result = TEALET_TEST_NEW(g_main, &victim, NULL, NULL, NULL);
+  result = tealet_test_new_dispatch(g_main, &victim, NULL, NULL, NULL);
   assert(result == 0);
   assert(victim != NULL);
   result = tealet_debug_force_defunct(victim);
@@ -439,7 +439,7 @@ void test_debug_swap_far_invalid_caller_check_main(void) {
   init_test();
 
   child = NULL;
-  result = TEALET_TEST_NEW(g_main, &child, NULL, NULL, NULL);
+  result = tealet_test_new_dispatch(g_main, &child, NULL, NULL, NULL);
   assert(result == 0);
   assert(child != NULL);
 
