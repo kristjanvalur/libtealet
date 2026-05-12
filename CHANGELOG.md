@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     switch) are returned unchanged.
 
 ### Changed
+- **Fork and start-mode API cleanup for orthogonality**
+  - Simplified `tealet_fork()` by removing side out-parameter signaling and
+    documenting side detection via `tealet_current(child) == child`.
+  - Renamed shared start flags from `TEALET_RUN_*` to `TEALET_START_*` to
+    better reflect usage across `tealet_run()`, `tealet_fork()`, and
+    `tealet_spawn()`.
+  - Updated tests and public docs to use the simplified fork contract and the
+    `TEALET_START_*` flag family.
+
 - **Regression test suite was restructured into focused modules**
   - Split the former monolithic regression harness into dedicated test files
     (lifecycle, transfer, locking, resilience, stack, stats, and stress) with
@@ -56,10 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Creation semantics now use explicit allocation + bind/start steps**
   - `tealet_new()` now allocates and returns a NEW/unbound tealet handle.
   - `tealet_run()` is the bind/start primitive, with:
-    - `TEALET_RUN_DEFAULT` for deferred start (capture without immediate switch)
-    - `TEALET_RUN_SWITCH` for immediate start via an optimized single path
-      equivalent in effect to `TEALET_RUN_DEFAULT` + `tealet_switch()`.
-  - `tealet_fork()` now uses `TEALET_RUN_DEFAULT` / `TEALET_RUN_SWITCH`
+    - `TEALET_START_DEFAULT` for deferred start (capture without immediate switch)
+    - `TEALET_START_SWITCH` for immediate start via an optimized single path
+      equivalent in effect to `TEALET_START_DEFAULT` + `tealet_switch()`.
+  - `tealet_fork()` now uses `TEALET_START_DEFAULT` / `TEALET_START_SWITCH`
     mode flags.
 
 - **Public transfer flags were renamed to `TEALET_XFER_*`**
@@ -88,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed core `tealet_create()` and the old create-and-start `tealet_new(...)`
     out-parameter signature.
   - Removed legacy `TEALET_FORK_DEFAULT` / `TEALET_FORK_SWITCH` flags in favor
-    of `TEALET_RUN_*`.
+    of `TEALET_START_*`.
 
 - **Separate switch/exit transfer-flag names removed**
   - Removed `TEALET_SWITCH_DEFAULT` / `TEALET_SWITCH_FORCE` /
@@ -99,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - Updated `README.md`, `docs/GETTING_STARTED.md`, `docs/API.md`,
   `docs/ARCHITECTURE.md`, and `src/tealet.h` Doxygen comments to reflect the
-  new creation flow and run-mode semantics.
+  new creation flow and start-mode semantics.
 
 ## [0.6.0] - 2026-05-09
 

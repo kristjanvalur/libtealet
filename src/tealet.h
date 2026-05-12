@@ -229,7 +229,7 @@ tealet_t *tealet_new(tealet_t *tealet);
  * @param run Callable entry function for the target.
  * @param parg Optional in/out switch argument pointer; used when #TEALET_START_SWITCH is set.
  * @param stack_far Optional minimum far-boundary requirement for the initial stack snapshot.
- * @param flags Run mode: #TEALET_START_DEFAULT or #TEALET_START_SWITCH.
+ * @param flags Start mode: #TEALET_START_DEFAULT or #TEALET_START_SWITCH.
  * @return 0 on success, negative #TEALET_ERR_* on failure.
  *
  * This API installs @p run on a NEW tealet and captures its initial saved
