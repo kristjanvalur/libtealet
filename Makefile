@@ -57,11 +57,6 @@ SCRIPT_DIR ?= scripts
 
 coreobj = src/tealet.o #src/switch_S.o src/switch_c.o
 allobj = $(coreobj) src/tealet_extras.o
-TEST_BINS = bin/test-static bin/test-dynamic bin/test-setcontext bin/test-chunks bin/test-stochastic bin/test-fork bin/test-config bin/test-current
-
-# Test binaries require test-only internal hooks.
-$(TEST_BINS): TEALET_WITH_TESTING := 1
-tests test test-sanitizers test-ubsan test-valgrind: TEALET_WITH_TESTING := 1
 
 src/tealet.o: src/tealet.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ src/tealet.c
