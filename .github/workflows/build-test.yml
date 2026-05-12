@@ -163,9 +163,6 @@ jobs:
           - platform: ARM64
             folder: ARM64
             abi: win_arm64
-    env:
-      CL: /DTEALET_WITH_TESTING=1
-    
     steps:
     - uses: actions/checkout@v6
     
