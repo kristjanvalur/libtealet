@@ -349,8 +349,10 @@ int tealet_switch(tealet_t *target, void **parg, int flags);
  * 1) requested target with #TEALET_XFER_FORCE,
  * 2) panic+force fallback to main only on #TEALET_ERR_MEM/
  *    #TEALET_ERR_DEFUNCT. Other errors are returned unchanged.
- * When @p target is main, #TEALET_XFER_NOFAIL is guaranteed to succeed,
- * because main is never allowed to become defunct.
+ * When @p target is main, #TEALET_XFER_NOFAIL guarantees transfer-start
+ * for valid exit contexts, because main is never allowed to become defunct.
+ * Invalid API usage/state (for example trying to exit main) still returns
+ * #TEALET_ERR_INVAL.
  *
  * `return p;` from run() uses an implicit policy rooted in
  * `tealet_exit(p, NULL, TEALET_XFER_DEFAULT)`, with retries for memory/defunct
@@ -735,15 +737,15 @@ void *tealet_stack_further(void *a, void *b);
  * @param dummy1 Matches tealet_run() signature; ignored.
  * @param dummy2 Matches tealet_run() signature; ignored.
  * @param dummy3 Matches tealet_run() signature; ignored.
- * @param dummy4 Matches tealet_run() signature; ignored.
+ * @param stack_far Optional far-boundary requirement (matches tealet_run()).
  * @param dummy5 Matches tealet_run() signature; ignored.
  * @return Effective far boundary that tealet_run() would use at this stack depth.
  *
  * this is used to get the "far" address if a tealet were initialized here.
- * The arguments must match tealet_run(); they are only dummies.
+ * The arguments match tealet_run(); only @p stack_far is consulted.
  */
 TEALET_API
-void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *dummy4, int dummy5);
+void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3, void *stack_far, int dummy5);
 
 /* Convenience macros */
 #define TEALET_MAIN(t) ((t)->main)

@@ -542,18 +542,20 @@ run-function return handling:
 - try requested target with `TEALET_XFER_FORCE`
 - reroute to main with `TEALET_XFER_PANIC | TEALET_XFER_FORCE` only on
     `TEALET_ERR_MEM` / `TEALET_ERR_DEFUNCT`
-- return other errors unchanged
-Main is never marked defunct, so this edge case remains a hard memory failure.
+- return other errors unchanged.
 
-When the requested target is `main`, `TEALET_XFER_NOFAIL` is guaranteed to
-succeed (transfer starts), because main is never allowed to become defunct.
+When the requested target is `main`, `TEALET_XFER_NOFAIL` guarantees
+transfer-start for valid exit contexts, because main is never allowed to become
+defunct. Invalid API usage/state (for example trying to exit main) still
+returns `TEALET_ERR_INVAL`.
 
 This means a successful forced exit can make other tealets become defunct as
 the trade-off for forward progress under memory pressure.
 
-**Note:** Returning from the run function does not auto-delete by default; it
-uses `TEALET_XFER_DEFAULT` semantics unless `TEALET_EXIT_DELETE` was requested
-explicitly (for example via deferred exit flags).
+**Note:** Returning from the run function leaves the tealet in exited state
+(`TEALET_STATUS_EXITED`) and still allocated, so delete it later with
+`tealet_delete()`, unless `TEALET_EXIT_DELETE` was requested explicitly
+(for example via deferred exit flags).
 Use `tealet_exit()` when you need explicit control over deletion or want to
 exit from nested calls within the run function.
 
@@ -812,21 +814,21 @@ Use this to combine boundary requirements from different stack references.
 
 ```c
 void *tealet_new_probe(tealet_t *dummy1, tealet_run_t dummy2, void **dummy3,
-                       void *dummy4, int dummy5);
+                       void *stack_far, int dummy5);
 ```
 
 A function to test what stack boundary would be used for a new tealet without creating one. This is mostly informative.
 
 **Parameters:**
-- `dummy1`, `dummy2`, `dummy3`, `dummy4`, `dummy5`: Unused placeholders to match the `tealet_run()` call shape
-- `dummy4`: Optional far-boundary requirement; if provided, it is clamped so it can only extend (not shrink) the probe boundary
+- `dummy1`, `dummy2`, `dummy3`, `dummy5`: Unused placeholders to match the `tealet_run()` call shape
+- `stack_far`: Optional far-boundary requirement (same role as in `tealet_run()`); if provided, it is clamped so it can only extend (not shrink) the probe boundary
 
 **Returns:** The probed stack-boundary marker.
 
 **Usage:**
 ```c
 void *arg = NULL;
-void *probe = tealet_new_probe(main, my_run, &arg, NULL, NULL);
+void *probe = tealet_new_probe(main, my_run, &arg, NULL, 0);
 printf("new tealet boundary probe: %p\n", probe);
 ```
 
@@ -1040,8 +1042,8 @@ tealet_delete(t);
 
 **When to Use:**
 - Deleting tealets that never ran (`TEALET_STATUS_NEW`)
-- Cleaning up tealets kept alive with `TEALET_XFER_DEFAULT`
 - Cleaning up tealets that returned normally
+- Deleting suspended tealets when orderly in-run cleanup is not required (for example, no run-function destructors/finalizers need to run)
 - Manual resource management
 
 **When Not Needed:**

@@ -2319,17 +2319,16 @@ void *tealet_stack_further(void *a, void *b) {
 #pragma warning(push)
 #pragma warning(disable : 4172)
 #endif
-void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *d4, int d5) {
+void *tealet_new_probe(tealet_t *d1, tealet_run_t d2, void **d3, void *stack_far, int d5) {
   tealet_sub_t *result;
   void *default_far;
   void *r;
   (void)d1;
   (void)d2;
   (void)d3;
-  (void)d4;
   (void)d5;
   default_far = (void *)&result;
-  r = tealet_pick_initial_far(default_far, d4);
+  r = tealet_pick_initial_far(default_far, stack_far);
   return r;
 }
 #if __GNUC__ > 4
