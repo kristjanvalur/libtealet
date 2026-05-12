@@ -370,7 +370,7 @@ typedef struct test_entry_t {
 
 static test_entry_t test_list[] = {
     {"test_main_current", test_main_current},
-  {"test_set_far_non_main_invalid", test_set_far_non_main_invalid},
+    {"test_set_far_non_main_invalid", test_set_far_non_main_invalid},
     {"test_stack_further", test_stack_further},
     {"test_stack_far_isolation", test_stack_far_isolation},
     {"test_add_unbound_phase1", test_add_unbound_phase1},
