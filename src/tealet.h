@@ -99,7 +99,7 @@ typedef struct tealet_lock_t {
  * that size, otherwise it is initialized to NULL
  */
 typedef struct tealet_t {
-  struct tealet_t *main; /* pointer to the main tealet */
+  struct tealet_t *const main; /* pointer to the main tealet */
   void *extra;
   /* private fields follow */
 } tealet_t;

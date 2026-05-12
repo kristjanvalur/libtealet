@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     switch) are returned unchanged.
 
 ### Changed
+- **`tealet_t.main` is now const-qualified in the public API** (initialized internally via a targeted cast-based write during allocation).
+
 - **Fork and start-mode API cleanup for orthogonality**
   - Simplified `tealet_fork()` by removing side out-parameter signaling and
     documenting side detection via `tealet_current(child) == child`.

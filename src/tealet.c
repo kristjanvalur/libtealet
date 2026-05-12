@@ -1493,7 +1493,8 @@ static tealet_sub_t *tealet_alloc_raw(tealet_main_t *g_main, tealet_alloc_t *all
   }
   /* Track tealet structure allocation */
   STATS_ADD_ALLOC(g_main, size);
-  g->base.main = (tealet_t *)g_main;
+  /* main is const in public type; initialize once during allocation. */
+  *((tealet_t **)&g->base.main) = (tealet_t *)g_main;
   if (extrasize)
     g->base.extra = (void *)((char *)g + basesize);
   else
