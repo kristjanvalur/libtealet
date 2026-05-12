@@ -368,6 +368,17 @@ static tealet_t *test_exit_defunct_fail_run(tealet_t *current, void *arg) {
   return NULL;
 }
 
+/* Force a caller-distance failure by moving far well away from the current
+ * probe on wide address-space targets.
+ *
+ * This is only used by the debug-swap caller-check tests below, and the
+ * selected offset intentionally exceeds TEALET_DEFAULT_MAX_STACK_SIZE.
+ */
+static void *invalid_caller_far_from_probe(void *probe) {
+  uintptr_t sp = (uintptr_t)probe;
+  return (void *)(sp + ((uintptr_t)64 << 20));
+}
+
 /* Verify that exiting to a defunct target returns TEALET_ERR_DEFUNCT and does
  * not accidentally permit transfer.
  */
@@ -438,12 +449,21 @@ void test_debug_swap_far_invalid_caller_check_main(void) {
    */
   init_test();
 
+#if defined(UINTPTR_MAX) && UINTPTR_MAX <= 0xffffffffu
+  /* On 32-bit targets this debug-only far mutation can collide with tight
+   * address-space limits and assert before the intended TEALET_ERR_INVAL path.
+   * Skip this stress variant there; 64-bit jobs still cover it.
+   */
+  fini_test();
+  return;
+#endif
+
   child = NULL;
   result = tealet_test_new_dispatch(g_main, &child, NULL, NULL, NULL);
   assert(result == 0);
   assert(child != NULL);
 
-  new_far = (void *)((uintptr_t)&stack_probe + ((uintptr_t)64 << 20));
+  new_far = invalid_caller_far_from_probe(&stack_probe);
   result = tealet_debug_swap_far(g_main, new_far, &old_far);
   assert(result == 0);
 
@@ -467,7 +487,7 @@ static tealet_t *test_invalid_caller_check_child_run(tealet_t *current, void *ar
   /* Verify that caller-check failure on a running child returns
    * TEALET_ERR_INVAL and does not accidentally persist the far-pointer tweak.
    */
-  new_far = (void *)((uintptr_t)&stack_probe + ((uintptr_t)64 << 20));
+  new_far = invalid_caller_far_from_probe(&stack_probe);
   result = tealet_debug_swap_far(current, new_far, &old_far);
   assert(result == 0);
 
@@ -489,6 +509,14 @@ void test_debug_swap_far_invalid_caller_check_child(void) {
    * accidentally allow a bad far-pointer configuration to pass.
    */
   init_test();
+
+#if defined(UINTPTR_MAX) && UINTPTR_MAX <= 0xffffffffu
+  /* Same rationale as the main-path variant above: keep this test focused on
+   * 64-bit caller-distance behavior where there is room for this mutation.
+   */
+  fini_test();
+  return;
+#endif
 
   runner = tealet_new_native_call(g_main, test_invalid_caller_check_child_run, NULL, NULL);
   assert(runner != NULL);
