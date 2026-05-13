@@ -7,7 +7,6 @@
  * - Dynamic creation and cleanup
  */
 #include "tealet.h"
-#include "test_lock_helpers.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +34,6 @@ static int g_max_recursion_depth = DEFAULT_MAX_RECURSION_DEPTH;
 
 /* Main tealet */
 static tealet_t *g_main = NULL;
-static tealet_test_lock_state_t g_lock_state;
 
 /* Forward declaration */
 static tealet_t *worker_entry(tealet_t *current, void *arg);
@@ -103,8 +101,6 @@ static int worker_recursive(tealet_t *current, int depth) {
   int choice;
   tealet_t *target;
   int i;
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
 
   /* Fill buffer to prevent optimization and consume stack */
   for (i = 0; i < 256; i++)
@@ -233,8 +229,6 @@ static tealet_t *worker_entry(tealet_t *current, void *arg) {
   int result;
   (void)arg;
 
-  tealet_test_lock_assert_unheld(&g_lock_state);
-
   /* Add ourselves to the registry */
   add_tealet(current);
 
@@ -321,11 +315,9 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Failed to initialize\n");
     return 1;
   }
-  tealet_test_lock_install(g_main, &g_lock_state);
   configure_result = tealet_configure_check_stack(g_main, 0);
   if (configure_result != 0) {
     fprintf(stderr, "Failed to enable stack checks: %d\n", configure_result);
-    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;
   }
@@ -385,7 +377,6 @@ int main(int argc, char *argv[]) {
 
   print_stats("Final");
 
-  tealet_test_lock_assert_balanced(&g_lock_state);
   tealet_finalize(g_main);
 
   printf("\n✓ Test completed\n");

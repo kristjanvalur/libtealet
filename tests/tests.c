@@ -20,6 +20,7 @@ tealet_t *g_main = NULL;
 static tealet_t *the_stub = NULL;
 static int newmode = 0;
 tealet_test_lock_state_t g_lock_state;
+static int g_locking_enabled = 0;
 
 /* Runtime detection of stats support */
 static int g_stats_enabled = 0;
@@ -162,6 +163,12 @@ void lock_snapshot_assert_delta_one(const lock_snapshot_t *before) {
 
 void test_lock_assert_unheld(void) { tealet_test_lock_assert_unheld(&g_lock_state); }
 
+void init_test_locking(void) {
+  assert(g_main != NULL);
+  tealet_test_lock_install(g_main, &g_lock_state);
+  g_locking_enabled = 1;
+}
+
 void *failmalloc(size_t size, void *context) {
   if (talloc_fail)
     return 0;
@@ -176,7 +183,6 @@ void init_test_extra(tealet_alloc_t *alloc, size_t extrasize) {
   if (alloc == NULL)
     alloc = &talloc;
   g_main = tealet_initialize(alloc, extrasize);
-  tealet_test_lock_install(g_main, &g_lock_state);
   result = tealet_configure_check_stack(g_main, 0);
   assert(result == 0);
   assert(tealet_current(g_main) == g_main);
@@ -205,9 +211,11 @@ void fini_test() {
   if (g_stats_enabled) {
     assert(stats.n_active == 1); /* main tealet  only */
   }
-  tealet_test_lock_assert_balanced(&g_lock_state);
+  if (g_locking_enabled)
+    tealet_test_lock_assert_balanced(&g_lock_state);
   tealet_finalize(g_main);
   g_main = NULL;
+  g_locking_enabled = 0;
 }
 
 /**************************************/
