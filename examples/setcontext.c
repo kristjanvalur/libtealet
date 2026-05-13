@@ -186,8 +186,7 @@ int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
   return 0;
 }
 
-int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *oucp, tealetex_ucontext_t *ucp,
-                         void **parg) {
+int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *oucp, tealetex_ucontext_t *ucp) {
   if (scmain == NULL || scmain->main == NULL || ucp == NULL)
     return TEALET_ERR_INVAL;
 
@@ -197,7 +196,7 @@ int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
     oucp->uc_state = TEALETEX_UCSTATE_BOUND | TEALETEX_UCSTATE_ACTIVE;
   }
 
-  return tealetex_transfer_to(scmain, ucp, parg);
+  return tealetex_transfer_to(scmain, ucp, NULL);
 }
 
 int tealetex_setcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp, void **parg) {

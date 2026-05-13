@@ -53,7 +53,7 @@ static void loop_func_tealetex(uintptr_t rounds) {
   for (i = 0; i < (int)rounds; ++i) {
     g_wrap_i_from_iterator = i;
 
-    result = tealetex_swapcontext(g_wrap_scmain, g_wrap_loop_uc, g_wrap_main_uc, NULL);
+    result = tealetex_swapcontext(g_wrap_scmain, g_wrap_loop_uc, g_wrap_main_uc);
     if (result != 0)
       return;
   }

@@ -90,13 +90,12 @@ int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
                          int argc, ...);
 
 /*
- * Swap from @p oucp to @p ucp, exchanging optional argument via @p parg.
+ * Swap from @p oucp to @p ucp.
  *
  * Similar intent to swapcontext(). On success, returns 0 after control later
  * switches back into @p oucp.
  */
-int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *oucp, tealetex_ucontext_t *ucp,
-                         void **parg);
+int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *oucp, tealetex_ucontext_t *ucp);
 
 /*
  * Transfer to @p ucp without saving return continuation in a separate output
