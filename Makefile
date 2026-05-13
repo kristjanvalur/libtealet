@@ -15,7 +15,7 @@ TEALET_WITH_STACK_GUARD ?= 1
 TEALET_WITH_STACK_SNAPSHOT ?= 1
 TEALET_WITH_TESTING ?= 0
 
-CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1 \
+CPPFLAGS += -Isrc -Iexamples -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1 \
 	-DTEALET_WITH_STACK_GUARD=$(TEALET_WITH_STACK_GUARD) \
 	-DTEALET_WITH_STACK_SNAPSHOT=$(TEALET_WITH_STACK_SNAPSHOT) \
 	-DTEALET_WITH_TESTING=$(TEALET_WITH_TESTING)
@@ -79,7 +79,7 @@ bin/libtealet.a: bin $(allobj)
 	@rm -rf bin/tmp_ar
 
 clean:
-	rm -f src/*.o src/*.d tests/*.o tests/*.d *.out *.so
+	rm -f src/*.o src/*.d tests/*.o tests/*.d examples/*.o examples/*.d *.out *.so
 	rm -rf bin/*
 
 .PHONY: abiname
@@ -221,14 +221,24 @@ bin/test-current: bin tests/test_current.o bin/libtealet.a
 tests/test_current.o: tests/test_current.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_current.c
 
-# Load compiler-generated header dependencies when present.
--include $(wildcard src/*.d tests/*.d)
+# setcontext wrapper example
+examples/setcontext_example.o: examples/setcontext_example.c examples/setcontext.h src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ examples/setcontext_example.c
 
-tests/setcontext.o: tests/setcontext.c src/tealet.h
+bin/example-setcontext: bin examples/setcontext_example.o examples/setcontext.o bin/libtealet.so
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ examples/setcontext_example.o examples/setcontext.o ${DEBUG} -ltealet
+
+# Load compiler-generated header dependencies when present.
+-include $(wildcard src/*.d tests/*.d examples/*.d)
+
+tests/setcontext.o: tests/setcontext.c src/tealet.h examples/setcontext.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/setcontext.c
 
-bin/test-setcontext: bin tests/setcontext.o bin/libtealet.so
-	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o ${DEBUG} -ltealet
+examples/setcontext.o: examples/setcontext.c examples/setcontext.h src/tealet.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ examples/setcontext.c
+
+bin/test-setcontext: bin tests/setcontext.o examples/setcontext.o bin/libtealet.so
+	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/setcontext.o examples/setcontext.o ${DEBUG} -ltealet
 
 tests/tests.o: tests/tests.c src/tealet.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/tests.c
