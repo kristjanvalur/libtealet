@@ -149,6 +149,7 @@ int tealetex_getcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t 
 
 int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp,
                          tealetex_context_func_t func, int argc, ...) {
+  tealet_t *old_tealet;
   tealet_t *new_tealet;
   va_list ap;
   int i;
@@ -157,6 +158,13 @@ int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
     return TEALET_ERR_INVAL;
   if (argc < 0 || argc > TEALETEX_MAKECONTEXT_MAX_ARGS)
     return TEALET_ERR_INVAL;
+
+  if (ucp->uc_main != NULL && ucp->uc_main != scmain->main)
+    return TEALET_ERR_INVAL;
+
+  old_tealet = ucp->uc_tealet;
+  if (old_tealet != NULL && old_tealet != scmain->main && old_tealet != tealet_current(scmain->main))
+    tealet_delete(old_tealet);
 
   new_tealet = tealet_new(scmain->main);
   if (new_tealet == NULL)
@@ -180,19 +188,12 @@ int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
 
 int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *oucp, tealetex_ucontext_t *ucp,
                          void **parg) {
-  int i;
-
   if (scmain == NULL || scmain->main == NULL || ucp == NULL)
     return TEALET_ERR_INVAL;
 
   if (oucp != NULL) {
     oucp->uc_tealet = tealet_current(scmain->main);
     oucp->uc_main = scmain->main;
-    oucp->uc_link = NULL;
-    oucp->uc_func = NULL;
-    oucp->uc_argc = 0;
-    for (i = 0; i < TEALETEX_MAKECONTEXT_MAX_ARGS; ++i)
-      oucp->uc_argv[i] = (uintptr_t)0;
     oucp->uc_state = TEALETEX_UCSTATE_BOUND | TEALETEX_UCSTATE_ACTIVE;
   }
 

@@ -34,17 +34,25 @@ static volatile int iterator_finished;
 static void loop(tealetex_ucontext_t *loop_context, tealetex_ucontext_t *other_context,
                  int *i_from_iterator_ptr) {
   int i;
-  int result;
+
+  fprintf(stderr,
+          "[debug] loop enter: loop_context=%p uc_link=%p expected_main_context1=%p other_context=%p\n",
+          (void *)loop_context,
+          loop_context != NULL ? (void *)loop_context->uc_link : (void *)0,
+          (void *)&main_context1,
+          (void *)other_context);
 
   if (loop_context == NULL || other_context == NULL || i_from_iterator_ptr == NULL)
     return;
 
+  if (loop_context->uc_link != &main_context1) {
+    fprintf(stderr, "[debug] WARNING: loop_context->uc_link is not main_context1\n");
+  }
+
   for (i = 0; i < 10; ++i) {
     *i_from_iterator_ptr = i;
 
-    result = tealetex_swapcontext(&g_scmain, loop_context, other_context, NULL);
-    if (result != 0)
-      return;
+    tealetex_swapcontext(&g_scmain, loop_context, other_context, NULL);
   }
 
   /* The wrapper in examples/setcontext.c applies implicit uc_link transfer
@@ -53,9 +61,11 @@ static void loop(tealetex_ucontext_t *loop_context, tealetex_ucontext_t *other_c
 }
 
 int main(int argc, char **argv) {
-  int result;
+  int main1_resume_count;
 
   (void)argc;
+
+  main1_resume_count = 0;
 
   tealetex_getcontext_init(&g_scmain, (void *)&argv);
   tealetex_getcontext(&g_scmain, &loop_context);
@@ -67,19 +77,31 @@ int main(int argc, char **argv) {
 
   iterator_finished = 0;
   tealetex_getcontext(&g_scmain, &main_context1);
+  ++main1_resume_count;
+  fprintf(stderr,
+          "[debug] resumed at main_context1: count=%d iterator_finished=%d\n",
+          main1_resume_count,
+          (int)iterator_finished);
 
   if (!iterator_finished) {
+    fprintf(stderr,
+            "[debug] entering producer/consumer loop block at main_context1: count=%d\n",
+            main1_resume_count);
     iterator_finished = 1;
+    fprintf(stderr,
+            "[debug] iterator_finished set to %d before while loop\n",
+            (int)iterator_finished);
 
     while (1) {
-      result = tealetex_swapcontext(&g_scmain, &main_context2, &loop_context, NULL);
-      if (result != 0 || tealet_status(loop_context.uc_tealet) != TEALET_STATUS_ACTIVE)
-        break;
+      tealetex_swapcontext(&g_scmain, &main_context2, &loop_context, NULL);
       printf("%d\n", i_from_iterator);
     }
+  } else {
+    fprintf(stderr,
+            "[debug] continuation resumed at main_context1 with iterator_finished=%d; skipping loop block\n",
+            (int)iterator_finished);
   }
 
   tealetex_freecontext(&g_scmain, &loop_context);
-  tealetex_getcontext_fini(&g_scmain);
   return 0;
 }

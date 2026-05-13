@@ -110,6 +110,15 @@ static int run_tealetex_wrapper_example(void *far_boundary) {
   if (result != 0)
     return 1;
 
+  loop_uc.uc_tealet = NULL;
+  loop_uc.uc_main = NULL;
+  loop_uc.uc_link = NULL;
+  loop_uc.uc_func = NULL;
+  loop_uc.uc_argc = 0;
+  for (i = 0; i < TEALETEX_MAKECONTEXT_MAX_ARGS; ++i)
+    loop_uc.uc_argv[i] = (uintptr_t)0;
+  loop_uc.uc_state = TEALETEX_UCSTATE_EMPTY;
+
   main_uc.uc_tealet = tealet_current(scmain.main);
   main_uc.uc_main = scmain.main;
   main_uc.uc_link = NULL;
