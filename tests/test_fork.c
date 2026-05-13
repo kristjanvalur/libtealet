@@ -9,9 +9,7 @@
 static int test_count = 0;
 static int test_passed = 0;
 
-static void finalize_main_checked(tealet_t *main) {
-  tealet_finalize(main);
-}
+static void finalize_main_checked(tealet_t *main) { tealet_finalize(main); }
 
 static void assert_origin_main(tealet_t *t) {
   unsigned int origin;

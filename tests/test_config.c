@@ -39,9 +39,7 @@ static int prepare_worker(tealet_t *main_tealet, tealet_t **pworker, tealet_run_
   return 0;
 }
 
-static void finalize_main_checked(tealet_t *main_tealet) {
-  tealet_finalize(main_tealet);
-}
+static void finalize_main_checked(tealet_t *main_tealet) { tealet_finalize(main_tealet); }
 
 /*
  * Runtime outcomes for alignment-sensitive mprotect split tests.
