@@ -95,28 +95,29 @@ static int run_direct_example(void) {
   return 0;
 }
 
-static int run_tealetex_wrapper_example(void) {
+static int run_tealetex_wrapper_example(void *far_boundary) {
   tealetex_setcontext_main_t scmain;
   tealetex_ucontext_t main_uc;
   tealetex_ucontext_t loop_uc;
   int expected;
   int loop_uc_ready;
   int result;
+  int i;
 
   loop_uc_ready = 0;
 
-  result = tealetex_getcontext_init(&scmain);
+  result = tealetex_getcontext_init(&scmain, far_boundary);
   if (result != 0)
     return 1;
 
-  result = tealetex_getcontext(&scmain, &main_uc);
-  if (result != 0)
-    goto fail;
-
-  result = tealetex_getcontext(&scmain, &loop_uc);
-  if (result != 0)
-    goto fail;
-  loop_uc_ready = 1;
+  main_uc.uc_tealet = tealet_current(scmain.main);
+  main_uc.uc_main = scmain.main;
+  main_uc.uc_link = NULL;
+  main_uc.uc_func = NULL;
+  main_uc.uc_argc = 0;
+  for (i = 0; i < TEALETEX_MAKECONTEXT_MAX_ARGS; ++i)
+    main_uc.uc_argv[i] = (uintptr_t)0;
+  main_uc.uc_state = TEALETEX_UCSTATE_BOUND | TEALETEX_UCSTATE_ACTIVE;
 
   loop_uc.uc_link = &main_uc;
   g_wrap_scmain = &scmain;
@@ -127,6 +128,7 @@ static int run_tealetex_wrapper_example(void) {
   result = tealetex_makecontext(&scmain, &loop_uc, loop_func_tealetex, 1, (uintptr_t)10);
   if (result != 0)
     goto fail;
+  loop_uc_ready = 1;
 
   result = tealetex_setcontext(&scmain, &loop_uc, NULL);
   if (result != 0)
@@ -159,9 +161,11 @@ fail:
 }
 
 int main(void) {
+  int far_marker;
+
   if (run_direct_example() != 0)
     return 1;
-  if (run_tealetex_wrapper_example() != 0)
+  if (run_tealetex_wrapper_example((void *)&far_marker) != 0)
     return 1;
   return 0;
 }

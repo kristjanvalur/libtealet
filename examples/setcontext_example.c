@@ -25,6 +25,9 @@ static tealetex_ucontext_t loop_context;
 /* Iterator return value. */
 static volatile int i_from_iterator;
 
+/* Completion flag shared between parent path and getcontext continuation path. */
+static volatile int iterator_finished;
+
 /* Iterator function. It yields values and switches back to main_context2.
  * When it returns, control flows to loop_context.uc_link (main_context1).
  */
@@ -49,52 +52,34 @@ static void loop(tealetex_ucontext_t *loop_context, tealetex_ucontext_t *other_c
    */
 }
 
-int main(void) {
-  volatile int iterator_finished;
+int main(int argc, char **argv) {
   int result;
 
-  result = tealetex_getcontext_init(&g_scmain);
-  if (result != 0)
-    return 1;
+  (void)argc;
 
-  result = tealetex_getcontext(&g_scmain, &loop_context);
-  if (result != 0)
-    goto fail;
-
-  result = tealetex_getcontext(&g_scmain, &main_context1);
-  if (result != 0)
-    goto fail;
-
-  result = tealetex_getcontext(&g_scmain, &main_context2);
-  if (result != 0)
-    goto fail;
+  tealetex_getcontext_init(&g_scmain, (void *)&argv);
+  tealetex_getcontext(&g_scmain, &loop_context);
 
   loop_context.uc_link = &main_context1;
 
-  result = tealetex_makecontext(&g_scmain, &loop_context, loop, 3, (uintptr_t)&loop_context,
-                                (uintptr_t)&main_context2, (uintptr_t)&i_from_iterator);
-  if (result != 0)
-    goto fail;
+  tealetex_makecontext(&g_scmain, &loop_context, loop, 3, (uintptr_t)&loop_context, (uintptr_t)&main_context2,
+                       (uintptr_t)&i_from_iterator);
 
   iterator_finished = 0;
-  while (!iterator_finished) {
-    result = tealetex_swapcontext(&g_scmain, &main_context2, &loop_context, NULL);
-    if (result != 0)
-      goto fail;
+  tealetex_getcontext(&g_scmain, &main_context1);
 
-    if (tealet_status(loop_context.uc_tealet) == TEALET_STATUS_ACTIVE) {
+  if (!iterator_finished) {
+    iterator_finished = 1;
+
+    while (1) {
+      result = tealetex_swapcontext(&g_scmain, &main_context2, &loop_context, NULL);
+      if (result != 0 || tealet_status(loop_context.uc_tealet) != TEALET_STATUS_ACTIVE)
+        break;
       printf("%d\n", i_from_iterator);
-    } else {
-      iterator_finished = 1;
     }
   }
 
   tealetex_freecontext(&g_scmain, &loop_context);
   tealetex_getcontext_fini(&g_scmain);
   return 0;
-
-fail:
-  tealetex_freecontext(&g_scmain, &loop_context);
-  tealetex_getcontext_fini(&g_scmain);
-  return 1;
 }

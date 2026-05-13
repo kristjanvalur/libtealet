@@ -63,10 +63,10 @@ typedef struct tealetex_ucontext_t {
  * Initialize/finalize a setcontext domain.
  *
  * init allocates the underlying libtealet main tealet (malloc allocator,
- * extrasize 0) and initializes @p scmain. fini finalizes it and clears the
- * handle.
+ * extrasize 0), sets its far boundary for fork-based getcontext capture,
+ * and initializes @p scmain. fini finalizes it and clears the handle.
  */
-int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain);
+int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain, void *far_boundary);
 void tealetex_getcontext_fini(tealetex_setcontext_main_t *scmain);
 
 /*

@@ -66,11 +66,8 @@ static int tealetex_transfer_to(tealetex_setcontext_main_t *scmain, tealetex_uco
   if (ucp->uc_tealet == tealet_current(scmain->main))
     return 0;
 
-  if (ucp->uc_state & TEALETEX_UCSTATE_ACTIVE)
+  if ((ucp->uc_state & TEALETEX_UCSTATE_ACTIVE) || ucp->uc_func == NULL)
     return tealet_switch(ucp->uc_tealet, parg, TEALET_XFER_DEFAULT);
-
-  if (ucp->uc_func == NULL)
-    return TEALET_ERR_INVAL;
 
   /* First start always passes the context descriptor to the entry wrapper. */
   start_arg = (void *)ucp;
@@ -84,10 +81,10 @@ static int tealetex_transfer_to(tealetex_setcontext_main_t *scmain, tealetex_uco
   return result;
 }
 
-int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain) {
+int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain, void *far_boundary) {
   tealet_alloc_t alloc = TEALET_ALLOC_INIT_MALLOC;
 
-  if (scmain == NULL)
+  if (scmain == NULL || far_boundary == NULL)
     return TEALET_ERR_INVAL;
 
   scmain->main = NULL;
@@ -95,6 +92,13 @@ int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain) {
   scmain->main = tealet_initialize(&alloc, 0);
   if (scmain->main == NULL)
     return TEALET_ERR_MEM;
+
+  if (tealet_set_far(scmain->main, far_boundary) != 0) {
+    tealet_finalize(scmain->main);
+    scmain->main = NULL;
+    return TEALET_ERR_INVAL;
+  }
+
   return 0;
 }
 
@@ -107,21 +111,39 @@ void tealetex_getcontext_fini(tealetex_setcontext_main_t *scmain) {
 }
 
 int tealetex_getcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp) {
-  tealet_t *current;
+  tealet_t *child;
+  int fork_result;
   int i;
 
   if (scmain == NULL || scmain->main == NULL || ucp == NULL)
     return TEALET_ERR_INVAL;
 
-  current = tealet_current(scmain->main);
-  ucp->uc_tealet = current;
+  child = tealet_new(scmain->main);
+  if (child == NULL)
+    return TEALET_ERR_MEM;
+
+  ucp->uc_tealet = child;
   ucp->uc_main = scmain->main;
   ucp->uc_link = NULL;
   ucp->uc_func = NULL;
   ucp->uc_argc = 0;
   for (i = 0; i < TEALETEX_MAKECONTEXT_MAX_ARGS; ++i)
     ucp->uc_argv[i] = (uintptr_t)0;
-  ucp->uc_state = TEALETEX_UCSTATE_BOUND | TEALETEX_UCSTATE_ACTIVE;
+
+  fork_result = tealet_fork(child, NULL, TEALET_START_DEFAULT);
+  if (fork_result != 0) {
+    tealet_delete(child);
+    ucp->uc_tealet = NULL;
+    ucp->uc_main = NULL;
+    ucp->uc_state = TEALETEX_UCSTATE_EMPTY;
+    return fork_result;
+  }
+
+  if (tealet_current(scmain->main) == child)
+    ucp->uc_state = TEALETEX_UCSTATE_BOUND | TEALETEX_UCSTATE_ACTIVE;
+  else
+    ucp->uc_state = TEALETEX_UCSTATE_BOUND;
+
   return 0;
 }
 
