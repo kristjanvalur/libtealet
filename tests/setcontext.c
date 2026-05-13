@@ -144,7 +144,7 @@ static int run_tealetex_wrapper_example(void *far_boundary) {
     goto fail;
 
   expected = 0;
-  while (tealet_status(loop_uc.uc_tealet) == TEALET_STATUS_ACTIVE) {
+  while ((loop_uc.uc_state & TEALETEX_UCSTATE_EXITED) == 0) {
     if (g_wrap_i_from_iterator != expected)
       goto fail;
     expected += 1;

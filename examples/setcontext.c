@@ -28,6 +28,7 @@ static void tealetex_dispatch(tealetex_ucontext_t *ucp) {
 
 static tealet_t *tealetex_context_entry(tealet_t *current, void *arg) {
   tealetex_ucontext_t *ucp = (tealetex_ucontext_t *)arg;
+  tealet_t *next;
 
   if (ucp == NULL || ucp->uc_func == NULL)
     return current->main;
@@ -44,8 +45,16 @@ static tealet_t *tealetex_context_entry(tealet_t *current, void *arg) {
   ucp->uc_state |= TEALETEX_UCSTATE_EXITED;
 
   if (ucp->uc_link != NULL && ucp->uc_link->uc_tealet != NULL)
-    return ucp->uc_link->uc_tealet;
-  return current->main;
+    next = ucp->uc_link->uc_tealet;
+  else
+    next = current->main;
+
+  /* This context function is complete; clear user handle before handoff and
+   * request delete of the current tealet on the implicit return transfer.
+   */
+  ucp->uc_tealet = NULL;
+  tealet_exit(next, NULL, TEALET_EXIT_DEFER | TEALET_EXIT_DELETE);
+  return next;
 }
 
 static int tealetex_transfer_to(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp, void **parg) {

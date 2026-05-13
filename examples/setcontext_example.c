@@ -71,6 +71,5 @@ int main(int argc, char **argv) {
     }
   }
 
-  tealetex_freecontext(&g_scmain, &loop_context);
   return 0;
 }
