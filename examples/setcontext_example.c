@@ -7,7 +7,6 @@
 
 #include "setcontext.h"
 
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -26,30 +25,17 @@ static tealetex_ucontext_t loop_context;
 /* Iterator return value. */
 static volatile int i_from_iterator;
 
-typedef struct tealetex_loop_args_t {
-  tealetex_ucontext_t *loop_context;
-  tealetex_ucontext_t *other_context;
-  volatile int *i_from_iterator;
-  int rounds;
-} tealetex_loop_args_t;
-
 /* Iterator function. It yields values and switches back to main_context2.
  * When it returns, control flows to loop_context.uc_link (main_context1).
  */
-static void loop(tealet_t *current, void *arg) {
-  tealetex_loop_args_t *loop_args = (tealetex_loop_args_t *)arg;
+static void loop(uintptr_t rounds) {
   int i;
   int result;
 
-  (void)current;
+  for (i = 0; i < (int)rounds; ++i) {
+    i_from_iterator = i;
 
-  if (loop_args == NULL)
-    return;
-
-  for (i = 0; i < loop_args->rounds; ++i) {
-    *(loop_args->i_from_iterator) = i;
-
-    result = tealetex_swapcontext(&g_scmain, loop_args->loop_context, loop_args->other_context, NULL);
+    result = tealetex_swapcontext(&g_scmain, &loop_context, &main_context2, NULL);
     if (result != 0)
       return;
   }
@@ -61,9 +47,7 @@ static void loop(tealet_t *current, void *arg) {
 }
 
 int main(void) {
-  char iterator_stack[SIGSTKSZ];
   volatile int iterator_finished;
-  tealetex_loop_args_t loop_args;
   int result;
 
   result = tealetex_getcontext_init(&g_scmain);
@@ -84,13 +68,7 @@ int main(void) {
 
   loop_context.uc_link = &main_context1;
 
-  loop_args.loop_context = &loop_context;
-  loop_args.other_context = &main_context2;
-  loop_args.i_from_iterator = &i_from_iterator;
-  loop_args.rounds = 10;
-
-  result = tealetex_makecontext(&g_scmain, &loop_context, loop, &loop_args, (void *)&iterator_stack[0],
-                                TEALET_START_DEFAULT);
+  result = tealetex_makecontext(&g_scmain, &loop_context, loop, 1, (uintptr_t)10);
   if (result != 0)
     goto fail;
 

@@ -41,12 +41,21 @@ tealet_t *loop_func(tealet_t *current, void *arg) {
   return tealet_previous(current);
 }
 
-static void loop_func_tealetex(tealet_t *current, void *arg) {
-  int i;
+static tealetex_setcontext_main_t *g_wrap_scmain;
+static tealetex_ucontext_t *g_wrap_main_uc;
+static tealetex_ucontext_t *g_wrap_loop_uc;
+static volatile int g_wrap_i_from_iterator;
 
-  for (i = 0; i < (int)(intptr_t)arg; ++i) {
-    void *value = (void *)(intptr_t)i;
-    tealet_switch(tealet_previous(current), &value, TEALET_XFER_DEFAULT);
+static void loop_func_tealetex(uintptr_t rounds) {
+  int i;
+  int result;
+
+  for (i = 0; i < (int)rounds; ++i) {
+    g_wrap_i_from_iterator = i;
+
+    result = tealetex_swapcontext(g_wrap_scmain, g_wrap_loop_uc, g_wrap_main_uc, NULL);
+    if (result != 0)
+      return;
   }
 }
 
@@ -90,7 +99,6 @@ static int run_tealetex_wrapper_example(void) {
   tealetex_setcontext_main_t scmain;
   tealetex_ucontext_t main_uc;
   tealetex_ucontext_t loop_uc;
-  void *data;
   int expected;
   int loop_uc_ready;
   int result;
@@ -111,22 +119,26 @@ static int run_tealetex_wrapper_example(void) {
   loop_uc_ready = 1;
 
   loop_uc.uc_link = &main_uc;
-  result = tealetex_makecontext(&scmain, &loop_uc, loop_func_tealetex, (void *)10, NULL, TEALET_START_SWITCH);
+  g_wrap_scmain = &scmain;
+  g_wrap_main_uc = &main_uc;
+  g_wrap_loop_uc = &loop_uc;
+  g_wrap_i_from_iterator = -1;
+
+  result = tealetex_makecontext(&scmain, &loop_uc, loop_func_tealetex, 1, (uintptr_t)10);
   if (result != 0)
     goto fail;
 
-  data = NULL;
-  result = tealetex_setcontext(&scmain, &loop_uc, &data);
+  result = tealetex_setcontext(&scmain, &loop_uc, NULL);
   if (result != 0)
     goto fail;
 
   expected = 0;
   while (tealet_status(loop_uc.uc_tealet) == TEALET_STATUS_ACTIVE) {
-    if ((int)(intptr_t)data != expected)
+    if (g_wrap_i_from_iterator != expected)
       goto fail;
     expected += 1;
 
-    result = tealetex_setcontext(&scmain, &loop_uc, &data);
+    result = tealetex_setcontext(&scmain, &loop_uc, NULL);
     if (result != 0)
       goto fail;
   }

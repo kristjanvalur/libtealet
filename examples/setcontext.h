@@ -11,6 +11,8 @@
 
 #include "tealet.h"
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,6 +33,12 @@ typedef struct tealetex_setcontext_main_t {
 #define TEALETEX_UCSTATE_ACTIVE (1u << 1)
 #define TEALETEX_UCSTATE_EXITED (1u << 2)
 
+/* Maximum number of makecontext arguments supported by this example API. */
+#define TEALETEX_MAKECONTEXT_MAX_ARGS (4)
+
+/* Canonical makecontext-style callback signature. */
+typedef void (*tealetex_context_func_t)();
+
 /*
  * setcontext-style context object.
  *
@@ -44,15 +52,12 @@ typedef struct tealetex_ucontext_t {
   tealet_t *uc_main;
   struct tealetex_ucontext_t *uc_link;
 
-  void (*uc_func)(tealet_t *current, void *arg);
-  void *uc_arg;
-  void *uc_stack_far;
-  int uc_start_flags; /* TEALET_START_DEFAULT or TEALET_START_SWITCH */
+  tealetex_context_func_t uc_func;
+  int uc_argc;
+  uintptr_t uc_argv[TEALETEX_MAKECONTEXT_MAX_ARGS];
 
   unsigned int uc_state;
 } tealetex_ucontext_t;
-
-typedef void (*tealetex_context_func_t)(tealet_t *current, void *arg);
 
 /*
  * Initialize/finalize a setcontext domain.
@@ -75,12 +80,14 @@ int tealetex_getcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t 
 /*
  * Bind a runnable entry to @p ucp.
  *
- * Similar intent to makecontext(). The context is configured but not started
- * unless @p start_flags requests an immediate switch.
+ * Similar intent to makecontext(). @p argc arguments are captured from varargs
+ * into @p ucp and dispatched by arity when the context first starts.
+ *
+ * This example implementation supports up to TEALETEX_MAKECONTEXT_MAX_ARGS
+ * arguments (each passed/stored as uintptr_t).
  */
 int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp, tealetex_context_func_t func,
-                         void *arg,
-                         void *stack_far, int start_flags);
+                         int argc, ...);
 
 /*
  * Swap from @p oucp to @p ucp, exchanging optional argument via @p parg.
