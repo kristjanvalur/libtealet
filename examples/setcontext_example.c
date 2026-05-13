@@ -28,14 +28,18 @@ static volatile int i_from_iterator;
 /* Iterator function. It yields values and switches back to main_context2.
  * When it returns, control flows to loop_context.uc_link (main_context1).
  */
-static void loop(uintptr_t rounds) {
+static void loop(tealetex_ucontext_t *loop_context, tealetex_ucontext_t *other_context,
+                 int *i_from_iterator_ptr) {
   int i;
   int result;
 
-  for (i = 0; i < (int)rounds; ++i) {
-    i_from_iterator = i;
+  if (loop_context == NULL || other_context == NULL || i_from_iterator_ptr == NULL)
+    return;
 
-    result = tealetex_swapcontext(&g_scmain, &loop_context, &main_context2, NULL);
+  for (i = 0; i < 10; ++i) {
+    *i_from_iterator_ptr = i;
+
+    result = tealetex_swapcontext(&g_scmain, loop_context, other_context, NULL);
     if (result != 0)
       return;
   }
@@ -43,7 +47,6 @@ static void loop(uintptr_t rounds) {
   /* The wrapper in examples/setcontext.c applies implicit uc_link transfer
    * when this function returns, like canonical setcontext examples.
    */
-  return;
 }
 
 int main(void) {
@@ -68,7 +71,8 @@ int main(void) {
 
   loop_context.uc_link = &main_context1;
 
-  result = tealetex_makecontext(&g_scmain, &loop_context, loop, 1, (uintptr_t)10);
+  result = tealetex_makecontext(&g_scmain, &loop_context, loop, 3, (uintptr_t)&loop_context,
+                                (uintptr_t)&main_context2, (uintptr_t)&i_from_iterator);
   if (result != 0)
     goto fail;
 
