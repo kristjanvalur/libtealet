@@ -4,7 +4,6 @@
 
 static tealet_t *tealetex_context_entry(tealet_t *current, void *arg) {
   tealetex_ucontext_t *ucp = (tealetex_ucontext_t *)arg;
-  tealet_t *next;
 
   if (ucp == NULL || ucp->uc_func == NULL)
     return current->main;
@@ -12,13 +11,15 @@ static tealet_t *tealetex_context_entry(tealet_t *current, void *arg) {
   ucp->uc_state |= TEALETEX_UCSTATE_ACTIVE;
   ucp->uc_state &= ~TEALETEX_UCSTATE_EXITED;
 
-  next = ucp->uc_func(current, ucp->uc_arg);
+  /* Match setcontext-style behavior: when the context function returns,
+   * control implicitly transfers to uc_link (or back to main if uc_link is NULL).
+   * Any tealet_t* return from the callback is intentionally ignored.
+   */
+  (void)ucp->uc_func(current, ucp->uc_arg);
 
   ucp->uc_state &= ~TEALETEX_UCSTATE_ACTIVE;
   ucp->uc_state |= TEALETEX_UCSTATE_EXITED;
 
-  if (next != NULL)
-    return next;
   if (ucp->uc_link != NULL && ucp->uc_link->uc_tealet != NULL)
     return ucp->uc_link->uc_tealet;
   return current->main;
@@ -106,8 +107,8 @@ int tealetex_getcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t 
   return 0;
 }
 
-int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp, tealet_run_t func, void *arg,
-                         void *stack_far, int start_flags) {
+int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp,
+                         tealetex_context_func_t func, void *arg, void *stack_far, int start_flags) {
   tealet_t *new_tealet;
 
   if (scmain == NULL || scmain->main == NULL || ucp == NULL || func == NULL)

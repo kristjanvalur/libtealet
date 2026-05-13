@@ -36,7 +36,7 @@ typedef struct tealetex_loop_args_t {
 /* Iterator function. It yields values and switches back to main_context2.
  * When it returns, control flows to loop_context.uc_link (main_context1).
  */
-static tealet_t *loop(tealet_t *current, void *arg) {
+static void loop(tealet_t *current, void *arg) {
   tealetex_loop_args_t *loop_args = (tealetex_loop_args_t *)arg;
   int i;
   int result;
@@ -44,19 +44,20 @@ static tealet_t *loop(tealet_t *current, void *arg) {
   (void)current;
 
   if (loop_args == NULL)
-    return tealet_previous(current);
+    return;
 
   for (i = 0; i < loop_args->rounds; ++i) {
     *(loop_args->i_from_iterator) = i;
 
     result = tealetex_swapcontext(&g_scmain, loop_args->loop_context, loop_args->other_context, NULL);
     if (result != 0)
-      return tealet_previous(current);
+      return;
   }
 
-  if (loop_args->loop_context->uc_link != NULL && loop_args->loop_context->uc_link->uc_tealet != NULL)
-    return loop_args->loop_context->uc_link->uc_tealet;
-  return tealet_previous(current);
+  /* The wrapper in examples/setcontext.c applies implicit uc_link transfer
+   * when this function returns, like canonical setcontext examples.
+   */
+  return;
 }
 
 int main(void) {

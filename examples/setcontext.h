@@ -44,13 +44,15 @@ typedef struct tealetex_ucontext_t {
   tealet_t *uc_main;
   struct tealetex_ucontext_t *uc_link;
 
-  tealet_run_t uc_func;
+  void (*uc_func)(tealet_t *current, void *arg);
   void *uc_arg;
   void *uc_stack_far;
   int uc_start_flags; /* TEALET_START_DEFAULT or TEALET_START_SWITCH */
 
   unsigned int uc_state;
 } tealetex_ucontext_t;
+
+typedef void (*tealetex_context_func_t)(tealet_t *current, void *arg);
 
 /*
  * Initialize/finalize a setcontext domain.
@@ -76,7 +78,8 @@ int tealetex_getcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t 
  * Similar intent to makecontext(). The context is configured but not started
  * unless @p start_flags requests an immediate switch.
  */
-int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp, tealet_run_t func, void *arg,
+int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t *ucp, tealetex_context_func_t func,
+                         void *arg,
                          void *stack_far, int start_flags);
 
 /*

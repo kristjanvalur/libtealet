@@ -41,6 +41,15 @@ tealet_t *loop_func(tealet_t *current, void *arg) {
   return tealet_previous(current);
 }
 
+static void loop_func_tealetex(tealet_t *current, void *arg) {
+  int i;
+
+  for (i = 0; i < (int)(intptr_t)arg; ++i) {
+    void *value = (void *)(intptr_t)i;
+    tealet_switch(tealet_previous(current), &value, TEALET_XFER_DEFAULT);
+  }
+}
+
 static int run_direct_example(void) {
   /* initialize main tealet using malloc based allocation */
   tealet_alloc_t talloc = TEALET_ALLOC_INIT_MALLOC;
@@ -102,7 +111,7 @@ static int run_tealetex_wrapper_example(void) {
   loop_uc_ready = 1;
 
   loop_uc.uc_link = &main_uc;
-  result = tealetex_makecontext(&scmain, &loop_uc, loop_func, (void *)10, NULL, TEALET_START_SWITCH);
+  result = tealetex_makecontext(&scmain, &loop_uc, loop_func_tealetex, (void *)10, NULL, TEALET_START_SWITCH);
   if (result != 0)
     goto fail;
 
