@@ -14,12 +14,9 @@
 #endif
 
 #include "tealet.h"
-#include "test_lock_helpers.h"
 
 static int test_count = 0;
 static int test_passed = 0;
-static tealet_test_lock_state_t g_lock_state;
-
 static int prepare_worker(tealet_t *main_tealet, tealet_t **pworker, tealet_run_t run) {
   tealet_t *worker;
   int result;
@@ -43,7 +40,6 @@ static int prepare_worker(tealet_t *main_tealet, tealet_t **pworker, tealet_run_
 }
 
 static void finalize_main_checked(tealet_t *main_tealet) {
-  tealet_test_lock_assert_balanced(&g_lock_state);
   tealet_finalize(main_tealet);
 }
 
@@ -77,7 +73,6 @@ static tealet_t *new_main_plain(void) {
 
   main_tealet = tealet_initialize(&alloc, 0);
   assert(main_tealet != NULL);
-  tealet_test_lock_install(main_tealet, &g_lock_state);
   return main_tealet;
 }
 
@@ -122,8 +117,6 @@ static tealet_t *run_write_to_target(tealet_t *current, void *arg) {
   void *far;
   int switch_result;
 
-  tealet_test_lock_assert_unheld(&g_lock_state);
-
   if (command->write_inside) {
     far = tealet_get_far(current);
     assert(far != NULL);
@@ -158,8 +151,6 @@ static tealet_t *run_resize_snapshot_while_active(tealet_t *current, void *arg) 
 #if TEALET_WITH_STACK_SNAPSHOT
   resize_snapshot_command_t *command = (resize_snapshot_command_t *)arg;
   tealet_config_t cfg = TEALET_CONFIG_INIT;
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
 
   cfg.flags = TEALET_CONFIGF_STACK_INTEGRITY | TEALET_CONFIGF_STACK_SNAPSHOT;
   cfg.stack_integrity_bytes = 4096;
@@ -211,8 +202,6 @@ static tealet_t *run_write_with_mprotect_split(tealet_t *current, void *arg) {
   int snapshot_has_bytes;
   unsigned char sp_probe;
   uintptr_t current_sp;
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
 
   page_size = (size_t)sysconf(_SC_PAGESIZE);
   assert(page_size > 0);

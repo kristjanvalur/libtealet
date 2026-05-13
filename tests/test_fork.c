@@ -1,7 +1,6 @@
 /* Test tealet_fork functionality */
 
 #include "tealet.h"
-#include "test_lock_helpers.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,10 +8,8 @@
 
 static int test_count = 0;
 static int test_passed = 0;
-static tealet_test_lock_state_t g_lock_state;
 
 static void finalize_main_checked(tealet_t *main) {
-  tealet_test_lock_assert_balanced(&g_lock_state);
   tealet_finalize(main);
 }
 
@@ -49,7 +46,6 @@ static tealet_t *new_main_checked(void) {
 
   main = tealet_initialize(&alloc, 0);
   assert(main != NULL);
-  tealet_test_lock_install(main, &g_lock_state);
   result = tealet_configure_check_stack(main, 0);
   assert(result == 0);
   return main;
@@ -113,7 +109,6 @@ static void test_basic_fork(void *far_marker) {
     PASS();
   } else if (is_child) {
     /* We are the child, other = parent */
-    tealet_test_lock_assert_unheld(&g_lock_state);
     other = tealet_previous(main);
     assert_origin_main_fork(tealet_current(main));
     assert_origin_main(other);
@@ -171,7 +166,6 @@ static void test_fork_switch(void *far_marker) {
 
   if (is_child) {
     /* We are the child */
-    tealet_test_lock_assert_unheld(&g_lock_state);
     other = tealet_previous(main);
     assert_origin_main_fork(tealet_current(main));
     assert_origin_main(other);

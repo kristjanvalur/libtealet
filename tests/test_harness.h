@@ -16,6 +16,7 @@ typedef struct lock_snapshot_t {
 void init_test(void);
 void fini_test(void);
 void init_test_extra(tealet_alloc_t *alloc, size_t extrasize);
+void init_test_locking(void);
 
 void lock_snapshot_take(lock_snapshot_t *snap);
 void lock_snapshot_assert_delta_one(const lock_snapshot_t *before);
