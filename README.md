@@ -13,8 +13,7 @@ It uses the [Stackman library][stackman] library for low
 level stack operations, providing implementation for common modern desktop platforms.
 For ease of integration, this repository bundles Stackman **v1.2.1** in `stackman/`
 including pre-built platform libraries used by the default build.
-The official Stackman repository is: https://github.com/stackless-dev/stackman
-There are no other run-time dependencies, except for `memcpy()`, and the default
+There are no other run-time dependencies, except for `memcpy()` and `abort()`, and the default
 use of `malloc()` can be replaced with a custom memory allocator, and `assert()` which is
 used by debug builds.
 
