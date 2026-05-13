@@ -25,8 +25,6 @@ typedef struct tealetex_setcontext_main_t {
   tealet_t *main;
 } tealetex_setcontext_main_t;
 
-#define TEALETEX_SETCONTEXT_MAIN_INIT { NULL }
-
 /* Context lifecycle state bits for tealetex_ucontext_t::uc_state. */
 #define TEALETEX_UCSTATE_EMPTY (0u)
 #define TEALETEX_UCSTATE_BOUND (1u << 0)
@@ -54,15 +52,12 @@ typedef struct tealetex_ucontext_t {
   unsigned int uc_state;
 } tealetex_ucontext_t;
 
-/* Default initializer for static storage duration objects. */
-#define TEALETEX_UCONTEXT_INIT                                                                                \
-  { NULL, NULL, NULL, NULL, NULL, NULL, TEALET_START_DEFAULT, TEALETEX_UCSTATE_EMPTY }
-
 /*
  * Initialize/finalize a setcontext domain.
  *
  * init allocates the underlying libtealet main tealet (malloc allocator,
- * extrasize 0). fini finalizes it and clears the handle.
+ * extrasize 0) and initializes @p scmain. fini finalizes it and clears the
+ * handle.
  */
 int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain);
 void tealetex_getcontext_fini(tealetex_setcontext_main_t *scmain);

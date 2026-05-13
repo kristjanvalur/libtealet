@@ -12,16 +12,16 @@
 #include <stdio.h>
 
 /* The setcontext domain for this example. */
-static tealetex_setcontext_main_t g_scmain = TEALETEX_SETCONTEXT_MAIN_INIT;
+static tealetex_setcontext_main_t g_scmain;
 
 /* The three contexts:
  *   (1) main_context1: return target when loop completes (uc_link).
  *   (2) main_context2: point in main used by swapcontext-like transfers.
  *   (3) loop_context : the iterator context.
  */
-static tealetex_ucontext_t main_context1 = TEALETEX_UCONTEXT_INIT;
-static tealetex_ucontext_t main_context2 = TEALETEX_UCONTEXT_INIT;
-static tealetex_ucontext_t loop_context = TEALETEX_UCONTEXT_INIT;
+static tealetex_ucontext_t main_context1;
+static tealetex_ucontext_t main_context2;
+static tealetex_ucontext_t loop_context;
 
 /* Iterator return value. */
 static volatile int i_from_iterator;

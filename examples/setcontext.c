@@ -71,8 +71,8 @@ int tealetex_getcontext_init(tealetex_setcontext_main_t *scmain) {
 
   if (scmain == NULL)
     return TEALET_ERR_INVAL;
-  if (scmain->main != NULL)
-    return 0;
+
+  scmain->main = NULL;
 
   scmain->main = tealet_initialize(&alloc, 0);
   if (scmain->main == NULL)
@@ -115,9 +115,6 @@ int tealetex_makecontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
   if ((start_flags & ~TEALET_START_SWITCH) != 0)
     return TEALET_ERR_INVAL;
 
-  if ((ucp->uc_state & TEALETEX_UCSTATE_BOUND) && ucp->uc_tealet != NULL && ucp->uc_tealet != scmain->main)
-    return TEALET_ERR_INVAL;
-
   new_tealet = tealet_new(scmain->main);
   if (new_tealet == NULL)
     return TEALET_ERR_MEM;
@@ -140,6 +137,11 @@ int tealetex_swapcontext(tealetex_setcontext_main_t *scmain, tealetex_ucontext_t
   if (oucp != NULL) {
     oucp->uc_tealet = tealet_current(scmain->main);
     oucp->uc_main = scmain->main;
+    oucp->uc_link = NULL;
+    oucp->uc_func = NULL;
+    oucp->uc_arg = NULL;
+    oucp->uc_stack_far = NULL;
+    oucp->uc_start_flags = TEALET_START_DEFAULT;
     oucp->uc_state = TEALETEX_UCSTATE_BOUND | TEALETEX_UCSTATE_ACTIVE;
   }
 
