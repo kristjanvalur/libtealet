@@ -128,7 +128,7 @@ For C, there also exist some other approaches. For an overview, see [Coroutines 
 ## Example
 
 For an example on how to implement `longjmp()` like functionality, as with the [`setcontext()` library](https://en.wikipedia.org/wiki/Setcontext),
-see [tests/setcontext.c](tests/setcontext.c).
+see [examples/setcontext.c](examples/setcontext.c).
 
 ## Development requirements
 
