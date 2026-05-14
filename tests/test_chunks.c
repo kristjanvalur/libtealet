@@ -8,13 +8,11 @@
  * - Statistics properly track multiple chunks
  */
 #include "tealet.h"
-#include "test_lock_helpers.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 static tealet_t *g_main = NULL;
-static tealet_test_lock_state_t g_lock_state;
 
 /* Helper to recurse and consume stack space - NOT tail-recursive */
 static void consume_stack(int depth, char *buffer) {
@@ -36,7 +34,6 @@ static tealet_t *worker_run(tealet_t *t, void *arg) {
   int depth = (int)(intptr_t)arg;
 
   (void)t;
-  tealet_test_lock_assert_unheld(&g_lock_state);
 
   /* Consume stack based on depth parameter */
   if (depth > 0)
@@ -44,8 +41,6 @@ static tealet_t *worker_run(tealet_t *t, void *arg) {
 
   /* Yield back to main */
   tealet_switch(g_main, NULL, TEALET_XFER_DEFAULT);
-
-  tealet_test_lock_assert_unheld(&g_lock_state);
 
   return g_main;
 }
@@ -61,11 +56,9 @@ int main(void) {
     fprintf(stderr, "Failed to initialize\n");
     return 1;
   }
-  tealet_test_lock_install(g_main, &g_lock_state);
   configure_result = tealet_configure_check_stack(g_main, 0);
   if (configure_result != 0) {
     fprintf(stderr, "Failed to enable stack checks: %d\n", configure_result);
-    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;
   }
@@ -77,14 +70,12 @@ int main(void) {
   t1 = tealet_new(g_main);
   if (t1 == NULL) {
     fprintf(stderr, "Failed to create tealet\n");
-    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;
   }
   if (tealet_run(t1, worker_run, NULL, NULL, TEALET_START_SWITCH) != 0) {
     fprintf(stderr, "Failed to start tealet\n");
     tealet_delete(t1);
-    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;
   }
@@ -113,7 +104,6 @@ int main(void) {
   if (!t2) {
     fprintf(stderr, "Failed to duplicate tealet\n");
     tealet_delete(t1);
-    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;
   }
@@ -132,7 +122,6 @@ int main(void) {
     fprintf(stderr, "Failed to duplicate tealet\n");
     tealet_delete(t1);
     tealet_delete(t2);
-    tealet_test_lock_assert_balanced(&g_lock_state);
     tealet_finalize(g_main);
     return 1;
   }
@@ -155,7 +144,6 @@ int main(void) {
   tealet_delete(t3);
   tealet_delete(t2);
   tealet_delete(t1);
-  tealet_test_lock_assert_balanced(&g_lock_state);
   tealet_finalize(g_main);
 
   printf("\n=== Test completed successfully ===\n");

@@ -59,6 +59,7 @@ void test_lock_transitions(void) {
   int result;
 
   init_test();
+  init_test_locking();
 
   g_lock_phase = LOCK_PHASE_NEW_START;
   lock_snapshot_take(&g_lock_new_before);
@@ -101,6 +102,7 @@ void test_lock_transitions_stub(void) {
   int result;
 
   init_test();
+  init_test_locking();
 
   lock_snapshot_take(&g_lock_stub_new_before);
   result = tealet_stub_new(g_main, &stub, NULL);
@@ -129,6 +131,7 @@ void test_lock_transitions_fork(void) {
   char far_marker = 0;
 
   init_test();
+  init_test_locking();
 
   result = tealet_set_far(g_main, &far_marker);
   assert(result == 0);
