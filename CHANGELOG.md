@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-19
+
 ### Fixed
 - **PANIC propagation during startup handoff now reaches creators consistently**
   - `tealet_run(..., TEALET_START_SWITCH)` now preserves first-switch out-argument handoff when startup returns `TEALET_ERR_PANIC`, so creator-side startup returns observe the propagated value.
@@ -545,7 +547,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/kristjanvalur/libtealet/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/kristjanvalur/libtealet/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kristjanvalur/libtealet/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kristjanvalur/libtealet/compare/v0.5.0...v0.5.1
