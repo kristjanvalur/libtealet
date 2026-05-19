@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **PANIC propagation during startup handoff now reaches creators consistently**
+  - `tealet_run(..., TEALET_START_SWITCH)` now preserves first-switch out-argument handoff when startup returns `TEALET_ERR_PANIC`, so creator-side startup returns observe the propagated value.
+  - `tealet_stub_run()` now preserves `TEALET_ERR_PANIC` signaling and avoids treating panic-resume as a generic failure path during trampoline startup.
+
+### Tests
+- Added transfer regression coverage for panic startup propagation:
+  - panic propagation to creator of a fresh tealet started with `TEALET_START_SWITCH`
+  - panic propagation through `tealet_stub_run()`
+
 ## [0.7.0] - 2026-05-12
 
 ### Added

@@ -394,6 +394,8 @@ static test_entry_t test_list[] = {
     {"test_exit", test_exit},
     {"test_switch", test_switch},
     {"test_switch_self_panic", test_switch_self_panic},
+    {"test_start_switch_panic_propagates_to_creator", test_start_switch_panic_propagates_to_creator},
+    {"test_stub_run_panic_propagates_to_creator", test_stub_run_panic_propagates_to_creator},
     {"test_switch_new", test_switch_new},
     {"test_arg", test_arg},
     {"test_random", test_random},

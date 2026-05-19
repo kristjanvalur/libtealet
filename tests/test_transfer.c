@@ -166,6 +166,71 @@ void test_switch_self_panic(void) {
   fini_test();
 }
 
+static tealet_t *start_switch_panic_child_run(tealet_t *current, void *arg) {
+  int result;
+  void *myarg = (void *)0x1234;
+
+  assert(arg == (void *)0x1111);
+
+  result = tealet_switch(current->main, &myarg, TEALET_XFER_PANIC);
+  abort();
+  assert(result == TEALET_ERR_PANIC);
+  return NULL;
+}
+
+/* Verify that PANIC from a freshly started TEALET_START_SWITCH child reaches
+ * the creator's tealet_run() return path.
+ */
+void test_start_switch_panic_propagates_to_creator(void) {
+  tealet_t *child;
+  int result;
+  void *arg;
+
+  init_test();
+
+  child = tealet_new(g_main);
+  assert(child != NULL);
+
+  arg = (void *)0x1111;
+  result = tealet_run(child, start_switch_panic_child_run, &arg, NULL, TEALET_START_SWITCH);
+  assert(result == TEALET_ERR_PANIC);
+  assert(arg == (void *)0x1234);
+
+  tealet_delete(child);
+  fini_test();
+}
+
+static tealet_t *stub_panic_child_run(tealet_t *current, void *arg) {
+  int result;
+  (void)arg;
+
+  result = tealet_switch(current->main, NULL, TEALET_XFER_PANIC);
+  abort();
+  assert(result == TEALET_ERR_PANIC);
+  return NULL;
+}
+
+/* Verify that PANIC from tealet_stub_run() reaches the creator instead of
+ * being treated as a generic startup failure.
+ */
+void test_stub_run_panic_propagates_to_creator(void) {
+  tealet_t *stub;
+  int result;
+
+  init_test();
+
+  stub = NULL;
+  result = tealet_stub_new(g_main, &stub, NULL);
+  assert(result == 0);
+  assert(stub != NULL);
+
+  result = tealet_stub_run(stub, stub_panic_child_run, NULL);
+  assert(result == TEALET_ERR_PANIC);
+
+  tealet_delete(stub);
+  fini_test();
+}
+
 tealet_t *test_arg_1(tealet_t *t1, void *arg) {
   void *myarg;
   tealet_t *peer = (tealet_t *)arg;

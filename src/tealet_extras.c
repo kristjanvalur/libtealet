@@ -111,13 +111,13 @@ int tealet_stub_run(tealet_t *stub, tealet_run_t run, void **parg) {
   psarg->runarg = parg ? *parg : NULL;
   myarg = (void *)psarg;
   result = tealet_switch(stub, &myarg, TEALET_XFER_DEFAULT);
-  if (result) {
+  if (result && result != TEALET_ERR_PANIC) {
     /* failure */
     tealet_free(stub, psarg);
     return result;
   }
-  /* pass back the arg value from the switch */
+  /* pass back the arg value from the switch/switch-back */
   if (parg)
     *parg = myarg;
-  return 0;
+  return result;
 }

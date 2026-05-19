@@ -1415,6 +1415,8 @@ static int tealet_initialstub(tealet_main_t *g_main, tealet_sub_t *g_new, tealet
   g_new->stack_far = (char *)stack_far;
   result = tealet_switchstack(g_main, g_target, NULL, &switch_arg);
   if (result < 0) {
+    if (run_on_switch && result == TEALET_ERR_PANIC && parg)
+      *parg = switch_arg;
     /* couldn't allocate stack */
     return result;
   }
