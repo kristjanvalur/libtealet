@@ -4,5 +4,6 @@
 void test_lock_transitions(void);
 void test_lock_transitions_stub(void);
 void test_lock_transitions_fork(void);
+void test_lock_transitions_structure_ops(void);
 
 #endif

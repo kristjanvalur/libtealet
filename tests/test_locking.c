@@ -25,6 +25,10 @@ static lock_snapshot_t g_lock_exit_before;
 static lock_snapshot_t g_lock_stub_new_before;
 static lock_snapshot_t g_lock_stub_run_before;
 static lock_snapshot_t g_lock_fork_before;
+static lock_snapshot_t g_lock_new_api_before;
+static lock_snapshot_t g_lock_dup_before;
+static lock_snapshot_t g_lock_delete_dup_before;
+static lock_snapshot_t g_lock_delete_new_before;
 
 /* Transition accounting test for tealet_new + switch + exit.
  * Verifies expected lock/unlock deltas at each phase boundary.
@@ -35,7 +39,7 @@ static tealet_t *test_lock_transition_run(tealet_t *current, void *arg) {
 
   test_lock_assert_unheld();
   assert(g_lock_phase == LOCK_PHASE_NEW_START);
-  lock_snapshot_assert_delta_one(&g_lock_new_before);
+  lock_snapshot_assert_delta(&g_lock_new_before, 2);
 
   g_lock_phase = LOCK_PHASE_WAIT_RESUME;
   tealet_switch(g_main, NULL, TEALET_XFER_DEFAULT);
@@ -108,7 +112,7 @@ void test_lock_transitions_stub(void) {
   result = tealet_stub_new(g_main, &stub, NULL);
   assert(result == 0);
   assert(stub != NULL);
-  lock_snapshot_assert_delta_one(&g_lock_stub_new_before);
+  lock_snapshot_assert_delta(&g_lock_stub_new_before, 2);
 
   lock_snapshot_take(&g_lock_stub_run_before);
   g_lock_phase = LOCK_PHASE_STUB_RUN_START;
@@ -159,4 +163,35 @@ void test_lock_transitions_fork(void) {
   test_lock_assert_unheld();
   tealet_exit(other, NULL, 0);
   abort();
+}
+
+/* Verify AUTO mode also covers structure APIs new/duplicate/delete and keeps
+ * lock/unlock transitions balanced.
+ */
+void test_lock_transitions_structure_ops(void) {
+  tealet_t *t;
+  tealet_t *dup;
+
+  init_test();
+  init_test_locking();
+
+  lock_snapshot_take(&g_lock_new_api_before);
+  t = tealet_new(g_main);
+  assert(t != NULL);
+  lock_snapshot_assert_delta_one(&g_lock_new_api_before);
+
+  lock_snapshot_take(&g_lock_dup_before);
+  dup = tealet_duplicate(t);
+  assert(dup != NULL);
+  lock_snapshot_assert_delta_one(&g_lock_dup_before);
+
+  lock_snapshot_take(&g_lock_delete_dup_before);
+  tealet_delete(dup);
+  lock_snapshot_assert_delta_one(&g_lock_delete_dup_before);
+
+  lock_snapshot_take(&g_lock_delete_new_before);
+  tealet_delete(t);
+  lock_snapshot_assert_delta_one(&g_lock_delete_new_before);
+
+  fini_test();
 }

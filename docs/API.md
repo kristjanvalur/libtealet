@@ -968,22 +968,22 @@ Returns:
 - `0` on success.
 - `<0` on error.
 - `TEALET_ERR_INVAL` when `locking` is non-`NULL` and `locking->mode` is not
-    `TEALET_LOCK_OFF` or `TEALET_LOCK_SWITCH`.
+    `TEALET_LOCK_OFF` or `TEALET_LOCK_AUTO`.
 
 **Recommendation:** Call this immediately after `tealet_initialize()` and before sharing tealet handles across threads. This avoids races where foreign-thread delete operations run before lock callbacks are installed.
 
 Mode behavior:
 
 - `TEALET_LOCK_OFF`: no internal auto-locking.
-- `TEALET_LOCK_SWITCH`: libtealet automatically acquires/releases this lock for the core switching APIs (`tealet_run()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`).
+- `TEALET_LOCK_AUTO`: libtealet automatically acquires/releases this lock for key lifecycle/transfer APIs (`tealet_new()`, `tealet_run()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`, `tealet_duplicate()`, `tealet_delete()`).
 
 Rationale: these paths are temporally asymmetric (execution may leave one call site and later continue from a different logical point, including entry/exit boundaries). Keeping lock ownership inside the library for these transitions avoids brittle cross-frame lock management in integrator code.
 
-Stub helpers in `tealet_extras.h` (`tealet_stub_new()`, `tealet_stub_run()`) are switching wrappers by inference, so they inherit this behavior through the core switching APIs.
+Stub helpers in `tealet_extras.h` (`tealet_stub_new()`, `tealet_stub_run()`) are wrappers over these core APIs and therefore inherit this behavior.
 
-For other APIs, integrators should call `tealet_lock()`/`tealet_unlock()` explicitly when foreign-thread access is possible.
+For APIs outside this auto-locked set, integrators should call `tealet_lock()`/`tealet_unlock()` explicitly when foreign-thread access is possible.
 
-Automatic locking in `TEALET_LOCK_SWITCH` mode does not require recursive lock primitives. Integrators may intentionally assert non-recursion in callbacks to enforce correct API usage.
+Automatic locking in `TEALET_LOCK_AUTO` mode does not require recursive lock primitives. Integrators may intentionally assert non-recursion in callbacks to enforce correct API usage.
 
 **Allocator interaction contract:** libtealet may invoke allocator callbacks either with or without the configured tealet lock held, depending on internal call path. Integrators must not rely on the tealet lock as allocator protection, and allocator implementations must avoid deadlocking in either state.
 
@@ -1004,7 +1004,7 @@ Invoke the configured locking callbacks for the tealet domain.
 
 These helpers are intended for synchronizing access to tealet structures for the primary multi-threaded use case: foreign-thread `tealet_delete()` of non-main tealets.
 
-Only the core switching APIs are auto-locked by libtealet (`tealet_run()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`). For other APIs (for example `tealet_delete()` and `tealet_duplicate()`), integrators are expected to apply explicit lock/unlock around calls if those operations may run from foreign threads.
+AUTO mode covers `tealet_new()`, `tealet_run()`, `tealet_switch()`, `tealet_exit()`, `tealet_fork()`, `tealet_duplicate()`, and `tealet_delete()`. For other APIs, integrators are expected to apply explicit lock/unlock around calls when those operations may run from foreign threads.
 
 Switching itself remains thread-affine: switching between related tealets from different threads is unsupported, and cross-thread `tealet_switch()` usage is invalid.
 
@@ -1204,9 +1204,10 @@ operation.
 Locking mode is configured via `tealet_configure_set_locking()` and
 `tealet_lock_t.mode`:
 
-- `TEALET_LOCK_SWITCH`: libtealet automatically acquires/releases the lock for
-    switching APIs (`tealet_run()`, `tealet_switch()`, `tealet_exit()`,
-    `tealet_fork()`).
+- `TEALET_LOCK_AUTO`: libtealet automatically acquires/releases the lock for
+    key lifecycle/transfer APIs (`tealet_new()`, `tealet_run()`,
+    `tealet_switch()`, `tealet_exit()`, `tealet_fork()`,
+    `tealet_duplicate()`, `tealet_delete()`).
 - `TEALET_LOCK_OFF`: no internal auto-locking; integrator fully controls lock
     scopes.
 
@@ -1222,7 +1223,7 @@ Use manual synchronization when:
 Preferred practice is to use `tealet_lock()` / `tealet_unlock()` around the
 entire sequence so lock scopes stay compatible with switching auto-lock mode.
 
-Automatic locking in `TEALET_LOCK_SWITCH` mode does not require recursive lock
+Automatic locking in `TEALET_LOCK_AUTO` mode does not require recursive lock
 primitives. Integrators may intentionally assert non-recursion in callbacks to
 enforce correct API usage.
 
@@ -1236,7 +1237,7 @@ equivalent integration-managed locking):
 3. Reacquire before returning.
 4. Reacquire before any `tealet_exit()` call from the run body.
 
-In `TEALET_LOCK_SWITCH` mode, libtealet maintains this entry/exit discipline
+In `TEALET_LOCK_AUTO` mode, libtealet maintains this entry/exit discipline
 internally for switching transitions.
 
 ---

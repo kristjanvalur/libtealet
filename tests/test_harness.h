@@ -19,6 +19,7 @@ void init_test_extra(tealet_alloc_t *alloc, size_t extrasize);
 void init_test_locking(void);
 
 void lock_snapshot_take(lock_snapshot_t *snap);
+void lock_snapshot_assert_delta(const lock_snapshot_t *before, int expected);
 void lock_snapshot_assert_delta_one(const lock_snapshot_t *before);
 void test_lock_assert_unheld(void);
 void check_stats(int verbose);

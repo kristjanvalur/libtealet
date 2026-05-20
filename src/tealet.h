@@ -56,9 +56,10 @@ typedef struct tealet_alloc_t {
  *
  * Automatic lock behavior is controlled by @ref tealet_lock_mode_t.
  *
- * In #TEALET_LOCK_SWITCH mode, libtealet automatically acquires/releases this
- * lock for switching APIs only: tealet_run(), tealet_fork(), tealet_switch(),
- * and tealet_exit().
+ * In #TEALET_LOCK_AUTO mode, libtealet automatically acquires/releases this
+ * lock for key lifecycle/transfer operations: tealet_new(), tealet_run(),
+ * tealet_fork(), tealet_switch(), tealet_exit(), tealet_duplicate(), and
+ * tealet_delete().
  *
  * In #TEALET_LOCK_OFF mode, libtealet never auto-locks; callers are fully
  * responsible for lock scopes.
@@ -73,7 +74,7 @@ typedef struct tealet_alloc_t {
  */
 typedef enum tealet_lock_mode_t {
   TEALET_LOCK_OFF = 0,
-  TEALET_LOCK_SWITCH = 1,
+  TEALET_LOCK_AUTO = 1,
 } tealet_lock_mode_t;
 
 typedef struct tealet_lock_t {
@@ -609,10 +610,12 @@ int tealet_configure_set(tealet_t *tealet, tealet_config_t *config);
  *
  * Automatic locking mode is selected by locking->mode:
  * - #TEALET_LOCK_OFF: no internal auto-locking,
- * - #TEALET_LOCK_SWITCH: auto-locking for the five switching APIs only.
+ * - #TEALET_LOCK_AUTO: auto-locking for key lifecycle/transfer operations
+ *   (tealet_new(), tealet_run(), tealet_fork(), tealet_switch(),
+ *   tealet_exit(), tealet_duplicate(), tealet_delete()).
  *
  * Returns #TEALET_ERR_INVAL when locking is non-NULL and locking->mode is not
- * #TEALET_LOCK_OFF or #TEALET_LOCK_SWITCH.
+ * #TEALET_LOCK_OFF or #TEALET_LOCK_AUTO.
  *
  * Non-switch APIs (for example tealet_delete(), tealet_duplicate(), and
  * query/status helpers) remain caller-synchronized when foreign-thread access

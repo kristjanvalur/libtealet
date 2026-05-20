@@ -155,10 +155,15 @@ void lock_snapshot_take(lock_snapshot_t *snap) {
   snap->unlock_calls = g_lock_state.unlock_calls;
 }
 
+/* Assert N lock/unlock pairs occurred since the snapshot. */
+void lock_snapshot_assert_delta(const lock_snapshot_t *before, int expected) {
+  assert(g_lock_state.lock_calls - before->lock_calls == expected);
+  assert(g_lock_state.unlock_calls - before->unlock_calls == expected);
+}
+
 /* Assert one lock/unlock pair occurred since the snapshot. */
 void lock_snapshot_assert_delta_one(const lock_snapshot_t *before) {
-  assert(g_lock_state.lock_calls - before->lock_calls == 1);
-  assert(g_lock_state.unlock_calls - before->unlock_calls == 1);
+  lock_snapshot_assert_delta(before, 1);
 }
 
 void test_lock_assert_unheld(void) { tealet_test_lock_assert_unheld(&g_lock_state); }
@@ -386,6 +391,7 @@ static test_entry_t test_list[] = {
     {"test_lock_transitions", test_lock_transitions},
     {"test_lock_transitions_stub", test_lock_transitions_stub},
     {"test_lock_transitions_fork", test_lock_transitions_fork},
+    {"test_lock_transitions_structure_ops", test_lock_transitions_structure_ops},
     {"test_simple_create", test_simple_create},
     {"test_simple_create_and_run", test_simple_create_and_run},
     {"test_create_previous", test_create_previous},
