@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Lock mode naming and scope were updated for clearer semantics**
   - Renamed public lock mode `TEALET_LOCK_SWITCH` to `TEALET_LOCK_AUTO`.
-  - Removed the compatibility alias to keep the API surface explicit.
   - Expanded automatic locking coverage to include structure APIs:
     `tealet_new()`, `tealet_duplicate()`, and `tealet_delete()`, in addition
     to existing transfer/lifecycle paths.
