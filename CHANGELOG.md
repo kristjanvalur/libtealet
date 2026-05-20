@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-05-20
+
 ### Changed
 - **Lock mode naming and scope were updated for clearer semantics**
   - Renamed public lock mode `TEALET_LOCK_SWITCH` to `TEALET_LOCK_AUTO`.
@@ -564,7 +566,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/kristjanvalur/libtealet/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/kristjanvalur/libtealet/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/kristjanvalur/libtealet/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kristjanvalur/libtealet/compare/v0.5.1...v0.6.0
