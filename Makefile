@@ -21,7 +21,7 @@ $(error Invalid BUILD_MODE='$(BUILD_MODE)' (expected 'debug' or 'release'))
 endif
 
 # Version
-VERSION = 0.7.3
+VERSION = 0.7.4
 STACKMAN_VERSION = 1.2.2
 
 # Stack-integrity compile-time defaults (can be overridden from shell).

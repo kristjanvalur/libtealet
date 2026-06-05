@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-06-05
+
+### Fixed
+- **Windows static library artifacts no longer require LTCG-compatible consumers**
+  - Disabled whole-program optimization in the `tealet_static` Visual Studio
+    project release configurations so generated `tealet_static.lib` archives
+    avoid LTCG-bound object requirements.
+  - This improves interoperability when consuming the static library from other
+    MSVC toolchain configurations.
+
 ## [0.7.3] - 2026-06-05
 
 ### Changed
@@ -590,7 +600,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/kristjanvalur/libtealet/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/kristjanvalur/libtealet/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/kristjanvalur/libtealet/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/kristjanvalur/libtealet/compare/v0.7.0...v0.7.1
