@@ -168,20 +168,25 @@ jobs:
     
     - uses: microsoft/setup-msbuild@v3
     
-    - name: build
-      run: msbuild.exe VS\tealet.sln /p:Platform=${{matrix.platform}}
+    - name: build (debug for tests)
+      run: msbuild.exe VS\tealet.sln /p:Configuration=Debug /p:Platform=${{matrix.platform}}
     
     - name: test
       if: ${{ matrix.native == 'yes' }}
       run: .\VS\${{matrix.folder}}\Debug\test.exe
+
+    - name: build (release for artifacts)
+      run: msbuild.exe VS\tealet.sln /p:Configuration=Release /p:Platform=${{matrix.platform}}
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7
       with:
         name: libtealet-${{ matrix.abi }}
         path: |
-          VS\${{matrix.folder}}\Debug\tealet.lib
-          VS\${{matrix.folder}}\Debug\tealet.dll
+          VS\${{matrix.folder}}\Release\tealet_static.lib
+          VS\${{matrix.folder}}\Release\tealet.lib
+          VS\${{matrix.folder}}\Release\tealet.dll
+          VS\${{matrix.folder}}\Release\tealet.pdb
   
   create-release:
     runs-on: ubuntu-latest
