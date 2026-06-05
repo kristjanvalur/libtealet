@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-06-05
+
+### Changed
+- **Windows static packaging now emits a self-contained `tealet_static.lib`**
+  - Updated the Visual Studio static-library project to merge the platform
+    `stackman.lib` archive into `tealet_static.lib` during the build.
+  - Consumers linking `tealet_static.lib` no longer need to add
+    `stackman.lib` explicitly.
+
 ## [0.7.4] - 2026-06-05
 
 ### Fixed
@@ -600,7 +609,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/kristjanvalur/libtealet/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/kristjanvalur/libtealet/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/kristjanvalur/libtealet/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/kristjanvalur/libtealet/compare/v0.7.1...v0.7.2

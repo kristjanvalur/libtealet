@@ -241,6 +241,18 @@
     <ClInclude Include="..\src\tealet.h" />
     <ClInclude Include="..\src\tealet_extras.h" />
   </ItemGroup>
+  <PropertyGroup>
+    <StackmanLibPath Condition="'$(Platform)'=='Win32'">$(ProjectDir)..\stackman\lib\win_x86\stackman.lib</StackmanLibPath>
+    <StackmanLibPath Condition="'$(Platform)'=='x64'">$(ProjectDir)..\stackman\lib\win_x64\stackman.lib</StackmanLibPath>
+    <StackmanLibPath Condition="'$(Platform)'=='ARM64'">$(ProjectDir)..\stackman\lib\win_arm64\stackman.lib</StackmanLibPath>
+    <MergedStaticLibPath>$(IntDir)tealet_static.merged.lib</MergedStaticLibPath>
+  </PropertyGroup>
+  <Target Name="MergeStackmanIntoTealetStatic" AfterTargets="Lib">
+    <Error Condition="'$(StackmanLibPath)'==''" Text="Unsupported platform for stackman merge: $(Platform)" />
+    <Error Condition="!Exists('$(StackmanLibPath)')" Text="Missing Stackman static library: $(StackmanLibPath)" />
+    <Exec Command="lib.exe /NOLOGO /OUT:&quot;$(MergedStaticLibPath)&quot; &quot;$(TargetPath)&quot; &quot;$(StackmanLibPath)&quot;" />
+    <Copy SourceFiles="$(MergedStaticLibPath)" DestinationFiles="$(TargetPath)" OverwriteReadOnlyFiles="true" />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
