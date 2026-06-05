@@ -85,7 +85,7 @@ jobs:
       run: make clean
 
     - name: build (release for artifacts)
-      run: make all CPPFLAGS="-DNDEBUG"
+      run: make all PLATFORMFLAGS="$PLATFORMFLAGS -DNDEBUG"
     
     - name: set abi name
       run: echo abiname=$(make abiname) >> $GITHUB_ENV
@@ -147,7 +147,7 @@ jobs:
       run: make clean
 
     - name: build (release for artifacts)
-      run: make all CPPFLAGS="-DNDEBUG"
+      run: make all PLATFORMFLAGS="$PLATFORMFLAGS -DNDEBUG"
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
