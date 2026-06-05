@@ -162,9 +162,7 @@ void lock_snapshot_assert_delta(const lock_snapshot_t *before, int expected) {
 }
 
 /* Assert one lock/unlock pair occurred since the snapshot. */
-void lock_snapshot_assert_delta_one(const lock_snapshot_t *before) {
-  lock_snapshot_assert_delta(before, 1);
-}
+void lock_snapshot_assert_delta_one(const lock_snapshot_t *before) { lock_snapshot_assert_delta(before, 1); }
 
 void test_lock_assert_unheld(void) { tealet_test_lock_assert_unheld(&g_lock_state); }
 
