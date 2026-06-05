@@ -75,11 +75,17 @@ jobs:
       if: matrix.platformtools
       run: sudo apt-get install -o Acquire::Retries=3 --fix-missing --no-install-recommends -y gcc-${{matrix.platformtools}} g++-${{matrix.platformtools}}
     
-    - name: make
+    - name: build (debug for tests)
       run: make all
     
     - name: test
       run: make test
+
+    - name: clean before release build
+      run: make clean
+
+    - name: build (release for artifacts)
+      run: make all CPPFLAGS="-DNDEBUG"
     
     - name: set abi name
       run: echo abiname=$(make abiname) >> $GITHUB_ENV
@@ -105,7 +111,7 @@ jobs:
     - name: Install Valgrind
       run: sudo apt-get install -o Acquire::Retries=3 --fix-missing --no-install-recommends -y valgrind
     
-    - name: Build library
+    - name: build (debug for tests)
       run: make all
     
     - name: Run UBSan tests
@@ -136,6 +142,12 @@ jobs:
     
     - name: Run tests
       run: make test
+
+    - name: clean before release build
+      run: make clean
+
+    - name: build (release for artifacts)
+      run: make all CPPFLAGS="-DNDEBUG"
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
