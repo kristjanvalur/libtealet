@@ -1,9 +1,24 @@
-# The following can be controlled from the shell
-# to run a debug build you can execute
-# `CFLAGS=-g make test`
-# or to test with full optimization
-# `CFLAGS="-O3 -flto" LDFLAGS="-O3 -flto" make test
+# Build profiles
+# BUILD_MODE=debug   -> development/test defaults (-O0 -g)
+# BUILD_MODE=release -> release defaults (-O2 -DNDEBUG)
 #
+# Examples:
+#   make test BUILD_MODE=debug
+#   make all BUILD_MODE=release
+
+BUILD_MODE ?= debug
+
+ifeq ($(BUILD_MODE),debug)
+MODE_CPPFLAGS +=
+MODE_CFLAGS += -O0 -g
+MODE_LDFLAGS += -g
+else ifeq ($(BUILD_MODE),release)
+MODE_CPPFLAGS += -DNDEBUG
+MODE_CFLAGS += -O2
+MODE_LDFLAGS +=
+else
+$(error Invalid BUILD_MODE='$(BUILD_MODE)' (expected 'debug' or 'release'))
+endif
 
 # Version
 VERSION = 0.7.2
@@ -15,13 +30,13 @@ TEALET_WITH_STACK_GUARD ?= 1
 TEALET_WITH_STACK_SNAPSHOT ?= 1
 TEALET_WITH_TESTING ?= 0
 
-CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) -DTEALET_WITH_STATS=1 \
+CPPFLAGS += -Isrc -Istackman/stackman $(PLATFORMFLAGS) $(MODE_CPPFLAGS) -DTEALET_WITH_STATS=1 \
 	-DTEALET_WITH_STACK_GUARD=$(TEALET_WITH_STACK_GUARD) \
 	-DTEALET_WITH_STACK_SNAPSHOT=$(TEALET_WITH_STACK_SNAPSHOT) \
 	-DTEALET_WITH_TESTING=$(TEALET_WITH_TESTING)
-CFLAGS += -fPIC -Wall $(PLATFORMFLAGS)
+CFLAGS += -fPIC -Wall $(PLATFORMFLAGS) $(MODE_CFLAGS)
 DEPFLAGS = -MMD -MP
-LDFLAGS += -Lbin $(PLATFORMFLAGS)
+LDFLAGS += -Lbin $(PLATFORMFLAGS) $(MODE_LDFLAGS)
 
 # Handle cross-compilation
 ifdef PLATFORM_PREFIX
