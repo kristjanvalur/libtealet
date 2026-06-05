@@ -5,10 +5,10 @@
 /* Version information */
 #define STACKMAN_VERSION_MAJOR 1
 #define STACKMAN_VERSION_MINOR 2
-#define STACKMAN_VERSION_PATCH 1
+#define STACKMAN_VERSION_PATCH 2
 
 /* Version as a string */
-#define STACKMAN_VERSION "1.2.1"
+#define STACKMAN_VERSION "1.2.2"
 
 /* Version as a single number for comparisons (MMmmpp: Major, minor, patch) */
 #define STACKMAN_VERSION_NUMBER ((STACKMAN_VERSION_MAJOR * 10000) + \
@@ -80,7 +80,7 @@
 #endif
 
 
-/* align a stack pointer to the righ alighment, either nudging it up or down */
+/* align a stack pointer to the right alignment, either nudging it up or down */
 #define STACKMAN_SP_ALIGN_DOWN(a) (((intptr_t)(a) & ~(STACKMAN_STACK_ALIGN-1)))
 #define STACKMAN_SP_ALIGN_UP(a)	  (((intptr_t)((a)+STACKMAN_STACK_ALIGN-1) & ~(STACKMAN_STACK_ALIGN-1)))
 

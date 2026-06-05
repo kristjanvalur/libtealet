@@ -22,7 +22,7 @@ endif
 
 # Version
 VERSION = 0.7.2
-STACKMAN_VERSION = 1.2.1
+STACKMAN_VERSION = 1.2.2
 
 # Stack-integrity compile-time defaults (can be overridden from shell).
 # Example disable: make TEALET_WITH_STACK_GUARD=0 TEALET_WITH_STACK_SNAPSHOT=0
