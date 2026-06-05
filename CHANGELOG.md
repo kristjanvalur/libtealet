@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-06-05
+
+### Changed
+- **Windows release packaging now includes both DLL and static variants**
+  - Added a parallel static Visual Studio project that produces
+    `tealet_static.lib` while keeping the existing DLL/import-lib outputs.
+  - Windows release artifacts now publish Release builds for
+    `tealet.dll`, `tealet.lib`, `tealet_static.lib`, and `tealet.pdb`.
+
+- **Build profile selection is now explicit in the Makefile**
+  - Added `BUILD_MODE` with `debug` (default) and `release` profiles.
+  - `BUILD_MODE=debug` uses `-O0 -g` for development/test builds.
+  - `BUILD_MODE=release` uses `-O2 -DNDEBUG` for shipped artifacts.
+
+### Fixed
+- **Win32 Release DLL link now aligns with x86 stack-switch assembly constraints**
+  - Disabled SAFESEH for Win32 Release DLL linking, matching existing Debug
+    Win32 behavior and preventing SAFESEH image-generation link failures.
+
+### Dependencies
+- **Bundled Stackman updated to v1.2.2**
+  - Vendored latest release payload and synchronized project metadata.
+  - Updated bundled Windows `stackman.lib` artifacts remove embedded CRT
+    default-library directives, reducing CRT-linkage conflicts.
+
 ## [0.7.2] - 2026-05-20
 
 ### Changed
@@ -565,7 +590,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/kristjanvalur/libtealet/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/kristjanvalur/libtealet/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/kristjanvalur/libtealet/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/kristjanvalur/libtealet/compare/v0.6.0...v0.7.0
