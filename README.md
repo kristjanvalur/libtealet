@@ -11,7 +11,7 @@ technique of stack-slicing, where the execution stack is saved and restored
 in order to maintain separate execution context.
 It uses the [Stackman library][stackman] library for low
 level stack operations, providing implementation for common modern desktop platforms.
-For ease of integration, this repository bundles Stackman **v1.2.2** in `stackman/`
+For ease of integration, this repository bundles Stackman **v1.2.5** in `stackman/`
 including pre-built platform libraries used by the default build.
 There are no other run-time dependencies beyond basic C runtime memory and
 abort/assert support. Allocation goes through the allocator interface

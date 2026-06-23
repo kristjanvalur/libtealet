@@ -2076,10 +2076,7 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats) {
   /* Walk the circular list of all tealets */
   tealet_sub_t *start = (tealet_sub_t *)tmain;
   tealet_sub_t *t = start;
-  int stack_num = 0;
-  int tealet_count = 0;
   do {
-    tealet_count++;
     /* Count tealets with saved stacks (current tealet won't have stack saved)
      */
     if (t->stack) {
@@ -2120,15 +2117,11 @@ void tealet_get_stats(tealet_t *tealet, tealet_stats_t *stats) {
 
       /* Count additional chunks */
       chunk = stack->chunk.next;
-      int chunk_count = 1;
       while (chunk) {
         this_expanded += offsetof(tealet_chunk_t, data[0]) + chunk->size;
-        chunk_count++;
         chunk = chunk->next;
       }
       stats->stack_bytes_expanded += this_expanded;
-
-      stack_num++;
     }
     t = t->next_tealet;
   } while (t != start);
