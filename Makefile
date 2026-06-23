@@ -22,7 +22,7 @@ endif
 
 # Version
 VERSION = 0.7.5
-STACKMAN_VERSION = 1.2.2
+STACKMAN_VERSION = 1.2.5
 
 # Stack-integrity compile-time defaults (can be overridden from shell).
 # Example disable: make TEALET_WITH_STACK_GUARD=0 TEALET_WITH_STACK_SNAPSHOT=0
@@ -52,6 +52,16 @@ $(error Could not determine platform)
 endif
 LIB := stackman/lib/$(ABI)
 LDFLAGS += -L$(LIB)
+
+# Keep Darwin artifacts usable on the oldest macOS release supported by
+# the corresponding architecture family unless the caller overrides it.
+ifeq ($(ABI),darwin_x86_64)
+MACOSX_DEPLOYMENT_TARGET ?= 10.13
+export MACOSX_DEPLOYMENT_TARGET
+else ifeq ($(ABI),darwin_arm64)
+MACOSX_DEPLOYMENT_TARGET ?= 11.0
+export MACOSX_DEPLOYMENT_TARGET
+endif
 
 # Debug output (only if MAKEFILE_DEBUG is set)
 ifdef MAKEFILE_DEBUG

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-06-23
+
+### Changed
+- macOS release libraries now use per-architecture deployment targets: `10.13` for Intel and `11.0` for Apple Silicon.
+
+## [1.2.4] - 2026-06-23
+
+### Fixed
+- macOS release libraries are built with `MACOSX_DEPLOYMENT_TARGET=14.0` so they are not tagged with the runner's current macOS version.
+
+## [1.2.3] - 2026-06-06
+
+### Added
+- Added explicit `STACKMAN_ABI` override support in the Makefile and ABI probe script for deterministic cross-build packaging
+
+### Changed
+- Normalized Windows ARM64 ABI naming to `win_arm64` and kept compatibility mapping for legacy `win_aarch64` inputs
+- ABI probe diagnostics now query compiler target triple and emit clearer mismatch guidance when target intent is not fully propagated through wrapper/toolchain settings
+- Target triple probing now prefers `CC` with `CFLAGS` (with fallback probing) so clang-style cross-target flags are reflected in secondary detection
+
 ## [1.2.2] - 2026-06-05
 
 ### Changed
@@ -116,7 +136,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI for automated building and testing
 - Visual Studio project files (VS2017, VS2019, VS2022)
 
-[Unreleased]: https://github.com/stackless-dev/stackman/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/stackless-dev/stackman/compare/v1.2.5...HEAD
+[1.2.5]: https://github.com/stackless-dev/stackman/releases/tag/v1.2.5
+[1.2.4]: https://github.com/stackless-dev/stackman/releases/tag/v1.2.4
+[1.2.3]: https://github.com/stackless-dev/stackman/releases/tag/v1.2.3
 [1.2.2]: https://github.com/stackless-dev/stackman/releases/tag/v1.2.2
 [1.2.1]: https://github.com/stackless-dev/stackman/releases/tag/v1.2.1
 [1.2.0]: https://github.com/stackless-dev/stackman/releases/tag/v1.2.0

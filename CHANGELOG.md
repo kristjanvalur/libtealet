@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dependencies
+- **Bundled Stackman updated to v1.2.5**
+  - Vendored latest release payload with macOS deployment targets of `10.13`
+    for Intel builds and `11.0` for Apple Silicon builds.
+
 ## [0.7.5] - 2026-06-05
 
 ### Changed
