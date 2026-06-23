@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-06-23
+
 ### Dependencies
 - **Bundled Stackman updated to v1.2.5**
   - Vendored latest release payload with macOS deployment targets of `10.13`
@@ -614,7 +616,8 @@ This release represents the accumulated work since the project's creation:
 - 2024-11: Documentation improvements
 - 2025-11: GitHub Copilot onboarding with copilot-instructions.md
 
-[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.5...HEAD
+[Unreleased]: https://github.com/kristjanvalur/libtealet/compare/v0.7.6...HEAD
+[0.7.6]: https://github.com/kristjanvalur/libtealet/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/kristjanvalur/libtealet/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/kristjanvalur/libtealet/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/kristjanvalur/libtealet/compare/v0.7.2...v0.7.3
