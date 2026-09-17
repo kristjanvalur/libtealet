@@ -181,6 +181,7 @@ ifndef EMULATOR
 endif
 	$(EMULATOR) bin/test-setcontext > /dev/null
 	$(EMULATOR) bin/test-stochastic -n 100 > /dev/null
+	$(EMULATOR) bin/test-stochastic -n 100 --mode stub > /dev/null
 	$(EMULATOR) bin/test-fork
 	$(EMULATOR) bin/test-config
 	@echo "*** All test suites passed ***"
@@ -222,8 +223,14 @@ tests/test_chunks.o: tests/test_chunks.c src/tealet.h
 bin/test-stochastic: bin tests/test_stochastic.o bin/libtealet.a
 	$(CC) $(LDFLAGS) $(STATIC_FLAG) -o $@ tests/test_stochastic.o -ltealet
 
-tests/test_stochastic.o: tests/test_stochastic.c src/tealet.h
+tests/test_stochastic.o: tests/test_stochastic.c src/tealet.h src/tealet_extras.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c -o $@ tests/test_stochastic.c
+
+# In-place vs shared-stub creation comparison (not part of regular test)
+.PHONY: bench-stubs
+bench-stubs: bin/test-stochastic
+	$(EMULATOR) bin/test-stochastic --compare -n 20000
+	$(EMULATOR) bin/test-stochastic --compare -n 20000 -s 20
 
 # Fork test
 bin/test-fork: bin tests/test_fork.o bin/libtealet.a

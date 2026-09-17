@@ -1496,10 +1496,27 @@ The helper API is in `tealet_extras.h`:
 - `tealet_duplicate()` can clone that paused stub cheaply.
 - `tealet_stub_run()` starts a specific run function on the stub or clone.
 
-This is useful for:
-- launching a family of similar tealets from the same captured stack depth,
-- reducing repeated setup work for create-and-start flows,
-- generating reproducible starting contexts in tests.
+`tealet_new()` / `tealet_run()` capture the stack at the **caller's current
+depth**, so children spawned from different frames get different stack bases.
+Stub children all inherit the template's base, so their saved stacks overlap
+to different degrees as they recurse.
+
+In mixed create / recurse / switch workloads that is typically a win:
+
+- **Faster switching** — less stack-chunk growth, so restore walks fewer chunks
+- **Less allocator traffic** — fewer extra chunks than spawning in place
+- **Cheap spawn** — `tealet_duplicate()` is an O(1) refcount bump
+- **Similar peak heap** — the template's saved stack is shared only until each
+  child first runs; after that each has its own stack, but the common far
+  boundary remains
+
+This is also useful for:
+
+- launching a family of similar tealets from the same captured stack depth
+- reducing repeated setup work for create-and-start flows
+- generating reproducible starting contexts in tests
+
+Re-measure with `bin/test-stochastic --compare` (see `make bench-stubs`).
 
 Example:
 
@@ -1529,6 +1546,7 @@ tealet_delete(stub);
 
 Repository references:
 - `tests/tests.c` uses stub flows in `stub_new()`, `stub_new2()`, `stub_new3()`.
+- `tests/test_stochastic.c --compare` measures in-place vs shared-stub creation.
 - `src/tealet_extras.c` contains the trampoline implementation (`_tealet_stub_main`).
 
 ---
