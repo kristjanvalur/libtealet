@@ -34,6 +34,12 @@ int tealet_spawn(tealet_t *tealet, tealet_t **pcreated, tealet_run_t run, void *
  * run any function.  It can also be duplicated, providing a
  * convenient mechanism to start a family of tealets from a common
  * position on the stack.
+ *
+ * Children inherit the stub's stack base, so they overlap as they
+ * recurse instead of being based at whatever depth tealet_new()/
+ * tealet_run() was called.  That typically means fewer stack chunks
+ * and faster switching than spawning in place; see docs/API.md
+ * (Stub Pattern).
  */
 
 /* create a stub and return it via out-parameter */

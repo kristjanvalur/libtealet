@@ -439,6 +439,8 @@ tealet_t *tealet_duplicate(tealet_t *tealet) {
 
 Multiple tealets can share a stack snapshot, useful for the **stub pattern** (template tealets).
 
+A stub is a paused template. `tealet_duplicate()` mints a child at the same `stack_far`. Those children overlap as they recurse, instead of each being based at whatever call depth `tealet_new()`/`tealet_run()` happened to run at. The template stack is shared only until a child first runs; after that each has its own stack, but the common far boundary remains. In mixed create/recurse/switch workloads this usually means fewer chunks and less allocator churn than spawning in place. See [Stub Pattern](API.md#stub-pattern).
+
 In the current implementation, this sharing is introduced by duplication paths (for example `tealet_duplicate()` and helpers built on it). `tealet_fork()` creates a new tealet by saving stack state through switch/save logic and does not directly use `tealet_stack_dup()`.
 
 ## The Switch Operation

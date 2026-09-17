@@ -474,6 +474,21 @@ tealet_switch(t, &arg, TEALET_XFER_DEFAULT);  /* Now it starts */
 
 Use when you need to set up multiple coroutines before starting any.
 
+### Stubs — a family from one stack base
+
+`tealet_new()` + `tealet_run()` bases each child at the caller's current depth. A **stub** is a paused template you duplicate instead, so every child starts from the same stack base and their saved stacks overlap as they recurse. That is usually faster and allocates fewer stack chunks than spawning in place.
+
+```c
+#include "tealet_extras.h"
+
+tealet_t *stub = NULL;
+tealet_stub_new(main, &stub, NULL);
+tealet_t *child = tealet_duplicate(stub);
+tealet_stub_run(child, my_run, &arg);
+```
+
+See [Stub Pattern](API.md#stub-pattern) for the rationale, and `bin/test-stochastic --compare` to measure it.
+
 ## Error Handling
 
 Switching/binding functions return negative error codes on failure:
@@ -533,6 +548,7 @@ tealet_run(t2, func2, NULL, NULL, TEALET_START_DEFAULT);
 - See [ARCHITECTURE.md](ARCHITECTURE.md) to understand internals
 - Check `tests/setcontext.c` for a complete working example
 - Explore `tests/tests.c` for advanced usage patterns
+- Compare in-place vs stub creation: `bin/test-stochastic --compare`
 
 ## Performance Characteristics
 
